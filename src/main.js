@@ -10,6 +10,7 @@ import { drawInstruments } from './planes/instruments.js';
 import { Plane, IDLE } from './flight/physics.js';
 import { approachInfo } from './approach.js';
 import { Missiles } from './weapons.js';
+import { VERSION } from './version.js';
 import { Tricks } from './flight/tricks.js';
 import { CameraRig } from './camera.js';
 import { Input, keyLabels } from './input.js';
@@ -352,6 +353,7 @@ function frame(now) {
 // ---------------------------------------------------------------------------
 async function boot() {
   const labels = await keyLabels();
+  document.getElementById('version').textContent = `Version ${VERSION}`;
   defineAirfields();
   scene.add(buildTerrain(runways));
   buildAirfields(scene);

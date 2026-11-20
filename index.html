@@ -7,6 +7,8 @@
 <script id="redirect">
   // ouvert d'un double-clic (file://) : les modules ne se chargent pas, on bascule sur la version « un seul fichier »
   if (location.protocol === 'file:') location.replace('jouer.html');
+  // en ligne (GitHub Pages) : la version « un seul fichier », toujours fraîche (pas de vieux modules en cache)
+  else if (location.hostname.endsWith('github.io')) location.replace('jouer.html?v=' + Date.now());
 </script>
 <style>
   :root { --ink: #fff; --panel: rgba(12, 24, 40, .42); --line: rgba(255, 255, 255, .22); --accent: #ffd34d; }
@@ -44,6 +46,7 @@
   #go { align-self: center; padding: 13px 34px; border-radius: 999px; border: none; background: var(--accent); color: #2b2205; font: inherit; font-size: 1.1rem; font-weight: 700; cursor: pointer; box-shadow: 0 6px 22px rgba(0, 20, 40, .3); transition: transform .1s; }
   #go:hover { transform: translateY(-1px) scale(1.02); }
   #go kbd { border-color: rgba(0, 0, 0, .25); background: rgba(0, 0, 0, .08); margin-left: .5em; }
+  #version { margin-top: .4em !important; font-size: .78rem !important; opacity: .7 !important; letter-spacing: .06em; }
   #menukeys { text-align: center; font-size: .82rem; opacity: .9; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
   #menukeys button { all: unset; cursor: pointer; text-decoration: underline dotted; }
 
@@ -99,6 +102,7 @@
   <header class="shadowed">
     <h1>AIR GAME</h1>
     <p>Vol libre au-dessus de l'île. Aucun but, juste voler.</p>
+    <p id="version"></p>
   </header>
   <div id="chooser">
     <div id="picker">
