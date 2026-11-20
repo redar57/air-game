@@ -56,10 +56,16 @@
   .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s; }
   #pctrl { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: .82rem; align-items: center; }
   #pctrl span:nth-child(odd) { white-space: nowrap; }
-  #starts, #opts { display: flex; gap: 6px; flex-wrap: wrap; }
+  #starts, #opts, #modes, #liveries { display: flex; gap: 6px; flex-wrap: wrap; }
+  #mdesc { font-size: .8rem !important; opacity: .8 !important; }
+  .chip:disabled { opacity: .35; cursor: not-allowed; }
+  .chip .sw { display: inline-flex; margin-right: 6px; vertical-align: -2px; }
+  .chip .sw i { width: 10px; height: 14px; display: inline-block; }
+  .chip .sw i:first-child { border-radius: 3px 0 0 3px; } .chip .sw i:last-child { border-radius: 0 3px 3px 0; }
+  #fuelbtn.on { background: var(--accent); color: #2b2205; border-color: transparent; font-weight: 700; }
   .chip, #opts button { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .08); color: #fff; font: inherit; font-size: .84rem; cursor: pointer; }
   .chip.on { background: #fff; color: #17304d; border-color: #fff; font-weight: 600; }
-  #go { margin-top: 4px; padding: 13px 20px; border-radius: 14px; border: none; background: var(--accent); color: #2b2205; font: inherit; font-size: 1.1rem; font-weight: 800; cursor: pointer; box-shadow: 0 6px 22px rgba(0, 20, 40, .3); transition: transform .1s; }
+  #go { position: sticky; bottom: 0; z-index: 1; margin-top: 4px; padding: 13px 20px; border-radius: 14px; border: none; background: var(--accent); color: #2b2205; font: inherit; font-size: 1.1rem; font-weight: 800; cursor: pointer; box-shadow: 0 6px 22px rgba(0, 20, 40, .3); transition: transform .1s; }
   #go:hover { transform: translateY(-1px) scale(1.01); }
   #go kbd { border-color: rgba(0, 0, 0, .25); background: rgba(0, 0, 0, .08); margin-left: .5em; }
   #menukeys { grid-column: 1 / -1; text-align: center; font-size: .8rem; opacity: .9; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
@@ -89,7 +95,30 @@
   #papi .lights i { width: 14px; height: 14px; border-radius: 50%; background: #e8433a; box-shadow: 0 0 10px #e8433a; }
   #papi .lights i.w { background: #fff; box-shadow: 0 0 10px #fff; }
   #papi .lights b { width: 22px; text-align: center; font-size: 1.1rem; color: var(--accent); }
-  #pad { position: fixed; right: 18px; bottom: 18px; font-size: .78rem; opacity: .85; pointer-events: none; }
+  #minimap { position: fixed; right: 16px; bottom: 16px; width: 170px; height: 170px; border-radius: 50%; box-shadow: 0 4px 18px rgba(0, 20, 40, .35); pointer-events: none; transition: opacity .3s; }
+  #bigmap { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8, 18, 32, .55); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); z-index: 4; pointer-events: none; }
+  #bigmap .box { position: relative; }
+  #bigmap canvas { width: min(86vh, 92vw); height: min(86vh, 92vw); border-radius: 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, .45); display: block; }
+  #bigmap .legend { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 14px; flex-wrap: wrap; font-size: .8rem; font-weight: 600; background: rgba(12, 24, 40, .7); padding: 6px 12px; border-radius: 10px; }
+  .off-ui #minimap { opacity: 0; }
+  #mission { position: fixed; left: 18px; top: 16px; min-width: 190px; padding: 10px 14px 12px; border-radius: 14px; border: 1px solid var(--line); background: rgba(12, 24, 40, .5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); pointer-events: none; }
+  #mission .t { font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--accent); font-weight: 800; }
+  #mission .b { font-size: 2rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  #mission .b small { font-size: .8rem; font-weight: 600; opacity: .8; margin-left: 6px; }
+  #mission .l { font-size: .85rem; opacity: .95; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  #mission .bar { margin-top: 6px; }
+  #mission .bar i { background: #5fd0ff; }
+  .off-ui #mission { opacity: 0; }
+  #result { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8, 18, 32, .5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); z-index: 6; }
+  #result .box { text-align: center; padding: 26px 34px; border-radius: 20px; border: 1px solid var(--line); background: rgba(12, 24, 40, .78); min-width: min(420px, 90vw); }
+  #result h2 { margin: 0; letter-spacing: .08em; }
+  #result .big { font-size: 2.6rem; font-weight: 800; margin: 10px 0 4px; color: var(--accent); }
+  #result .rec { opacity: .9; margin-bottom: 18px; }
+  #result .rec.new { color: #7fe08a; font-weight: 800; }
+  #result .row { display: flex; gap: 10px; justify-content: center; }
+  #result button { padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .1); color: #fff; font: inherit; cursor: pointer; }
+  #result button.main { background: var(--accent); color: #2b2205; border-color: transparent; font-weight: 700; }
+  #pad { position: fixed; right: 18px; top: 56px; font-size: .78rem; opacity: .85; pointer-events: none; }
   #lock { position: fixed; left: -28px; top: -28px; width: 56px; height: 56px; border: 2px solid #ffd34d; transform-origin: center; pointer-events: none; box-shadow: 0 0 8px rgba(255, 211, 77, .6); }
   #lock::before, #lock::after { content: ''; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px; border: 2px solid #ffd34d; transform: rotate(45deg); }
   #lock::after { display: none; }
@@ -118,11 +147,17 @@
 <canvas id="view" tabindex="0"></canvas>
 
 <div id="hud" class="shadowed" hidden>
-  <b id="h-spd">0</b><i>km/h</i><b id="h-alt">0</b><i>m</i><b id="h-vs" class="vs">0</b><i>m/s</i><b id="h-thr">0</b><i>% gaz</i><span id="h-flags"></span>
+  <b id="h-spd">0</b><i>km/h</i><b id="h-alt">0</b><i>m</i><b id="h-vs" class="vs">0</b><i>m/s</i><b id="h-thr">0</b><i>% gaz</i><b id="h-fuel" hidden>0</b><i id="h-fuel-u" hidden>% carbu</i><span id="h-flags"></span>
 </div>
 <canvas id="compass" width="680" height="76" hidden></canvas>
 <div id="papi" class="shadowed" hidden><div class="lights"><b id="papi-l"></b><i></i><i></i><i></i><i></i><b id="papi-r"></b></div><span id="papi-t"></span></div>
 <div id="pad" class="shadowed" hidden>🎮 Manette</div>
+<div id="mission" class="shadowed" hidden></div>
+<div id="result" hidden><div class="box"><h2 id="r-title"></h2><div class="big" id="r-big"></div><div class="rec" id="r-rec"></div>
+  <div class="row"><button class="main" id="r-again">Rejouer <kbd>Entrée</kbd></button><button id="r-menu">Menu <kbd>Échap</kbd></button></div></div></div>
+<canvas id="minimap" width="340" height="340" hidden></canvas>
+<div id="bigmap" hidden><div class="box"><canvas id="bigmapc" width="1100" height="1100"></canvas>
+  <div class="legend shadowed"><span>▲ toi</span><span style="color:#ff6b5e">● montgolfière</span><span style="color:#ff9a3a">▲ feu</span><span>◌ thermique</span><span><kbd>N</kbd> fermer</span></div></div></div>
 <div id="sight" hidden><i></i></div>
 <div id="lock" hidden><span class="shadowed"><b id="lock-s">VERROUILLÉ</b><br><b id="lock-t"></b></span></div>
 <div id="toast" class="shadowed"></div>
@@ -152,10 +187,15 @@
     </div>
     <h3>Commandes</h3>
     <div id="pctrl"></div>
+    <h3>Mode</h3>
+    <div id="modes"></div>
+    <p id="mdesc"></p>
     <h3>Départ</h3>
     <div id="starts"></div>
+    <h3>Livrée</h3>
+    <div id="liveries"></div>
     <h3>Options</h3>
-    <div id="opts"><button id="invert">Tangage : normal</button><button id="daytime">Heure : Plein jour</button><button id="mutebtn">Son : activé</button></div>
+    <div id="opts"><button id="fuelbtn">Carburant et pannes : non</button><button id="invert">Tangage : normal</button><button id="daytime">Heure : Plein jour</button><button id="mutebtn">Son : activé</button></div>
     <button id="go">Décoller <kbd>Entrée</kbd></button>
   </section>
   <div id="menukeys" class="shadowed">

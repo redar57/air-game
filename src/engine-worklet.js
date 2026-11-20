@@ -53,7 +53,7 @@ class EngineProcessor extends AudioWorkletProcessor {
     // turbines
     this.voices = Array.from({ length: o.count }, (_, i) => ({
       det: 1 + (i - (o.count - 1) / 2) * 0.009 + (this.rand() - 0.5) * 0.004,
-      w: this.rand(), p: this.rand(), gas: new SVF(),
+      w: this.rand(), p: this.rand(), gas: new SVF(), slapF: (() => { const f = new SVF(); f.set(320, 0.9); return f; })(),
     }));
     this.fan = 0; this.comp = 0; this.roar = new SVF(); this.roar2 = new SVF(); this.rumble = new SVF();
     this.crk = 0; this.crkF = new SVF(); this.dc = 0; this.dcIn = 0;
@@ -140,8 +140,18 @@ class EngineProcessor extends AudioWorkletProcessor {
         const blade = 0.5 + 0.5 * sinp(v.p + 0.25);
         const tone = sinp(v.p) + 0.6 * sinp(2 * v.p) + 0.3 * sinp(3 * v.p) + 0.15 * sinp(4 * v.p);
         v.gas.run(n);
-        s += propAmp * (tone * 0.2 + n * blade * blade * 0.18) + gasAmp * v.gas.lp * 0.9
-          + whineAmp * (sinp(v.w) + 0.5 * sinp(v.w * 0.51));
+        const whine = whineAmp * (sinp(v.w) + 0.5 * sinp(v.w * 0.51));
+        if (o.heli) {
+          // hélicoptère : chaque pale qui passe claque (« whop ») — tout le souffle du rotor bat à ce rythme,
+          // plus une impulsion grave à chaque passage
+          const b2 = blade * blade, slap = b2 * b2 * b2;
+          v.slapF.run(n);
+          const am = 0.3 + 1.3 * slap * (0.5 + 0.5 * load);
+          s += (propAmp * (tone * 0.12 + n * 0.12) + gasAmp * v.gas.lp * 0.7) * am + whine
+            + slap * (0.4 + 0.6 * load) * v.slapF.lp * 3.2;
+        } else {
+          s += propAmp * (tone * 0.2 + n * blade * blade * 0.18) + gasAmp * v.gas.lp * 0.9 + whine;
+        }
       }
       out[i] = s * norm * 1.8;
     }

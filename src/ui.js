@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 
 /** Menu, affichage minimal en vol, messages furtifs et écran de pause. */
 export class UI {
-  constructor(starts, labels, planes) {
+  constructor(starts, labels, planes, modes, liveries) {
     this.handlers = {};
     this.toastT = 0; this.hintT = 0;
     this.hudCache = ['', '', '', '', ''];
@@ -20,6 +20,24 @@ export class UI {
     $('invert').addEventListener('click', () => this.emit('invert'));
     $('daytime').addEventListener('click', () => this.emit('daytime'));
     $('mutebtn').addEventListener('click', () => this.emit('mute'));
+    $('fuelbtn').addEventListener('click', () => this.emit('fuel'));
+    $('r-again').addEventListener('click', () => this.emit('again'));
+    $('r-menu').addEventListener('click', () => this.emit('menu'));
+    this.modes = modes; this.liveries = liveries;
+    this.modeChips = modes.map((m, i) => {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.textContent = m.name;
+      b.addEventListener('click', () => this.emit('mode-select', i));
+      $('modes').appendChild(b);
+      return b;
+    });
+    this.liveryChips = liveries.map((l, i) => {
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.addEventListener('click', () => this.emit('livery-select', i));
+      $('liveries').appendChild(b);
+      return b;
+    });
 
     // liste des appareils (vignettes ajoutées plus tard par setThumb)
     this.planes = planes; this.cat = 'all'; this.sel = 0;
@@ -49,6 +67,7 @@ export class UI {
       [k('V'), 'Volets (3 crans) : on vole plus lentement, idéal pour se poser'],
       [k('X'), 'Armes : missile (jet, vise ~1 s pour verrouiller) · mitrailleuses (chasseur, maintenir)'],
       [k('C'), 'Changer de vue (glisser la souris pour regarder autour)'],
+      [k('N'), "Carte de l'île (croix ← à la manette)"],
       [k('T'), 'Heure du jour'],
       [k('Retour arrière'), 'Réapparaître en vol'],
       [k('H', 'M'), "Masquer l'interface / couper le son"],
@@ -58,6 +77,7 @@ export class UI {
     this.keysHtml.push(['', 'Clic stick droit (R3) ou croix bas : missile / mitrailleuse (maintenir)']);
     this.L = L; this.k = k;
     $('keys').innerHTML = this.keysHtml.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
+    this.gliderHint = `Pas de moteur : cherche les thermiques sous les gros nuages ronds et tourne dedans · le vario bipe quand ça monte · ${k('Espace')} aérofreins`;
     this.heliHint = `${k(L.KeyR)} gaz au-dessus de 50 % pour décoller · ${k(L.KeyW, L.KeyS)} avancer / reculer · ${k(L.KeyA, L.KeyD)} tourner · ${k(L.KeyQ, L.KeyE)} pivoter · ${k('Espace')} stationnaire`;
     this.flightHint = `${k(L.KeyR)} mettre les gaz · ${k(L.KeyS)} cabrer pour décoller · ${k(L.KeyA, L.KeyD)} incliner · ${k('C')} vue · ${k('Échap')} toutes les commandes`;
   }
@@ -146,6 +166,29 @@ export class UI {
     img.src = url; img.alt = '';
     ph.replaceWith(img);
   }
+  /** Modes : grise ceux auxquels l'appareil n'a pas droit. */
+  showModes(spec, sel) {
+    this.modeChips.forEach((b, i) => {
+      const m = this.modes[i], ok = m.ok(spec);
+      b.disabled = !ok;
+      b.title = ok ? m.desc : `Réservé : ${m.why}`;
+      b.classList.toggle('on', i === sel);
+    });
+    $('mdesc').textContent = this.modes[sel].desc;
+  }
+  /** Livrées, avec une pastille de leurs couleurs (sur l'appareil choisi). */
+  showLiveries(spec, sel) {
+    const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+    this.liveryChips.forEach((b, i) => {
+      const cols = (this.liveries[i].colors || spec.paint || []).slice(0, (spec.paint || []).length || 2);
+      b.innerHTML = `<span class="sw">${cols.map((c) => `<i style="background:${hex(c)}"></i>`).join('')}</span>${this.liveries[i].name}`;
+      b.classList.toggle('on', i === sel);
+    });
+  }
+  setFuel(on) {
+    $('fuelbtn').textContent = `Carburant et pannes : ${on ? 'oui' : 'non'}`;
+    $('fuelbtn').classList.toggle('on', on);
+  }
   setDaytime(name) { $('daytime').textContent = `Heure : ${name}`; }
   setMute(m) { $('mutebtn').textContent = `Son : ${m ? 'coupé' : 'activé'}`; }
   showStart(i) { this.chips.forEach((c, n) => c.classList.toggle('on', n === i)); }
@@ -153,7 +196,12 @@ export class UI {
 
   menu(show) { $('menu').classList.toggle('off', !show); }
   pause(show) { $('pause').hidden = !show; }
-  hud(show) { $('hud').hidden = !show; $('compass').hidden = !show; if (!show) this.approach(null); }
+  hud(show) {
+    $('hud').hidden = !show; $('compass').hidden = !show; $('minimap').hidden = !show;
+    if (!show) { this.approach(null); this.bigMap(false); }
+  }
+  bigMap(show) { $('bigmap').hidden = !show; }
+  get bigMapOpen() { return !$('bigmap').hidden; }
 
   /** Bandeau de cap en haut de l'écran (heading en radians, 0 = nord). */
   compass(heading) {
@@ -199,6 +247,34 @@ export class UI {
     const km = a.dist >= 1000 ? `${(a.dist / 1000).toFixed(1).replace('.', ',')} km` : `${Math.round(a.dist / 10) * 10} m`;
     const tip = a.white >= 4 ? 'TROP HAUT' : a.white <= 0 ? 'TROP BAS' : a.white === 2 ? 'BON PLAN' : a.white > 2 ? 'UN PEU HAUT' : 'UN PEU BAS';
     $('papi-t').textContent = `${a.name} ${km} · ${tip}`;
+  }
+
+  /** Jauge de carburant (fraction 0..1) ; null pour la cacher. */
+  fuel(f) {
+    const b = $('h-fuel'), u = $('h-fuel-u');
+    if (f === null) { if (!b.hidden) { b.hidden = true; u.hidden = true; } return; }
+    b.hidden = false; u.hidden = false;
+    const t = String(Math.ceil(f * 100));
+    if (b.textContent !== t) b.textContent = t;
+    b.style.color = f < 0.15 ? '#ff6b5e' : '';
+  }
+
+  /** Panneau de mission en haut à gauche ; null pour le cacher. */
+  mission(h) {
+    const el = $('mission');
+    if (!h) { el.hidden = true; return; }
+    el.hidden = false;
+    const html = `<div class="t">${h.title}</div><div class="b">${h.big}<small>${h.unit || ''}</small></div>`
+      + h.lines.filter(Boolean).map((l) => `<div class="l">${l}</div>`).join('')
+      + (h.bar !== undefined ? `<div class="bar"><i style="width:${Math.round(h.bar * 100)}%"></i></div>` : '');
+    if (html !== this.missionHtml) { this.missionHtml = html; el.innerHTML = html; }
+  }
+  /** Écran de fin de mission ; null pour le cacher. */
+  result(r) {
+    $('result').hidden = !r;
+    if (!r) return;
+    $('r-title').textContent = r.title; $('r-big').textContent = r.big;
+    $('r-rec').textContent = r.line; $('r-rec').classList.toggle('new', !!r.isNew);
   }
 
   gamepad(on) { $('pad').hidden = !on; }

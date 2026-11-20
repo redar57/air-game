@@ -1,13 +1,18 @@
 import * as THREE from 'three';
 import { damp } from './util.js';
 
-const MAX = 420, TRAIL = 46;
+const TRAIL = 46;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _c = new THREE.Color(), _p = new THREE.Vector3();
 
 /** Explosion / gerbe d'eau en particules low-poly, et traînées de bout d'aile. */
 export class Effects {
-  constructor(scene) {
-    this.mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial(), MAX);
+  constructor(scene, opts = {}) {
+    // options : max = nombre de particules, opacity < 1 pour de la fumée translucide, drag = freinage de l'air
+    const { max = 420, opacity = 1, drag = 1.2 } = opts;
+    const MAX = this.max = max;
+    this.drag = drag;
+    this.mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0),
+      new THREE.MeshBasicMaterial(opacity < 1 ? { transparent: true, opacity, depthWrite: false } : {}), MAX);
     this.mesh.frustumCulled = false;
     this.parts = [];
     for (let i = 0; i < MAX; i++) {
@@ -30,7 +35,7 @@ export class Effects {
   }
 
   emit(pos, vel, life, size, color, grow, grav) {
-    const i = this.cursor = (this.cursor + 1) % MAX, p = this.parts[i];
+    const i = this.cursor = (this.cursor + 1) % this.max, p = this.parts[i];
     p.pos.copy(pos); p.vel.copy(vel); p.life = p.max = life; p.size = size; p.grow = grow; p.grav = grav;
     this.mesh.setColorAt(i, _c.set(color));
     this.mesh.instanceColor.needsUpdate = true;
@@ -80,12 +85,12 @@ export class Effects {
 
   update(dt) {
     let dirty = false;
-    for (let i = 0; i < MAX; i++) {
+    for (let i = 0; i < this.max; i++) {
       const p = this.parts[i];
       if (p.life <= 0) continue;
       p.life -= dt;
       p.vel.y -= p.grav * dt;
-      p.vel.multiplyScalar(1 - Math.min(1, 1.2 * dt));
+      p.vel.multiplyScalar(1 - Math.min(1, this.drag * dt));
       p.pos.addScaledVector(p.vel, dt);
       p.size = Math.max(0, p.size + p.grow * dt);
       const k = p.life <= 0 ? 0 : p.size * Math.min(1, (p.life / p.max) * 2.5);

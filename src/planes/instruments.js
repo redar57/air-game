@@ -150,6 +150,7 @@ function altimeter(cx, cy, s) {
 
 function tacho(cx, cy, s) {
   bezel(cx, cy);
+  if (s.engine.kind === 'none') { label(cx, cy, 'PLANEUR', -8, 12); label(cx, cy, 'sans moteur', 10, 10); return; }
   if (s.jet) {
     // régime du réacteur en %
     const f = (p) => p / 110;
@@ -304,18 +305,26 @@ function annunciators(x0, y0, s) {
     g.fillStyle = s.flaps > 0.05 ? '#5fd0ff' : WHT;
     g.fillRect(x0 + 112, y0 + 38 + (s.flaps / 2) * 44, 32, 8);
   } else { g.fillStyle = DIM; g.font = '700 12px sans-serif'; g.textAlign = 'center'; g.fillText('—', x0 + 128, y0 + 60); }
-  // manette des gaz
-  label(x0 + 210, y0 + 26, 'GAZ', 0, 10);
-  g.fillStyle = '#0b0d10'; g.fillRect(x0 + 200, y0 + 36, 20, 60);
+  // manette des gaz (et jauge de carburant si l'option est activée)
+  const gx = s.fuel === null ? x0 + 200 : x0 + 184;
+  label(gx + 10, y0 + 26, 'GAZ', 0, 10);
+  g.fillStyle = '#0b0d10'; g.fillRect(gx, y0 + 36, 20, 60);
   g.fillStyle = s.burner > 0.05 ? '#ff8a3a' : s.throttle > 0.9 ? YEL : GRN;
-  g.fillRect(x0 + 202, y0 + 94 - 56 * s.throttle, 16, 56 * s.throttle);
-  g.fillStyle = WHT; g.fillRect(x0 + 197, y0 + 94 - 56 * s.power - 1, 26, 2);
+  g.fillRect(gx + 2, y0 + 94 - 56 * s.throttle, 16, 56 * s.throttle);
+  g.fillStyle = WHT; g.fillRect(gx - 3, y0 + 94 - 56 * s.power - 1, 26, 2);
+  if (s.fuel !== null) {
+    label(x0 + 226, y0 + 26, 'CARB', 0, 10);
+    g.fillStyle = '#0b0d10'; g.fillRect(x0 + 216, y0 + 36, 20, 60);
+    g.fillStyle = s.fuel < 0.15 ? RED : s.fuel < 0.3 ? YEL : '#5fd0ff';
+    g.fillRect(x0 + 218, y0 + 94 - 56 * s.fuel, 16, 56 * s.fuel);
+  }
   // alarmes
   const blink = (performance.now() % 600) < 340;
   lamp(x0 + 16, y0 + 106, 108, 18, s.stallWarn && blink, RED, 'DÉCROCHAGE');
   lamp(x0 + 132, y0 + 106, 108, 18, s.brake, YEL, s.onGround ? 'FREINS' : 'AÉROFREINS');
   lamp(x0 + 16, y0 + 128, 108, 18, s.gearWarn && blink, RED, 'TRAIN !');
-  lamp(x0 + 132, y0 + 128, 108, 18, s.lowAlt && blink, YEL, 'ALTITUDE');
+  if (s.failure) lamp(x0 + 132, y0 + 128, 108, 18, blink, RED, s.failure === 'stop' ? 'PANNE MOT.' : 'MOT. FAIBLE');
+  else lamp(x0 + 132, y0 + 128, 108, 18, s.lowAlt && blink, YEL, 'ALTITUDE');
 }
 
 /** s : état de l'avion préparé par main.js (voir cockpitData). */

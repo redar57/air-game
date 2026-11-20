@@ -60,6 +60,7 @@ export class Plane {
     this.rpm = IDLE; this.flaps = 0; this.flapAnim = 0; this.yawRate = 0;
     this.buffet = 0; this.dropSide = 0; this.ground = 0; this.seed = Math.random() * 100;
     this.hPitch = 0; this.hBank = 0;
+    this.fuel = 1; this.failure = null; this.fuelWarned = false; this.refuelT = 0; this.airLift = 0;
     this.events.length = 0;
   }
 
@@ -68,6 +69,39 @@ export class Plane {
   get burner() {
     return this.spec.afterburner ? clamp((this.throttle - 0.9) * 10, 0, 1) * clamp((this.rpm - 0.88) * 12, 0, 1) : 0;
   }
+  /** Le moteur tourne-t-il ? (carburant et pannes, si l'option est activée) */
+  get engineRunning() { return !this.spec.glider && !(this.fuelOn && (this.fuel <= 0 || this.failure === 'stop')); }
+  /** Part de la puissance disponible (1 normal, 0,45 moteur affaibli, 0 coupé). */
+  get engineFactor() { return !this.engineRunning ? 0 : this.fuelOn && this.failure === 'partial' ? 0.45 : 1; }
+
+  /** Carburant, pannes, plein et réparation au sol. */
+  stepFuel(dt) {
+    const s = this.spec;
+    if (!this.fuelOn || s.glider) return;
+    const load = s.heli ? this.throttle : this.power;
+    if (this.fuel > 0) {
+      this.fuel = Math.max(0, this.fuel - ((0.12 + 0.88 * load + 2.2 * this.burner) / (s.endurance || 540)) * dt);
+      if (!this.fuelWarned && this.fuel < 0.15) { this.fuelWarned = true; this.events.push({ type: 'fuel', what: 'low' }); }
+      if (this.fuel <= 0) this.events.push({ type: 'fuel', what: 'empty' });
+    }
+    // pannes : en vol seulement, en moyenne une toutes les ~7 minutes
+    if (!this.onGround && !this.failure && this.airTime > 20 && Math.random() < dt / 420) {
+      this.failure = Math.random() < 0.55 ? 'stop' : 'partial';
+      this.events.push({ type: 'failure', what: this.failure });
+    }
+    // plein et réparation : arrêté sur une piste ou sur le porte-avions
+    const pit = this.onGround && this.groundSpeed < 1 && this.speed < 1 && (this.surface === 'runway' || this.surface === 'carrier');
+    if (pit && (this.fuel < 0.999 || this.failure)) {
+      this.refuelT += dt;
+      this.fuel = Math.min(1, this.fuel + dt / 6);
+      if (this.refuelT > 3 && this.fuel >= 0.999) {
+        const fixed = !!this.failure;
+        this.failure = null; this.fuelWarned = false; this.refuelT = 0;
+        this.events.push({ type: 'fuel', what: 'full', fixed });
+      }
+    } else this.refuelT = 0;
+  }
+
   /** Puissance réellement délivrée (0 au ralenti, 1 plein gaz), en retard sur la manette. */
   get power() { return clamp((this.rpm - IDLE) / (1 - IDLE), 0, 1); }
   /** Vitesse de décrochage du moment (les volets et l'effet de sol l'abaissent). */
@@ -164,7 +198,9 @@ export class Plane {
     this.throttle = clamp(this.throttle + input.throttle * 0.6 * dt, 0, 1);
     // régime moteur : un piston répond vite, une turbine monte lentement en régime (surtout au ralenti)
     // (hélicoptère : le rotor tourne à régime constant, c'est le pas collectif qui varie)
-    const target = s.heli ? 1 : IDLE + (1 - IDLE) * this.throttle, e = s.engine || {};
+    this.stepFuel(dt);
+    const ef = this.engineFactor;
+    const target = ef === 0 ? 0 : s.heli ? 1 : IDLE + (1 - IDLE) * this.throttle * ef, e = s.engine || {};
     const spool = e.spool ? (0.3 + 1.7 * this.rpm * this.rpm) / e.spool : 5;
     this.rpm += (target - this.rpm) * (1 - Math.exp(-spool * dt));
     this.flapAnim = damp(this.flapAnim, this.flaps, 1.4, dt);
@@ -258,11 +294,11 @@ export class Plane {
 
     // forces
     if (V > 0.5) _vdir.copy(v).multiplyScalar(1 / V); else _vdir.copy(fwd);
-    const kd = s.accel / (s.maxSpeed * s.maxSpeed);
+    const kd = s.dragK ?? s.accel / (s.maxSpeed * s.maxSpeed);
     const n = (Math.abs(pr) * V) / G + lf;
     const flapDrag = this.flapAnim <= 1 ? FLAPS[1].drag * this.flapAnim : lerp(FLAPS[1].drag, FLAPS[2].drag, this.flapAnim - 1);
     let drag = kd * V * V * (1 + (s.retract && this.gearAnim > 0.5 ? 0.35 : 0) + (input.brake ? 1.6 : 0) + flapDrag);
-    drag += 0.08 * n * n * G * Math.min(4, (st / Math.max(V, 1)) ** 2) * (1 - 0.5 * this.ground);
+    drag += (s.inducedK ?? 0.08) * n * n * G * Math.min(4, (st / Math.max(V, 1)) ** 2) * (1 - 0.5 * this.ground);
     const gAlong = -G * _vdir.y;
     _acc.copy(fwd).multiplyScalar(this.thrust()).addScaledVector(_vdir, gAlong - drag);
     const ul = 1 - lf;
@@ -283,6 +319,9 @@ export class Plane {
       v.copy(_vdir).multiplyScalar(V);
     }
     pos.addScaledVector(v, dt);
+    // ascendances (thermiques) : la masse d'air emporte l'avion
+    this.airLift = world.updraft ? world.updraft(pos.x, pos.y, pos.z) : 0;
+    pos.y += this.airLift * dt;
     // facteur de charge ressenti (accélération réelle, gravité comprise, dans l'axe vertical de l'avion)
     _v0.subVectors(v, _v0).multiplyScalar(1 / dt);
     _v0.y += G;
@@ -365,6 +404,9 @@ export class Plane {
 
     // portance : 50 % de gaz = stationnaire (quelle que soit l'inclinaison)
     let liftV = G * (1 + (this.throttle - 0.5) * 2.4);
+    // moteur coupé : autorotation (on descend doucement, toujours pilotable) ; affaibli : on monte à peine
+    const ef = this.engineFactor;
+    if (ef === 0) liftV = Math.min(liftV, G * 0.84); else if (ef < 1) liftV = Math.min(liftV, G * 1.06);
     if (this.agl < 12) { // coussin arcade près du sol : on ne s'écrase pas en descendant à la verticale
       const vmin = -(1.5 + this.agl * 0.3);
       if (v.y < vmin) liftV += (vmin - v.y) * 4;
@@ -386,6 +428,8 @@ export class Plane {
     _acc.y += s.turb * 0.6 * wobble((this.time + this.seed) * 0.9, 1.3); // petites turbulences
     v.addScaledVector(_acc, dt);
     pos.addScaledVector(v, dt);
+    this.airLift = world.updraft ? world.updraft(pos.x, pos.y, pos.z) * 0.5 : 0;
+    pos.y += this.airLift * dt;
 
     // sol
     const g = world.groundAt(pos.x, pos.z, pos.y);
@@ -456,7 +500,7 @@ export class Plane {
     const fx = -Math.sin(this.yawG), fz = -Math.cos(this.yawG);
 
     // accélération / freinage
-    let acc = this.thrust() - (s.accel / (s.maxSpeed * s.maxSpeed)) * sp * sp;
+    let acc = this.thrust() - (s.dragK ?? s.accel / (s.maxSpeed * s.maxSpeed)) * sp * sp;
     let fr = hard ? 0.35 : g.type === 'water' ? 1.5 : 2.2;
     if (belly) fr += 14;
     if (input.brake) fr += g.type === 'water' ? 3 : s.brake;

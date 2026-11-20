@@ -22,7 +22,21 @@ export const PLANES = [
     cam: { dist: 17, height: 4.3 }, eye: [0, 0.4, -1.05],
     inertia: 0.32, stallBite: 0.25, flaps: true, turb: 1,
     engine: { kind: 'piston', cyl: 4, idle: 700, max: 2700, blades: 2, gear: 1, exhaust: 95, rough: 0.35 },
+    paint: [0xf4f1ea, 0xd8432f], // couleurs principales (remplacées par les livrées)
     stats: [0.22, 0.5, 1],
+  },
+  {
+    id: 'planeur', name: 'Le Planeur',
+    desc: 'Pas de moteur : on part en altitude et on tient l\'air en spiralant dans les thermiques (sous les gros nuages ronds). Le vario bipe quand ça monte.',
+    // dragK / inducedK : traînées très faibles (finesse ~30)
+    maxSpeed: 60, stall: 19, accel: 0, dragK: 0.00028, inducedK: 0.025, pitchRate: 1.1, rollRate: 1.25, yawRate: 0.5, gLimit: 5.3,
+    brake: 6, maxSink: 5, gearH: 0.75, bellyH: 0.75, span: 18, len: 8.2, wingY: 0.35,
+    retract: false, floats: false, jet: false, glider: true,
+    cam: { dist: 20, height: 4.6 }, eye: [0, 0.42, -1.6],
+    inertia: 0.3, stallBite: 0.35, flaps: false, turb: 0.9,
+    engine: { kind: 'none' },
+    paint: [0xf6f6f2, 0xd8312b],
+    stats: [0.15, 0.45, 0.8],
   },
   {
     id: 'biplan', name: 'Le Biplan',
@@ -33,6 +47,7 @@ export const PLANES = [
     cam: { dist: 14, height: 3.6 }, eye: [0, 0.74, -0.3],
     inertia: 0.12, stallBite: 0.7, flaps: false, turb: 1.1,
     engine: { kind: 'piston', cyl: 7, radial: true, idle: 650, max: 2500, blades: 2, gear: 1, exhaust: 120, rough: 0.5 },
+    paint: [0xf2c230, 0xc93a2c, 0x33373c], // couleurs principales (remplacées par les livrées)
     stats: [0.3, 1, 0.75],
   },
   {
@@ -44,6 +59,7 @@ export const PLANES = [
     cam: { dist: 19, height: 4.8 }, eye: [0, 0.46, -1.25],
     inertia: 0.36, stallBite: 0.3, flaps: true, turb: 0.95,
     engine: { kind: 'piston', cyl: 9, radial: true, idle: 600, max: 2200, blades: 3, gear: 1, exhaust: 85, rough: 0.45 },
+    paint: [0xf5f2ea, 0xf08a2c, 0xe2e8ec], // couleurs principales (remplacées par les livrées)
     stats: [0.2, 0.42, 0.9],
   },
   {
@@ -56,6 +72,7 @@ export const PLANES = [
     inertia: 0.2, stallBite: 1, flaps: true, turb: 0.6,
     engine: { kind: 'piston', cyl: 12, idle: 900, max: 3000, blades: 3, gear: 0.48, exhaust: 150, rough: 0.3 },
     guns: [[-2.7, -0.3, -2.3], [2.7, -0.3, -2.3]], // canons dans le bord d'attaque (gauche, droite)
+    paint: [0x5f6f3f, 0xf4f1ea, 0xf2c230], // couleurs principales (remplacées par les livrées)
     stats: [0.58, 0.78, 0.55],
   },
   {
@@ -69,6 +86,7 @@ export const PLANES = [
     inertia: 0.09, stallBite: 0.8, flaps: true, turb: 0.35, inputRate: 9, arcade: 2.3,
     engine: { kind: 'jet', spool: 0.55 },
     missiles: [[-4.9, -0.32, 2.4], [4.9, -0.32, 2.4]], // rails sous les ailes (gauche, droite)
+    paint: [0xaab3bc, 0x7d8791, 0x33383d], // couleurs principales (remplacées par les livrées)
     stats: [1, 0.85, 0.4],
   },
   {
@@ -80,6 +98,7 @@ export const PLANES = [
     cam: { dist: 62, height: 13 }, eye: [0, 1.2, -12.45],
     inertia: 0.42, stallBite: 0.6, flaps: true, turb: 0.3,
     engine: { kind: 'turboprop', count: 4, blades: 4, prop: 1020, spool: 1.1 },
+    paint: [0xf2f2ee, 0x2f5fa8, 0x8d959d], // couleurs principales (remplacées par les livrées)
     stats: [0.45, 0.12, 0.3],
   },
 ];
@@ -94,8 +113,9 @@ PLANES.push({
   retract: false, floats: false, jet: false, heli: true,
   cam: { dist: 22, height: 6 }, eye: [0, 0.55, -1.65],
   inertia: 0.25, stallBite: 0, flaps: false, turb: 0.7,
-  engine: { kind: 'turboprop', count: 1, blades: 4, prop: 390, spool: 0.8 },
-  stats: [0.25, 0.6, 0.8],
+  engine: { kind: 'turboprop', count: 1, blades: 4, prop: 390, spool: 0.8, heli: true },
+  paint: [0xd8352a, 0xf3f1ec], // couleurs principales (remplacées par les livrées)
+    stats: [0.25, 0.6, 0.8],
 });
 
 PLANES.push({
@@ -107,8 +127,9 @@ PLANES.push({
   retract: false, floats: false, jet: false, heli: true,
   cam: { dist: 15, height: 4 }, eye: [0, 0.42, -0.62],
   inertia: 0.16, stallBite: 0, flaps: false, turb: 0.9,
-  engine: { kind: 'turboprop', count: 1, blades: 2, prop: 520, spool: 0.6 },
-  stats: [0.2, 1, 0.95],
+  engine: { kind: 'turboprop', count: 1, blades: 2, prop: 520, spool: 0.6, heli: true },
+  paint: [0xf2c230, 0x26292d], // couleurs principales (remplacées par les livrées)
+    stats: [0.2, 1, 0.95],
 });
 PLANES.push({
   id: 'birotor', name: 'Le Bi-rotor',
@@ -119,8 +140,9 @@ PLANES.push({
   retract: false, floats: false, jet: false, heli: true,
   cam: { dist: 42, height: 11 }, eye: [0, 0.75, -7.6],
   inertia: 0.5, stallBite: 0, flaps: false, turb: 0.35,
-  engine: { kind: 'turboprop', count: 2, blades: 3, prop: 230, spool: 1 },
-  stats: [0.35, 0.3, 0.75],
+  engine: { kind: 'turboprop', count: 2, blades: 3, prop: 230, spool: 1, heli: true },
+  paint: [0x6b7448, 0x4d5434, 0xe9e4d4], // couleurs principales (remplacées par les livrées)
+    stats: [0.35, 0.3, 0.75],
 });
 PLANES.splice(PLANES.findIndex((p) => p.id === 'jet'), 0, {
   id: 'racer', name: 'Le Racer',
@@ -131,10 +153,21 @@ PLANES.splice(PLANES.findIndex((p) => p.id === 'jet'), 0, {
   cam: { dist: 13, height: 3.3 }, eye: [0, 0.62, -0.05],
   inertia: 0.08, stallBite: 0.9, flaps: false, turb: 0.8, inputRate: 8, arcade: 2,
   engine: { kind: 'piston', cyl: 8, idle: 950, max: 3300, blades: 3, gear: 0.6, exhaust: 135, rough: 0.35 },
-  stats: [0.6, 1, 0.45],
+  paint: [0xd62f2f, 0xf5f3ee], // couleurs principales (remplacées par les livrées)
+    stats: [0.6, 1, 0.45],
 });
 
 for (const p of PLANES) p.takeoff = p.stall * 1.12;
+
+/** Livrées : remplacent dans l'ordre les couleurs « paint » de chaque appareil (null = d'origine). */
+export const LIVERIES = [
+  { name: "D'origine", colors: null },
+  { name: 'Patrouille', colors: [0x1f4f9c, 0xf4f4f4, 0xd8312b] },
+  { name: 'Nuit', colors: [0x2a2e35, 0x6b7480, 0xf2c230] },
+  { name: 'Désert', colors: [0xd8b878, 0x8a5a33, 0x6b7448] },
+  { name: 'Corail', colors: [0xf27059, 0x2ec4b6, 0xfff1d6] },
+  { name: 'Arctique', colors: [0xf2f5f7, 0xe8462e, 0x2b3440] },
+];
 
 /** Points de départ proposés au menu. */
 export const STARTS = [

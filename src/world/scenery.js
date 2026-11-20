@@ -182,8 +182,9 @@ export function buildScenery(scene) {
     /** Cibles : montgolfières encore en l'air. */
     balloons,
     /** Abat une montgolfière ; elle revient (en gonflant) au bout de 40 s. */
+    respawn: 40,
     pop(b) {
-      b.alive = false; b.back = 40; b.col.off = true; b.mesh.visible = false; b.dmg = 0;
+      b.alive = false; b.back = this.respawn; b.col.off = true; b.mesh.visible = false; b.dmg = 0;
     },
     update(t, night, dt = 0) {
       for (const b of balloons) {

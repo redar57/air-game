@@ -1,2 +1,2 @@
 // Numéro de version affiché au menu (à changer à chaque publication).
-export const VERSION = '1.7 · nouveau menu, 3 appareils';
+export const VERSION = '1.8 · missions, planeur, carte';

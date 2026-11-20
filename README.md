@@ -1,7 +1,7 @@
 # Air Game — vol libre
 
-Petit simulateur de vol arcade au-dessus d'une île : sept avions (tourisme, biplan de voltige, hydravion amphibie,
-chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur) et trois hélicoptères (bombardier d'eau,
+Petit simulateur de vol arcade au-dessus d'une île : huit avions (tourisme, planeur, biplan de voltige, hydravion
+amphibie, chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur) et trois hélicoptères (bombardier d'eau,
 Libellule à bulle, Bi-rotor de transport), un aéroport, un altiport et un porte-avions.
 Tout est généré par le code : relief, avions, sons. Aucune installation.
 
@@ -30,6 +30,7 @@ Navigateurs : Chrome, Edge, Firefox ou Safari récents (Safari 16.4 minimum).
 | Espace | A (Croix) | Freins / aérofreins |
 | C | Y (Triangle) | Changer de vue |
 | souris (glisser) | stick droit | Regarder autour |
+| N | croix ← | Carte de l'île |
 | T | croix ↑ | Heure du jour |
 | Retour arrière | Select | Réapparaître en vol |
 | Échap | Start | Pause |
@@ -60,6 +61,19 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   plus pour monter, moins pour descendre (près du sol, la descente est freinée toute seule). Avant / arrière pour
   avancer ou reculer, gauche / droite pour tourner, A/E (palonnier) pour pivoter sur place, Espace pour revenir en
   stationnaire. Ils se posent partout où c'est assez plat.
+- **Modes de jeu** (choisis au menu) :
+  - *Voltige notée* : 3 minutes pour marquer un maximum de points ; enchaîner les figures multiplie les points.
+  - *Chasse* (jet, chasseur) : 3 minutes pour abattre un maximum de montgolfières.
+  - *Feux de forêt* (hélicoptères, hydravion) : écope au ras de l'eau (stationnaire bas pour l'hélico, glissade sur
+    l'eau pour l'hydravion), puis maintiens X au-dessus des flammes. Chrono et record.
+- **Planeur** : sans moteur, il part en altitude. Les gros nuages ronds marquent les thermiques : tourne dedans pour
+  monter, le vario bipe d'autant plus vite que ça monte.
+- **Carte** : mini-carte en bas à droite (tourne avec l'appareil), grande carte avec N (croix ← à la manette) :
+  pistes, thermiques, montgolfières, feux.
+- **Carburant et pannes** (option du menu) : la consommation dépend des gaz, des pannes peuvent survenir en vol ;
+  plein et réparation à l'arrêt sur une piste ou sur le porte-avions. Moteur coupé, l'hélicoptère descend en
+  autorotation.
+- **Livrées** : six jeux de couleurs par appareil, choisis au menu (gardés d'une partie à l'autre, comme les records).
 - **Menu** : liste des appareils avec vignettes et filtre Avions / Hélicos, fiche avec atouts et commandes propres à
   chaque appareil, choix du départ, de l'heure, du sens du tangage et du son. ↑/↓ change d'appareil, ←/→ de départ
   (à la manette : croix ou stick, LB/RB pour la catégorie, A pour décoller).

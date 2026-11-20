@@ -39,16 +39,32 @@ export class Sound {
     comp.threshold.value = -14; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.01; comp.release.value = 0.25;
     this.master.connect(comp).connect(ctx.destination);
 
+    // réverbération (réponse impulsionnelle synthétique) : profondeur des explosions et des sons lointains
+    this.reverb = ctx.createConvolver();
+    const len = Math.floor(ctx.sampleRate * 1.8), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+    }
+    this.reverb.buffer = ir;
+    this.reverbIn = ctx.createGain(); this.reverbIn.gain.value = 0.35;
+    this.reverbIn.connect(this.reverb).connect(this.master);
+
     // tout ce qui vient de l'avion passe par ici : distance, air, stéréo
     this.planeBus = ctx.createGain();
     this.airLP = ctx.createBiquadFilter(); this.airLP.type = 'lowpass'; this.airLP.frequency.value = 18000;
     this.pan = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
     this.planeBus.connect(this.airLP).connect(this.pan).connect(this.master);
+    this.planeSend = ctx.createGain(); this.planeSend.gain.value = 0.08;
+    this.pan.connect(this.planeSend).connect(this.reverbIn);
 
     // le moteur a son propre filtre (cockpit fermé = étouffé)
     this.engineGain = ctx.createGain(); this.engineGain.gain.value = 0;
     this.cabinLP = ctx.createBiquadFilter(); this.cabinLP.type = 'lowpass'; this.cabinLP.frequency.value = 20000;
-    this.engineGain.connect(this.cabinLP).connect(this.planeBus);
+    // dans le cockpit : les basses vibrent dans la carlingue
+    this.cabinBass = ctx.createBiquadFilter(); this.cabinBass.type = 'lowshelf'; this.cabinBass.frequency.value = 180; this.cabinBass.gain.value = 0;
+    this.startGain = ctx.createGain(); this.startGain.gain.value = 1; // séquence de démarrage
+    this.engineGain.connect(this.startGain).connect(this.cabinLP).connect(this.cabinBass).connect(this.planeBus);
 
     // bruit blanc partagé
     const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -70,6 +86,13 @@ export class Sound {
     this.buffet = chain(noise(), 'lowpass', 70, 1.2, this.planeBus);
     this.roll = chain(noise(), 'lowpass', 300, 0.8, this.planeBus);
     this.water = chain(noise(), 'bandpass', 1400, 0.9, this.planeBus);
+    // ressac : vagues qui vont et viennent quand on vole bas au-dessus de la mer (non lié à la position de l'avion)
+    this.sea = chain(noise(), 'lowpass', 600, 0.6, this.master);
+
+    // vario du planeur : bips de plus en plus aigus et rapides quand ça monte, grondement grave quand ça descend fort
+    this.vario = ctx.createOscillator(); this.vario.type = 'triangle'; this.vario.frequency.value = 600;
+    this.varioGain = ctx.createGain(); this.varioGain.gain.value = 0;
+    this.vario.connect(this.varioGain).connect(this.master); this.vario.start();
 
     // alarme de décrochage (dans le cockpit surtout)
     this.horn = ctx.createOscillator(); this.horn.type = 'square'; this.horn.frequency.value = 440;
@@ -101,6 +124,7 @@ export class Sound {
     const ctx = this.ctx;
     if (this.engine) { try { this.engine.stop(); this.engine.node.disconnect(); } catch { /* déjà coupé */ } }
     const e = this.spec.engine || { kind: this.spec.jet ? 'jet' : 'piston' };
+    if (e.kind === 'none') { this.engine = null; return; } // planeur : que le vent
     if (this.worklet) {
       const node = new AudioWorkletNode(ctx, 'engine', { numberOfInputs: 0, outputChannelCount: [1], processorOptions: e });
       const out = ctx.createGain();
@@ -163,7 +187,13 @@ export class Sound {
     const rpm = clamp((plane.rpm - IDLE) / (1 - IDLE), 0, 1.1);
     const speedRatio = clamp(plane.speed / spec.maxSpeed, 0, 1.6);
     set(this.cabinLP.frequency, cockpit ? (open ? 7000 : 1300) : 20000, 0.1);
-    set(this.engineGain.gain, engineOn ? (cockpit && !open ? 0.85 : 1) : 0, engineOn ? 0.05 : 0.25);
+    set(this.cabinBass.gain, cockpit && !open ? 7 : 0, 0.2);
+    const swell = 0.55 + 0.45 * Math.sin(t * 0.9) * Math.sin(t * 0.37 + 1);
+    const seaK = active && plane.surface === 'water' ? Math.max(0, 1 - plane.agl / 120) : 0;
+    set(this.sea.g.gain, seaK * swell * (cockpit && !open ? 0.06 : 0.16), 0.3);
+    set(this.sea.f.frequency, 380 + 500 * swell, 0.3);
+    const cough = plane.fuelOn && plane.failure === 'partial' && Math.random() < 0.08 ? 0.15 : 1;
+    set(this.engineGain.gain, engineOn ? (cockpit && !open ? 0.85 : 1) * cough : 0, engineOn ? (cough < 1 ? 0.01 : 0.05) : 0.6);
     const e = this.engine;
     if (e && !e.simple) {
       set(e.rpm, rpm, 0.03); set(e.load, spec.heli ? plane.throttle : plane.power, 0.05); set(e.burner, plane.burner, 0.08);
@@ -191,6 +221,18 @@ export class Sound {
     set(this.roll.f.frequency, 120 + 500 * gs);
     set(this.roll.g.gain, on * gs * land * 0.35);
     set(this.water.g.gain, on * (plane.onGround && plane.surface === 'water' ? 0.05 + gs * 0.4 : 0));
+
+    // --- vario (planeur)
+    let vg = 0;
+    if (spec.glider && active && !plane.onGround) {
+      const vs = plane.vel.y + (plane.airLift || 0);
+      if (vs > 0.25) {
+        const per = clamp(0.48 - vs * 0.07, 0.11, 0.48);
+        this.vario.frequency.setTargetAtTime(Math.min(1500, 520 + vs * 120), t, 0.02);
+        vg = (t % per) < per * 0.55 ? 0.09 : 0;
+      } else if (vs < -2.8) { this.vario.frequency.setTargetAtTime(240, t, 0.05); vg = 0.035; }
+    }
+    this.varioGain.gain.setTargetAtTime(vg, t, 0.006);
 
     // --- alarme de décrochage : continue pour les avions à hélice, bips pour le jet
     let horn = flying && engineOn && plane.stallWarn ? 1 : 0;
@@ -268,10 +310,56 @@ export class Sound {
     if (!this.ctx) return;
     const k = 1 / (1 + dist / 350), delay = Math.min(4, dist / C_SOUND) * 1000;
     setTimeout(() => {
+      this.burst(Math.max(250, 1200 * k), 2, 1.4 * (1 - k * 0.5), this.reverbIn); // écho lointain
       this.burst(Math.max(250, 1200 * k), 1.4, 1.2 * k);
       this.burst(110, 2, 0.9 * k);
       if (water) this.burst(3000, 0.9, 0.5 * k);
     }, delay);
+  }
+
+  /** Ambiance des feux de forêt : crépitement selon la distance, écopage, largage. */
+  fireAmbience(fires, pos, scooping, dropping) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (!this.fireNodes) {
+      const mk = (type, f, q) => {
+        const s = ctx.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true; s.start(0, Math.random() * 1.5);
+        const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+        const g = ctx.createGain(); g.gain.value = 0;
+        s.connect(fl).connect(g).connect(this.master);
+        return g;
+      };
+      this.fireNodes = { crackle: mk('bandpass', 2400, 1.4), roar: mk('lowpass', 260, 0.7), scoop: mk('highpass', 1800, 0.6), drop: mk('lowpass', 900, 0.6) };
+    }
+    const n = this.fireNodes;
+    let near = 1e9, pw = 0;
+    if (pos) for (const f of fires) if (!f.out) { const d = Math.hypot(f.x - pos.x, f.y - pos.y, f.z - pos.z); if (d < near) { near = d; pw = f.power; } }
+    const k = pos ? Math.max(0, 1 - near / 900) * Math.min(1, pw) : 0;
+    n.crackle.gain.setTargetAtTime(k * (Math.random() < 0.3 ? 0.5 : 0.05), t, 0.01); // crépitement irrégulier
+    n.roar.gain.setTargetAtTime(k * 0.5, t, 0.2);
+    n.scoop.gain.setTargetAtTime(scooping ? 0.25 : 0, t, 0.1);
+    n.drop.gain.setTargetAtTime(dropping ? 0.5 : 0, t, 0.08);
+  }
+
+  /** Panne : gros raté, toux du moteur. */
+  failure() {
+    this.burst(400, 0.35, 1.0, this.planeBus);
+    setTimeout(() => this.burst(300, 0.3, 0.8, this.planeBus), 260);
+    setTimeout(() => this.burst(200, 0.5, 0.6, this.planeBus), 620);
+  }
+
+  /** Petit carillon (n notes) pour les annonces. */
+  chime(n = 1) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    for (let k = 0; k < n; k++) {
+      const t = ctx.currentTime + k * 0.18;
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.value = n > 1 ? 880 - k * 220 : 660 + k * 220;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.55);
+    }
   }
 
   gear() { this.motor(this.spec?.id === 'cargo' ? 3.4 : 2.2, 120, 0.05); }
@@ -299,7 +387,45 @@ export class Sound {
     }
   }
 
-  boom() { this.burst(900, 1.6, 1.4); this.burst(120, 2.4, 1.2); }
+  /** Démarrage au sol : démarreur et toussotements (pistons) ou montée en régime (turbines), puis le moteur. */
+  startup(spec) {
+    if (!this.ctx || !spec.engine || spec.engine.kind === 'none') return;
+    const ctx = this.ctx, t = ctx.currentTime, g = this.startGain.gain;
+    const piston = spec.engine.kind === 'piston';
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(0.0001, t);
+    g.setValueAtTime(0.0001, t + (piston ? 1.1 : 0.3));
+    g.exponentialRampToValueAtTime(1, t + (piston ? 1.6 : 2.6));
+    if (piston) {
+      // démarreur : grognement électrique qui accélère, quelques ratés, puis le moteur prend
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(14, t); o.frequency.linearRampToValueAtTime(28, t + 1.1);
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
+      const sg = ctx.createGain(); sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(0.25, t + 0.1);
+      sg.gain.setValueAtTime(0.25, t + 1.0); sg.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+      o.connect(lp).connect(sg).connect(this.planeBus); o.start(t); o.stop(t + 1.35);
+      [0.55, 0.8, 1.0, 1.15].forEach((d, k) => setTimeout(() => this.burst(300 + k * 60, 0.18, 0.45, this.planeBus), d * 1000));
+    } else {
+      // turbine : sifflement qui monte
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(spec.heli ? 2400 : 3600, t + 2.4);
+      const sg = ctx.createGain(); sg.gain.setValueAtTime(0.0001, t); sg.gain.exponentialRampToValueAtTime(0.05, t + 0.6);
+      sg.gain.exponentialRampToValueAtTime(0.0001, t + 3);
+      o.connect(sg).connect(this.planeBus); o.start(t); o.stop(t + 3.05);
+    }
+  }
+
+  /** Petit clic d'interface (menu). */
+  click(up = true) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(up ? 1250 : 900, t);
+    o.frequency.exponentialRampToValueAtTime(up ? 1700 : 700, t + 0.05);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.09);
+  }
+
+  boom() { this.burst(900, 1.6, 1.4, this.reverbIn); this.burst(900, 1.6, 1.4); this.burst(120, 2.4, 1.2); }
   splash() { this.burst(3500, 1.1, 0.8); this.burst(300, 1.2, 0.6); }
   thump() { this.burst(260, 0.25, 0.7); }
 }

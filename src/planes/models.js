@@ -6,7 +6,9 @@ import { newMissileMesh } from '../weapons.js';
 // Repère avion : -Z vers l'avant, +X aile droite, +Y vers le haut. Origine près du centre de gravité.
 
 const mats = new Map();
+let PAINT = null; // livrée en cours de construction : couleur d'origine -> nouvelle couleur
 function M(color, opts) {
+  if (PAINT && PAINT.has(color)) color = PAINT.get(color);
   const key = color + (opts ? JSON.stringify(opts) : '');
   if (!mats.has(key)) mats.set(key, new THREE.MeshLambertMaterial({ color, flatShading: true, ...opts }));
   return mats.get(key);
@@ -543,16 +545,38 @@ function racer(spec) {
   return m;
 }
 
-const BUILDERS = { tourisme, biplan, hydravion, chasseur, jet, cargo, helico, libellule, birotor, racer };
+// Planeur (blanc, saumons rouges, empennage en T)
+function planeur(spec) {
+  const m = base(), { hull, always } = m;
+  const W = 0xf6f6f2, R = 0xd8312b;
+  hull.add(tube(0.05, 0.42, -3.5, -2.6, W));
+  hull.add(tube(0.42, 0.44, -2.6, -0.5, W, { sy: 1.05 }));
+  hull.add(tube(0.42, 0.11, -0.5, 4.4, W, { y: 0.12 }));
+  hull.add(blob(0.36, GLASS, 0, 0.36, -1.85, 0.95, 0.85, 3.0));
+  wheel(hull, 0.3, 0.12, 0, -0.45, -0.7);
+  bar(hull, [0, -0.25, 4.0], [0, -0.32, 4.25], 0.05, DARK);
+  finS(m, hull, [1.35, 1.15, 0.62, 0.08, 0.5], W, 0, 0.25, 3.75, 0, 0.36);
+  wingS(m, hull, [1.35, 0.62, 0.4, 0.06, 0.12], R, 0, 1.6, 4.3, [{ kind: 'elevator', t0: 0, t1: 1 }], 0.4);
+  wingS(m, always, [8.75, 1.05, 0.42, 0.12, 0.22, 0.4, 0.5], W, 0.25, 0.32, -0.65, [{ kind: 'aileron', t0: 0.55, t1: 0.96 }], 0.26);
+  for (const s of [-1, 1]) always.add(box(0.7, 0.09, 0.45, R, s * 8.65, 0.73, -0.45));
+  m.cockpit = makeCockpit(spec.eye, { w: 0.62, frame: true, nose: { w: 0.8, len: 1.4, color: W, drop: 0.12 } });
+  m.tips = [[9, 0.72, -0.4], [-9, 0.72, -0.4]];
+  return m;
+}
+
+const BUILDERS = { planeur, tourisme, biplan, hydravion, chasseur, jet, cargo, helico, libellule, birotor, racer };
 const cache = new Map();
 
-/** Construit (une seule fois) le modèle 3D d'un avion. */
-export function getModel(spec) {
-  if (cache.has(spec.id)) return cache.get(spec.id);
+/** Construit (une seule fois par livrée) le modèle 3D d'un appareil. */
+export function getModel(spec, livery = null) {
+  const key = `${spec.id}:${livery ? livery.name : ''}`;
+  if (cache.has(key)) return cache.get(key);
+  PAINT = livery && livery.colors && spec.paint ? new Map(spec.paint.map((c, i) => [c, livery.colors[i]])) : null;
   const m = BUILDERS[spec.id](spec);
+  PAINT = null;
   m.root.add(m.cockpit);
   m.root.traverse((o) => { if (o.isMesh && !o.userData.noShadow) o.castShadow = true; });
-  cache.set(spec.id, m);
+  cache.set(key, m);
   return m;
 }
 
