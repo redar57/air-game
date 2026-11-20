@@ -9,6 +9,7 @@ import { getModel, animateModel } from './planes/models.js';
 import { drawInstruments } from './planes/instruments.js';
 import { Plane, IDLE } from './flight/physics.js';
 import { approachInfo } from './approach.js';
+import { Missiles } from './weapons.js';
 import { Tricks } from './flight/tricks.js';
 import { CameraRig } from './camera.js';
 import { Input, keyLabels } from './input.js';
@@ -50,7 +51,8 @@ const world = {
   hit: hitObstacle,
 };
 
-let sky, scenery, rig, ui, fx, plane, model;
+let sky, scenery, rig, ui, fx, plane, model, missiles;
+const _sv = new THREE.Vector3();
 const input = new Input(), sound = new Sound(), tricks = new Tricks();
 let state = 'loading';
 let selPlane = 0, selStart = 0;
@@ -80,6 +82,7 @@ function setStart(i) {
 
 function enterMenu() {
   state = 'menu';
+  missiles.reset(); ui.lock(null);
   ui.pause(false); ui.hud(false); ui.clearHint(); ui.menu(true);
   rig.set('orbit');
   plane.placeInAir(show.x, show.y, show.z, show.yaw, 0);
@@ -206,6 +209,10 @@ function handleKeys() {
       else if (key === 'c') ui.toast(rig.next(), 1300);
       else if (key === 'g') ui.toast(plane.toggleGear(), 1300);
       else if (key === 'v') ui.toast(plane.cycleFlaps(), 1300);
+      else if (key === 'x') {
+        if (!plane.spec.missiles) ui.toast('Missiles : seulement sur le jet de chasse', 1500);
+        else if (missiles.fire(plane, scenery.balloons)) input.rumble(0.25, 0.35, 120);
+      }
       else if (key === 't') ui.toast(sky.cycle(), 1500);
       else if (key === 'h') ui.toggleHud();
       else if (key === 'm') ui.toast(sound.toggleMute() ? 'Son coupé' : 'Son activé', 1200);
@@ -221,6 +228,29 @@ function resume() {
   if (state !== 'pause') return;
   state = 'fly';
   ui.pause(false);
+}
+
+/** Missiles en vol, montgolfières touchées, cadre de visée. */
+function updateWeapons(dt) {
+  for (const b of missiles.update(dt, world, scenery.balloons, camera.position)) {
+    scenery.pop(b);
+    // lambeaux d'enveloppe qui retombent
+    for (let i = 0; i < 26; i++) {
+      _sv.set(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).multiplyScalar(30);
+      fx.emit(b.pos, _sv, 2.5 + Math.random() * 2, 1.2 + Math.random() * 1.6, i % 2 ? 0xe84c3d : 0xfff1d6, -0.2, 7);
+    }
+    ui.toast(`Montgolfière abattue ! (${missiles.hits})`, 1800);
+    input.rumble(0.4, 0.6, 220);
+  }
+  const t = state === 'fly' && plane.spec.missiles ? missiles.target(plane, scenery.balloons) : null;
+  if (t) {
+    _sv.copy(t.pos).project(camera);
+    if (_sv.z < 1) {
+      ui.lock((_sv.x + 1) / 2 * window.innerWidth, (1 - _sv.y) / 2 * window.innerHeight, t.pos.distanceTo(plane.pos));
+      return;
+    }
+  }
+  ui.lock(null);
 }
 
 /** Tout ce qu'affiche la planche de bord. */
@@ -273,12 +303,13 @@ function frame(now) {
       ctrl: plane.ctrl, flaps: plane.flapAnim,
     });
     fx.update(dt);
+    updateWeapons(dt);
     fx.updateTrails(dt, plane, model.tips,
       state === 'fly' && !plane.onGround && (plane.gLoad > 3.2 || plane.speed > plane.spec.maxSpeed * 0.93));
     rig.padLook(input.look.x, input.look.y, dt);
     if (state !== 'crash') rig.update(dt, plane, world, state === 'menu');
     if (state === 'fly' && plane.buffet > 0.3 && frameNo % 12 === 0) input.rumble(0.25 * plane.buffet, 0.4 * plane.buffet, 180);
-    scenery.update(time, sky.night);
+    scenery.update(time, sky.night, dt);
   }
   if (!paused) {
     const hdg = Math.atan2(plane.fwd.x, -plane.fwd.z);
@@ -328,6 +359,7 @@ async function boot() {
   sky = new Sky(scene);
   scenery = buildScenery(scene);
   fx = new Effects(scene);
+  missiles = new Missiles(scene, fx, sound);
   rig = new CameraRig(camera, canvas);
   ui = new UI(STARTS, labels);
 
@@ -351,7 +383,7 @@ async function boot() {
   // petit accès pour le débogage depuis la console
   window.airgame = {
     get plane() { return plane; }, get state() { return state; },
-    world, rig, sky, input, sound, runways, carrier, PLANES, heightAt, scene, camera, renderer,
+    world, rig, sky, input, sound, get missiles() { return missiles; }, get scenery() { return scenery; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
     select(planeId, startId) {
       setPlane(PLANES.findIndex((p) => p.id === planeId));
       setStart(STARTS.findIndex((s) => s.id === startId));

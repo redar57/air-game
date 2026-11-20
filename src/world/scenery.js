@@ -155,8 +155,8 @@ function buildBalloons(scene) {
     const by = Math.max(y, heightAt(x, z) + 170);
     mesh.position.set(x, by, z);
     scene.add(mesh);
-    addSphere(x, by - 2, z, 14);
-    out.push({ mesh, by, ph: i * 1.7 });
+    const col = addSphere(x, by - 2, z, 14);
+    out.push({ mesh, by, ph: i * 1.7, col, alive: true, back: 0, pos: mesh.position, r: 15 });
   });
   return out;
 }
@@ -179,8 +179,22 @@ export function buildScenery(scene) {
 
   return {
     trees,
-    update(t, night) {
-      for (const b of balloons) b.mesh.position.y = b.by + Math.sin(t * 0.35 + b.ph) * 3;
+    /** Cibles : montgolfières encore en l'air. */
+    balloons,
+    /** Abat une montgolfière ; elle revient (en gonflant) au bout de 40 s. */
+    pop(b) {
+      b.alive = false; b.back = 40; b.col.off = true; b.mesh.visible = false;
+    },
+    update(t, night, dt = 0) {
+      for (const b of balloons) {
+        b.mesh.position.y = b.by + Math.sin(t * 0.35 + b.ph) * 3;
+        if (!b.alive && (b.back -= dt) <= 0) { b.alive = true; b.col.off = false; b.mesh.visible = true; b.grow = 0; }
+        if (b.grow !== undefined) {
+          b.grow = Math.min(1, b.grow + dt * 0.5);
+          b.mesh.scale.setScalar(0.05 + 0.95 * b.grow * b.grow * (3 - 2 * b.grow));
+          if (b.grow >= 1) b.grow = undefined;
+        }
+      }
       lamp.material.color.setHex(night > 0.2 && Math.sin(t * 2.2) > 0.2 ? 0xffffff : 0xfff0a0);
       lava.material.color.setRGB(1, 0.42 + 0.1 * Math.sin(t * 1.7), 0.1);
       glow.intensity = 1600 * (0.3 + night) * (0.85 + 0.15 * Math.sin(t * 1.7));

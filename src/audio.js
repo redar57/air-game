@@ -230,6 +230,33 @@ export class Sound {
     setTimeout(() => this.burst(500, 0.18, 0.5, this.planeBus), dur * 1000);
   }
 
+  /** Départ d'un missile : souffle qui monte puis s'éloigne. */
+  missile() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.9;
+    f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(2600, t + 0.25);
+    f.frequency.exponentialRampToValueAtTime(900, t + 1.6);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+    src.connect(f).connect(g).connect(this.master);
+    src.start(t, Math.random()); src.stop(t + 1.8);
+    this.burst(180, 0.3, 0.5);
+  }
+
+  /** Explosion lointaine : plus faible, plus sourde, et retardée (le son voyage à 343 m/s). */
+  distantBoom(dist, water) {
+    if (!this.ctx) return;
+    const k = 1 / (1 + dist / 350), delay = Math.min(4, dist / C_SOUND) * 1000;
+    setTimeout(() => {
+      this.burst(Math.max(250, 1200 * k), 1.4, 1.2 * k);
+      this.burst(110, 2, 0.9 * k);
+      if (water) this.burst(3000, 0.9, 0.5 * k);
+    }, delay);
+  }
+
   gear() { this.motor(this.spec?.id === 'cargo' ? 3.4 : 2.2, 120, 0.05); }
   flaps() { this.motor(1.1, 190, 0.03); }
   catapult() { this.burst(2400, 1.8, 0.7, this.planeBus, 'bandpass', 0.6); }

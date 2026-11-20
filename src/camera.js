@@ -89,18 +89,6 @@ export class CameraRig {
       fov = clamp((2 * Math.atan((spec.span * 2.4) / Math.max(far, 1)) * 180) / Math.PI, 7, 55);
     }
 
-    // tremblements : avion près du décrochage ou sous forts G, roulage dans l'herbe
-    this.t = (this.t || 0) + dt;
-    if (!menu && (mode === 'chase' || mode === 'cockpit')) {
-      const rough = plane.onGround ? (plane.surface === 'land' ? 1 : 0.3) * clamp(plane.groundSpeed / 30, 0, 1) : 0;
-      const amp = (plane.buffet || 0) * (mode === 'cockpit' ? 0.009 : 0.005) + rough * 0.0035;
-      if (amp > 1e-4) {
-        const t = this.t * 31;
-        cam.quaternion.multiply(_q.setFromEuler(_e.set(
-          amp * (Math.sin(t) + Math.sin(t * 2.3 + 1)), amp * 0.6 * Math.sin(t * 1.7 + 2), amp * Math.sin(t * 1.3 + 4), 'YXZ')));
-      }
-    }
-
     // jamais sous le sol ni sous l'eau (sauf dans le cockpit)
     if (mode !== 'cockpit') {
       const floor = world.groundAt(cam.position.x, cam.position.z, cam.position.y + 3).h + 1.6;

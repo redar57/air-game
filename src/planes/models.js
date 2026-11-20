@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { lerp, clamp } from '../util.js';
 import { instrumentTexture } from './instruments.js';
+import { newMissileMesh } from '../weapons.js';
 
 // Repère avion : -Z vers l'avant, +X aile droite, +Y vers le haut. Origine près du centre de gravité.
 
@@ -354,6 +355,8 @@ function jet(spec) {
 
   wingS(m, always, [4.1, 4.8, 1.35, 0.17, 2.7, -0.12, 0.4], A, 1.3, 0.02, 0.9,
     [{ kind: 'flap', t0: 0.02, t1: 0.46 }, { kind: 'aileron', t0: 0.5, t1: 0.9 }], 0.22);
+  // missiles sur leurs rails (toujours là : ils sont illimités)
+  for (const p of spec.missiles || []) { const ms = newMissileMesh(); ms.position.set(...p); always.add(ms); }
   m.cockpit = makeCockpit(spec.eye, { w: 0.8, frame: true, nose: { w: 0.9, len: 3.6, color: D, drop: 0.06 } });
   m.tips = [[5.4, -0.1, 3.9], [-5.4, -0.1, 3.9]];
   return m;

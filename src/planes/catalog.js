@@ -57,7 +57,7 @@ export const PLANES = [
   },
   {
     id: 'jet', name: 'Le Jet de chasse',
-    desc: 'Postcombustion au-delà de 90 % de gaz. Taillé pour le porte-avions et les passages à fond.',
+    desc: 'Postcombustion au-delà de 90 % de gaz, missiles illimités (touche X) pour chasser les montgolfières.',
     maxSpeed: 230, stall: 55, accel: 13, pitchRate: 1.5, rollRate: 3.3, yawRate: 0.5, gLimit: 9,
     afterburner: 0.75,
     brake: 10, maxSink: 9, gearH: 2.1, bellyH: 0.86, span: 10.6, len: 15.6, wingY: 0,
@@ -65,6 +65,7 @@ export const PLANES = [
     cam: { dist: 27, height: 5.6 }, eye: [0, 0.9, -3.75],
     inertia: 0.15, stallBite: 0.8, flaps: true, turb: 0.35,
     engine: { kind: 'jet', spool: 0.55 },
+    missiles: [[-4.9, -0.32, 2.4], [4.9, -0.32, 2.4]], // rails sous les ailes (gauche, droite)
     stats: [1, 0.85, 0.4],
   },
   {

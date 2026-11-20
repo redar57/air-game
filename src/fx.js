@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { damp } from './util.js';
 
-const MAX = 110, TRAIL = 46;
+const MAX = 420, TRAIL = 46;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _c = new THREE.Color(), _p = new THREE.Vector3();
 
 /** Explosion / gerbe d'eau en particules low-poly, et traînées de bout d'aile. */
