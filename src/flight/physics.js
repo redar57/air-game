@@ -1,0 +1,412 @@
+import * as THREE from 'three';
+import { clamp, lerp, damp } from '../util.js';
+
+// Modèle de vol « arcade + un peu de réalisme » :
+//  - la vitesse vient des gaz, de la traînée et de la pente (on ralentit en montée, on accélère en piqué) ;
+//  - la portance dépend de la vitesse² : sous la vitesse de décrochage l'avion s'enfonce et le nez tombe ;
+//  - le taux de virage est limité par la portance disponible et par le facteur de charge maxi ;
+//  - incliner l'avion le fait virer, et le nez retombe doucement si on ne tire pas ;
+//  - les commandes ont de l'inertie (un gros porteur s'incline lentement, un biplan aussitôt)
+//    et leur efficacité dépend de la vitesse ;
+//  - le facteur de charge est plafonné : à grande vitesse on vire moins sec (et on perd de la vitesse) ;
+//  - le moteur met un peu de temps à monter en régime (beaucoup pour un réacteur) ;
+//  - volets, effet de sol, turbulences légères, tremblement avant décrochage et aile qui tombe.
+
+const G = 9.81;
+const ARCADE = 1.5; // coup de pouce sur la maniabilité par rapport à un vrai avion
+const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+const _q = new THREE.Quaternion();
+const _axis = new THREE.Vector3(), _vdir = new THREE.Vector3(), _acc = new THREE.Vector3();
+const _n = new THREE.Vector3(), _p = new THREE.Vector3(), _v0 = new THREE.Vector3();
+export const IDLE = 0.22; // régime de ralenti (fraction du régime maxi)
+// crans de volets : vitesse de décrochage multipliée par `stall`, traînée en plus
+const FLAPS = [{ stall: 1, drag: 0, name: 'Volets rentrés' }, { stall: 0.9, drag: 0.2, name: 'Volets : décollage' },
+  { stall: 0.8, drag: 0.6, name: 'Volets : atterrissage' }];
+/** Petit bruit lisse (somme de sinus) pour les turbulences. */
+const wobble = (t, a) => Math.sin(t * 1.31 + a) * 0.5 + Math.sin(t * 2.87 + a * 1.7) * 0.3 + Math.sin(t * 0.53 + a * 2.3) * 0.6;
+/** Sa dérivée : appliquée comme vitesse de rotation, l'avion oscille autour de son attitude sans dériver. */
+const wobbleD = (t, a) => Math.cos(t * 1.31 + a) * 0.655 + Math.cos(t * 2.87 + a * 1.7) * 0.861 + Math.cos(t * 0.53 + a * 2.3) * 0.318;
+
+export class Plane {
+  constructor(spec) {
+    this.spec = spec;
+    this.pos = new THREE.Vector3();
+    this.quat = new THREE.Quaternion();
+    this.vel = new THREE.Vector3();
+    this.fwd = new THREE.Vector3(0, 0, -1);
+    this.up = new THREE.Vector3(0, 1, 0);
+    this.right = new THREE.Vector3(1, 0, 0);
+    this.gNormal = new THREE.Vector3(0, 1, 0);
+    this.ctrl = { pitch: 0, roll: 0, yaw: 0 };
+    this.events = [];
+    this.hitPts = [
+      new THREE.Vector3(0, 0, -spec.len / 2),
+      new THREE.Vector3(0, 0.3, spec.len * 0.45),
+      new THREE.Vector3(spec.span / 2, spec.wingY, 0),
+      new THREE.Vector3(-spec.span / 2, spec.wingY, 0),
+    ];
+    this.reset();
+  }
+
+  reset() {
+    this.throttle = 0; this.onGround = false; this.crashed = false;
+    this.gearDown = true; this.gearAnim = 1;
+    this.ctrl.pitch = this.ctrl.roll = this.ctrl.yaw = 0;
+    this.pitchRate = 0; this.rollRate = 0; this.gLoad = 1;
+    this.yawG = 0; this.groundSpeed = 0; this.groundPitch = 0;
+    this.speed = 0; this.agl = 0; this.surface = 'land';
+    this.stalling = false; this.braking = false; this.arrest = false; this.catapult = false;
+    this.airTime = 0; this.time = 0;
+    this.rpm = IDLE; this.flaps = 0; this.flapAnim = 0; this.yawRate = 0;
+    this.buffet = 0; this.dropSide = 0; this.ground = 0; this.seed = Math.random() * 100;
+    this.events.length = 0;
+  }
+
+  get retractUp() { return this.spec.retract && !this.gearDown; }
+  get standH() { return this.retractUp ? this.spec.bellyH : this.spec.gearH; }
+  get burner() {
+    return this.spec.afterburner ? clamp((this.throttle - 0.9) * 10, 0, 1) * clamp((this.rpm - 0.88) * 12, 0, 1) : 0;
+  }
+  /** Puissance réellement délivrée (0 au ralenti, 1 plein gaz), en retard sur la manette. */
+  get power() { return clamp((this.rpm - IDLE) / (1 - IDLE), 0, 1); }
+  /** Vitesse de décrochage du moment (les volets et l'effet de sol l'abaissent). */
+  get stallSpeed() {
+    const f = FLAPS[1].stall, fl = this.flapAnim;
+    const flap = fl <= 1 ? lerp(1, f, fl) : lerp(f, FLAPS[2].stall, fl - 1);
+    return this.spec.stall * flap / Math.sqrt(1 + 0.22 * this.ground);
+  }
+  get takeoffSpeed() { return this.stallSpeed * 1.12; }
+  get pitch() { return Math.asin(clamp(this.fwd.y, -1, 1)); }
+  get roll() { return Math.atan2(-this.right.y, this.up.y); }
+
+  thrust() {
+    return this.spec.accel * this.power * (1 + (this.spec.afterburner || 0) * this.burner);
+  }
+
+  axes() {
+    this.fwd.set(0, 0, -1).applyQuaternion(this.quat);
+    this.up.set(0, 1, 0).applyQuaternion(this.quat);
+    this.right.set(1, 0, 0).applyQuaternion(this.quat);
+  }
+
+  placeOnGround(x, z, yaw, world) {
+    this.reset();
+    const g = world.groundAt(x, z, 1e4);
+    this.pos.set(x, g.h + this.spec.gearH, z);
+    this.yawG = yaw;
+    this.quat.setFromAxisAngle(Y, yaw);
+    this.vel.set(0, 0, 0);
+    this.onGround = true;
+    this.surface = g.type;
+    this.axes();
+  }
+
+  placeInAir(x, y, z, yaw, speed) {
+    this.reset();
+    this.pos.set(x, y, z);
+    this.quat.setFromAxisAngle(Y, yaw);
+    this.axes();
+    this.vel.copy(this.fwd).multiplyScalar(speed);
+    this.speed = speed;
+    this.throttle = 0.7;
+    this.rpm = IDLE + (1 - IDLE) * this.throttle;
+    this.gearDown = !this.spec.retract;
+    this.gearAnim = this.gearDown ? 1 : 0;
+    this.airTime = 10;
+    this.agl = 100;
+  }
+
+  /** Renvoie un petit message à afficher, ou null. */
+  toggleGear() {
+    if (!this.spec.retract) return this.spec.floats ? 'Flotteurs fixes' : 'Train fixe';
+    if (this.onGround && this.gearDown) return 'Train verrouillé au sol';
+    this.gearDown = !this.gearDown;
+    this.events.push({ type: 'gear', down: this.gearDown });
+    return this.gearDown ? 'Train sorti' : 'Train rentré';
+  }
+
+  /** Cran de volets suivant (0 -> 1 -> 2 -> 0). Renvoie un message. */
+  cycleFlaps() {
+    if (!this.spec.flaps) return 'Pas de volets sur cet avion';
+    const next = (this.flaps + 1) % FLAPS.length;
+    if (next > 0 && !this.onGround && this.speed > this.flapLimit) return 'Trop vite pour sortir les volets';
+    this.flaps = next;
+    this.events.push({ type: 'flaps', level: next });
+    return FLAPS[next].name;
+  }
+  get flapLimit() { return this.spec.maxSpeed * 0.68; }
+
+  crash(kind) {
+    this.crashed = true;
+    this.events.push({ type: 'crash', kind });
+  }
+
+  step(dt, input, world) {
+    if (this.crashed) return;
+    this.time += dt;
+    const c = this.ctrl, s = this.spec;
+    // au clavier, une touche tapée donne une petite correction, maintenue elle va à fond :
+    // on avance vite vers le neutre, plus progressivement vers le débattement maxi
+    const ease = (cur, want, slow) => {
+      const rate = input.analog ? 18 : Math.abs(want) > Math.abs(cur) && want * cur >= 0 ? slow : 14;
+      return cur + (want - cur) * (1 - Math.exp(-rate * dt));
+    };
+    c.pitch = ease(c.pitch, input.pitch, 5);
+    c.roll = ease(c.roll, input.roll, 7);
+    c.yaw = ease(c.yaw, input.yaw, 5);
+    this.throttle = clamp(this.throttle + input.throttle * 0.6 * dt, 0, 1);
+    // régime moteur : un piston répond vite, une turbine monte lentement en régime (surtout au ralenti)
+    const target = IDLE + (1 - IDLE) * this.throttle, e = s.engine || {};
+    const spool = e.spool ? (0.3 + 1.7 * this.rpm * this.rpm) / e.spool : 5;
+    this.rpm += (target - this.rpm) * (1 - Math.exp(-spool * dt));
+    this.flapAnim = damp(this.flapAnim, this.flaps, 1.4, dt);
+    this.gearAnim = damp(this.gearAnim, this.gearDown ? 1 : 0, 5, dt);
+    this.braking = input.brake;
+    if (this.onGround) this.stepGround(dt, input, world);
+    else this.stepAir(dt, input, world);
+    this.speed = this.vel.length();
+  }
+
+  // -------------------------------------------------------------------------
+  stepAir(dt, input, world) {
+    const s = this.spec, q = this.quat, v = this.vel, c = this.ctrl, pos = this.pos;
+    const { fwd, up, right } = this;
+    this.airTime += dt;
+    let V = v.length();
+    // effet de sol : à moins d'une demi-envergure du sol, l'aile porte mieux (on « flotte » à l'arrondi)
+    this.ground = clamp(1 - this.agl / (0.6 * s.span), 0, 1) ** 2;
+    const st = this.stallSpeed, vr = V / st;
+    const lf = clamp(vr * vr, 0, 1); // part du poids que les ailes peuvent porter
+    // efficacité des gouvernes : faible à basse vitesse, un peu plus dure tout près de la vitesse maxi
+    const auth = clamp((vr - 0.15) / 0.85, 0.12, 1) * (1 - 0.25 * clamp((V / s.maxSpeed - 0.95) * 3, 0, 1));
+    const nMax = Math.min(s.gLimit, vr * vr);
+    const Vs = Math.max(V, 5);
+    const maxPitch = Math.min(s.pitchRate, (ARCADE * nMax * G) / Vs, (1.2 * s.gLimit * G) / Vs) * (0.25 + 0.75 * lf);
+    let pr = c.pitch * maxPitch;
+    if (pr < 0) pr *= 0.75;
+    // limiteur de G : le virage incliné consomme déjà une partie du facteur de charge disponible
+    const horiz0 = Math.sqrt(Math.max(0, 1 - fwd.y * fwd.y));
+    const nOther = lf * (Math.abs(up.y) + 1.35 * Math.abs(right.y) * horiz0);
+    const nRoom = Math.max(0.6, 1.1 * s.gLimit - nOther);
+    if (pr > 0) pr = Math.min(pr, (nRoom * G) / Vs);
+    if (this.gLoad > 1.1 * s.gLimit && pr > 0) pr *= (1.1 * s.gLimit) / this.gLoad;
+    let rr = (c.roll * s.rollRate + c.yaw * s.rollRate * 0.15) * auth; // le palonnier fait aussi pencher l'avion
+    const yr = c.yaw * s.yawRate * auth;
+
+    // décrochage : tremblement à l'approche, puis une aile tombe si on insiste
+    const airborne = this.airTime > 1.2;
+    this.buffet = airborne ? Math.max(clamp((1.1 - vr) / 0.1, 0, 1), clamp((this.gLoad / s.gLimit - 0.85) * 5, 0, 1) * 0.6) : 0;
+    if (airborne && vr < 0.97 && (c.pitch > 0.3 || vr < 0.8)) {
+      if (!this.dropSide) this.dropSide = Math.random() < 0.5 ? -1 : 1;
+      rr += this.dropSide * s.stallBite * 1.6 * clamp((1 - vr) * 6, 0, 1);
+    } else if (vr > 1.05) this.dropSide = 0;
+    // turbulences : plus fortes près du relief, et pour les avions légers
+    // (amplitude en radians : quelques degrés au plus)
+    const tb = s.turb * (0.02 + 0.04 * clamp(1 - this.agl / 500, 0, 1)) * clamp(vr, 0, 1.5) * (this.surface === 'water' ? 0.6 : 1)
+      + this.buffet * 0.012;
+    const tf = 1 + this.buffet * 5, tt = this.time * tf + this.seed;
+    pr += tb * tf * wobbleD(tt, 0.3);
+    rr += tb * tf * 1.6 * 1.13 * wobbleD(tt * 1.13, 2.1);
+
+    // inertie : la vitesse de rotation rejoint la consigne en `inertia` secondes environ
+    const ki = 1 - Math.exp(-dt / s.inertia);
+    this.pitchRate += (pr - this.pitchRate) * ki;
+    this.rollRate += (rr - this.rollRate) * ki * 1.3;
+    this.yawRate += (yr - this.yawRate) * ki;
+    pr = this.pitchRate; rr = this.rollRate;
+
+    q.multiply(_q.setFromAxisAngle(X, pr * dt));
+    q.multiply(_q.setFromAxisAngle(Z, -rr * dt));
+    q.multiply(_q.setFromAxisAngle(Y, -this.yawRate * dt));
+    this.axes();
+    const horiz = Math.sqrt(Math.max(0, 1 - fwd.y * fwd.y));
+
+    // inclinaison -> virage
+    q.premultiply(_q.setFromAxisAngle(Y, right.y * (G / Math.max(V, st)) * 1.35 * lf * horiz * dt));
+    // le nez retombe quand l'avion est incliné (ou sur le dos)
+    // … et aussi quand on vole trop lentement : gaz réduits, l'avion se met de lui-même en descente
+    if (horiz > 0.05) {
+      _axis.set(fwd.z, 0, -fwd.x).normalize();
+      //   (jusqu'à une pente de plané qui dépend du manque de vitesse, pas au-delà)
+      const slow = clamp(1.35 - vr, 0, 1);
+      const excess = Math.asin(clamp(fwd.y, -1, 1)) + 0.45 * slow;
+      const glide = excess > 0 ? Math.min(0.3 * slow + 0.04, excess * 2) * (c.pitch > 0.2 ? 0.35 : 1) : 0;
+      q.premultiply(_q.setFromAxisAngle(_axis, (0.1 * (1 - up.y) * lf + glide) * horiz * dt));
+    }
+    // décrochage : le nez rejoint la trajectoire (il tombe)
+    if (lf < 1 && V > 2) {
+      this.axes();
+      _vdir.copy(v).multiplyScalar(1 / V);
+      _axis.crossVectors(fwd, _vdir);
+      const sn = _axis.length();
+      if (sn > 1e-4) {
+        const ang = Math.asin(Math.min(1, sn)) * (1 - Math.exp(-(1 - lf) * 2.2 * dt));
+        q.premultiply(_q.setFromAxisAngle(_axis.multiplyScalar(1 / sn), ang));
+      }
+    }
+    q.normalize();
+    this.axes();
+
+    // forces
+    if (V > 0.5) _vdir.copy(v).multiplyScalar(1 / V); else _vdir.copy(fwd);
+    const kd = s.accel / (s.maxSpeed * s.maxSpeed);
+    const n = (Math.abs(pr) * V) / G + lf;
+    const flapDrag = this.flapAnim <= 1 ? FLAPS[1].drag * this.flapAnim : lerp(FLAPS[1].drag, FLAPS[2].drag, this.flapAnim - 1);
+    let drag = kd * V * V * (1 + (s.retract && this.gearAnim > 0.5 ? 0.35 : 0) + (input.brake ? 1.6 : 0) + flapDrag);
+    drag += 0.08 * n * n * G * Math.min(4, (st / Math.max(V, 1)) ** 2) * (1 - 0.5 * this.ground);
+    const gAlong = -G * _vdir.y;
+    _acc.copy(fwd).multiplyScalar(this.thrust()).addScaledVector(_vdir, gAlong - drag);
+    const ul = 1 - lf;
+    if (ul > 0) {
+      _acc.x -= _vdir.x * gAlong * ul;
+      _acc.y += (-G - _vdir.y * gAlong) * ul;
+      _acc.z -= _vdir.z * gAlong * ul;
+    }
+    // rafales verticales (atténuées tout près du sol pour ne pas gâcher les atterrissages)
+    _acc.y += s.turb * 0.9 * clamp(1 - this.agl / 400, 0.15, 1) * clamp(vr - 0.5, 0, 1) * (1 - 0.7 * this.ground) * wobble(tt * 0.8, 4.2);
+    _v0.copy(v);
+    v.addScaledVector(_acc, dt);
+
+    // la trajectoire rejoint l'axe de l'avion
+    V = v.length();
+    if (V > 0.5) {
+      _vdir.copy(v).multiplyScalar(1 / V).lerp(fwd, 1 - Math.exp(-4.5 * lf * lf * dt)).normalize();
+      v.copy(_vdir).multiplyScalar(V);
+    }
+    pos.addScaledVector(v, dt);
+    // facteur de charge ressenti (accélération réelle, gravité comprise, dans l'axe vertical de l'avion)
+    _v0.subVectors(v, _v0).multiplyScalar(1 / dt);
+    _v0.y += G;
+    this.gLoad = damp(this.gLoad, _v0.dot(up) / G, 10, dt);
+    // volets sortis trop vite : ils se rentrent d'eux-mêmes
+    if (this.flaps > 0 && V > this.flapLimit * 1.08) {
+      this.flaps = 0;
+      this.events.push({ type: 'flaps', level: 0, blown: true });
+    }
+
+    // sol
+    const g = world.groundAt(pos.x, pos.z, pos.y);
+    this.agl = pos.y - this.standH - g.h;
+    this.surface = g.type;
+    this.stalling = vr < 1 && this.agl > 2 && this.airTime > 1.5;
+    this.stallWarn = vr < 1.08 && this.agl > 2 && this.airTime > 2.5;
+    if (this.agl <= 0) { this.touchdown(g, world); return; }
+    if (this.agl < Math.max(40, s.span * 2)) {
+      for (const hp of this.hitPts) {
+        _p.copy(hp).applyQuaternion(q).add(pos);
+        const gp = world.groundAt(_p.x, _p.z, _p.y);
+        if (_p.y < gp.h - 0.25) { this.crash(gp.type === 'water' ? 'water' : 'ground'); return; }
+      }
+    }
+    // obstacles
+    if (world.hit(pos.x, pos.y, pos.z)) { this.crash('obstacle'); return; }
+    for (const hp of this.hitPts) {
+      _p.copy(hp).applyQuaternion(q).add(pos);
+      if (world.hit(_p.x, _p.y, _p.z)) { this.crash('obstacle'); return; }
+    }
+  }
+
+  touchdown(g, world) {
+    const s = this.spec, { fwd, up, right, pos, vel } = this;
+    if (g.type === 'land') world.normalAt(pos.x, pos.z, _n); else _n.set(0, 1, 0);
+    const sink = -vel.dot(_n);
+    const pitch = this.pitch, bank = Math.abs(right.y);
+    let ok = up.y > 0.6 && sink < s.maxSink && bank < 0.42 && pitch > -0.2 && pitch < 0.55 && -this.agl < 1.3;
+    if (g.type === 'water' && !s.floats) ok = false;
+    if (g.type === 'land' && _n.y < 0.9) ok = false;
+    if (!ok) { this.crash(g.type === 'water' ? 'water' : 'ground'); return; }
+
+    this.onGround = true;
+    this.yawG = Math.atan2(-fwd.x, -fwd.z);
+    this.groundSpeed = Math.hypot(vel.x, vel.z);
+    this.groundPitch = clamp(pitch, 0, 0.2);
+    this.gNormal.copy(_n);
+    this.arrest = g.type === 'carrier';
+    pos.y = g.h + this.standH;
+    this.agl = 0;
+    this.events.push({ type: 'touchdown', surface: g.type, sink, belly: this.retractUp, airTime: this.airTime });
+  }
+
+  // -------------------------------------------------------------------------
+  stepGround(dt, input, world) {
+    const s = this.spec, pos = this.pos, c = this.ctrl, q = this.quat;
+    const belly = this.retractUp;
+    let g = world.groundAt(pos.x, pos.z, pos.y + 2);
+    let sp = this.groundSpeed;
+    const hard = g.type === 'runway' || g.type === 'carrier';
+
+    // direction (palonnier ou manche)
+    const steer = clamp(c.roll + c.yaw, -1, 1);
+    this.yawG -= steer * lerp(0.95, 0.1, clamp(sp / s.takeoff, 0, 1)) * clamp(sp / 2.5, 0, 1) * dt;
+    const fx = -Math.sin(this.yawG), fz = -Math.cos(this.yawG);
+
+    // accélération / freinage
+    let acc = this.thrust() - (s.accel / (s.maxSpeed * s.maxSpeed)) * sp * sp;
+    let fr = hard ? 0.35 : g.type === 'water' ? 1.5 : 2.2;
+    if (belly) fr += 14;
+    if (input.brake) fr += g.type === 'water' ? 3 : s.brake;
+    if (g.type === 'carrier') {
+      if (this.arrest) {
+        // brins d'arrêt
+        if (sp < 3 || this.throttle > 0.5) this.arrest = false; else fr += 30;
+      } else if (this.throttle > 0.92 && !input.brake && sp > 1 && !belly) {
+        acc += 17;
+        if (!this.catapult) { this.catapult = true; this.events.push({ type: 'catapult' }); }
+      }
+    }
+    if (g.type !== 'carrier' || this.throttle < 0.9) this.catapult = false;
+    if (g.type === 'land') {
+      const ha = world.groundAt(pos.x + fx * 4, pos.z + fz * 4, pos.y + 2).h;
+      acc -= G * clamp((ha - g.h) / 4, -0.5, 0.5);
+    }
+    if (sp < 0.05 && acc <= fr) sp = 0; else sp = Math.max(0, sp + (acc - fr) * dt);
+
+    // on lève le nez quand il y a assez de vitesse
+    this.ground = 1;
+    const vto = this.takeoffSpeed;
+    const auth = clamp((sp - 0.5 * vto) / (0.4 * vto), 0, 1);
+    this.groundPitch = damp(this.groundPitch, belly ? 0 : Math.max(0, c.pitch) * 0.2 * auth, 3.5, dt);
+
+    pos.x += fx * sp * dt; pos.z += fz * sp * dt;
+    g = world.groundAt(pos.x, pos.z, pos.y + 2);
+    const ty = g.h + this.standH;
+    this.surface = g.type; this.agl = 0; this.groundSpeed = sp;
+    this.pitchRate = 0; this.rollRate = 0; this.yawRate = 0; this.gLoad = 1; this.stalling = false;
+
+    if (pos.y - ty > 0.9) { this.liftOff(sp, false); return; } // bord du pont, falaise…
+    pos.y = ty;
+    if (g.type === 'water' && !s.floats) { this.crash('water'); return; }
+    if (g.type === 'land') world.normalAt(pos.x, pos.z, _n); else _n.set(0, 1, 0);
+    if (g.type === 'land' && _n.y < 0.78 && sp > 10) { this.crash('ground'); return; }
+    this.gNormal.lerp(_n, 1 - Math.exp(-6 * dt)).normalize();
+
+    let bob = 0;
+    if (g.type === 'water') {
+      bob = Math.sin(this.time * 1.5) * 0.012;
+      pos.y += Math.sin(this.time * 1.1) * 0.05;
+    }
+    q.setFromUnitVectors(Y, this.gNormal);
+    q.multiply(_q.setFromAxisAngle(Y, this.yawG));
+    q.multiply(_q.setFromAxisAngle(X, this.groundPitch + bob));
+    this.axes();
+    this.vel.copy(this.fwd).multiplyScalar(sp);
+
+    if (sp > 1) {
+      _p.copy(this.hitPts[0]).applyQuaternion(q).add(pos);
+      if (world.hit(pos.x, pos.y, pos.z) || world.hit(_p.x, _p.y, _p.z)) { this.crash('obstacle'); return; }
+    }
+    this.buffet = 0; this.stallWarn = false;
+    if (!belly && sp >= vto && this.groundPitch > 0.06) this.liftOff(sp, true);
+  }
+
+  liftOff(sp, announce) {
+    this.onGround = false;
+    this.airTime = 0;
+    this.vel.copy(this.fwd).multiplyScalar(sp);
+    if (announce) {
+      this.vel.y += 1.2;
+      this.pos.y += 0.05;
+      this.events.push({ type: 'takeoff' });
+    }
+  }
+}

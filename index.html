@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Air Game — vol libre</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script id="redirect">
+  // ouvert d'un double-clic (file://) : les modules ne se chargent pas, on bascule sur la version « un seul fichier »
+  if (location.protocol === 'file:') location.replace('jouer.html');
+</script>
+<style>
+  :root { --ink: #fff; --panel: rgba(12, 24, 40, .42); --line: rgba(255, 255, 255, .22); --accent: #ffd34d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #8ec5ee; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: var(--ink); user-select: none; }
+  canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  .shadowed { text-shadow: 0 1px 2px rgba(0, 20, 40, .55), 0 0 18px rgba(0, 20, 40, .35); }
+  kbd { font: 600 .78em/1 inherit; padding: .28em .5em; border-radius: 6px; border: 1px solid var(--line); background: rgba(255, 255, 255, .12); white-space: nowrap; }
+  [hidden] { display: none !important; }
+
+  /* ---------- chargement ---------- */
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; background: linear-gradient(#3f8fe0, #bfe3f7); font-size: 1.15rem; letter-spacing: .04em; transition: opacity .6s; z-index: 10; }
+  #loading.done { opacity: 0; pointer-events: none; }
+
+  /* ---------- menu ---------- */
+  #menu { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 5vh 5vw 4vh; transition: opacity .45s; }
+  #menu.off { opacity: 0; pointer-events: none; }
+  #menu h1 { margin: 0; font-size: clamp(2.2rem, 6vw, 4.6rem); font-weight: 800; letter-spacing: .12em; line-height: 1; }
+  #menu header p { margin: .7em 0 0; font-size: clamp(.95rem, 1.5vw, 1.15rem); opacity: .92; }
+  #chooser { align-self: center; width: min(640px, 100%); display: flex; flex-direction: column; gap: 12px; align-items: stretch; margin-top: auto; margin-bottom: 18px; }
+  #picker { display: flex; align-items: stretch; gap: 10px; }
+  .arrow { flex: 0 0 52px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: #fff; font-size: 1.8rem; cursor: pointer; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: background .15s, transform .1s; }
+  .arrow:hover { background: rgba(30, 55, 85, .6); }
+  .arrow:active { transform: scale(.95); }
+  #card { flex: 1; padding: 16px 22px 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); min-height: 150px; }
+  #card h2 { margin: 0 0 4px; font-size: 1.45rem; }
+  #card p { margin: 0 0 12px; font-size: .95rem; opacity: .9; min-height: 2.6em; }
+  .stat { display: grid; grid-template-columns: 78px 1fr; align-items: center; gap: 10px; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; opacity: .95; margin-top: 5px; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .2); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s; }
+  #starts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .chip { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: #fff; font: inherit; font-size: .9rem; cursor: pointer; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .chip.on { background: #fff; color: #17304d; border-color: #fff; font-weight: 600; }
+  #go { align-self: center; padding: 13px 34px; border-radius: 999px; border: none; background: var(--accent); color: #2b2205; font: inherit; font-size: 1.1rem; font-weight: 700; cursor: pointer; box-shadow: 0 6px 22px rgba(0, 20, 40, .3); transition: transform .1s; }
+  #go:hover { transform: translateY(-1px) scale(1.02); }
+  #go kbd { border-color: rgba(0, 0, 0, .25); background: rgba(0, 0, 0, .08); margin-left: .5em; }
+  #menukeys { text-align: center; font-size: .82rem; opacity: .9; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  #menukeys button { all: unset; cursor: pointer; text-decoration: underline dotted; }
+
+  /* ---------- en vol ---------- */
+  #hud { position: fixed; left: 22px; bottom: 20px; display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; transition: opacity .3s; pointer-events: none; }
+  #hud b { font-size: 1.5rem; font-weight: 700; min-width: 2.2ch; text-align: right; }
+  #hud i { font-style: normal; font-size: .78rem; opacity: .85; margin-right: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  #h-flags { font-size: .78rem; font-weight: 700; letter-spacing: .08em; color: var(--accent); }
+  #toast { position: fixed; left: 0; right: 0; top: 13%; text-align: center; font-size: clamp(1.4rem, 3.2vw, 2.3rem); font-weight: 800; letter-spacing: .05em; opacity: 0; transform: translateY(8px) scale(.96); transition: opacity .35s, transform .35s; pointer-events: none; }
+  #toast.on { opacity: 1; transform: none; }
+  #hint { position: fixed; left: 0; right: 0; bottom: 64px; text-align: center; font-size: .92rem; opacity: 0; transition: opacity .6s; pointer-events: none; line-height: 2; }
+  #hint.on { opacity: .96; }
+  #hud .vs { font-size: 1.1rem; }
+  #compass { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); width: 340px; height: 38px; pointer-events: none; transition: opacity .3s; }
+  #papi { position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: .8rem; font-weight: 700; letter-spacing: .08em; pointer-events: none; }
+  #papi .lights { display: flex; gap: 9px; align-items: center; }
+  #papi .lights i { width: 14px; height: 14px; border-radius: 50%; background: #e8433a; box-shadow: 0 0 10px #e8433a; }
+  #papi .lights i.w { background: #fff; box-shadow: 0 0 10px #fff; }
+  #papi .lights b { width: 22px; text-align: center; font-size: 1.1rem; color: var(--accent); }
+  #pad { position: fixed; right: 18px; bottom: 18px; font-size: .78rem; opacity: .85; pointer-events: none; }
+  .off-ui #hud, .off-ui #hint, .off-ui #compass, .off-ui #papi { opacity: 0 !important; }
+
+  /* ---------- pause ---------- */
+  #pause { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8, 18, 32, .45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); z-index: 5; }
+  #pause .box { width: min(560px, 92vw); padding: 24px 28px; border-radius: 20px; border: 1px solid var(--line); background: rgba(12, 24, 40, .72); }
+  #pause h2 { margin: 0 0 14px; letter-spacing: .1em; }
+  #keys { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: .92rem; align-items: center; margin-bottom: 18px; }
+  #keys span:nth-child(odd) { white-space: nowrap; }
+  #pause .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  #pause button { padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .1); color: #fff; font: inherit; cursor: pointer; }
+  #pause button.main { background: var(--accent); color: #2b2205; border-color: transparent; font-weight: 700; }
+</style>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<canvas id="view" tabindex="0"></canvas>
+
+<div id="hud" class="shadowed" hidden>
+  <b id="h-spd">0</b><i>km/h</i><b id="h-alt">0</b><i>m</i><b id="h-vs" class="vs">0</b><i>m/s</i><b id="h-thr">0</b><i>% gaz</i><span id="h-flags"></span>
+</div>
+<canvas id="compass" width="680" height="76" hidden></canvas>
+<div id="papi" class="shadowed" hidden><div class="lights"><b id="papi-l"></b><i></i><i></i><i></i><i></i><b id="papi-r"></b></div><span id="papi-t"></span></div>
+<div id="pad" class="shadowed" hidden>🎮 Manette</div>
+<div id="toast" class="shadowed"></div>
+<div id="hint" class="shadowed"></div>
+
+<div id="menu" class="off">
+  <header class="shadowed">
+    <h1>AIR GAME</h1>
+    <p>Vol libre au-dessus de l'île. Aucun but, juste voler.</p>
+  </header>
+  <div id="chooser">
+    <div id="picker">
+      <button class="arrow" id="prev" aria-label="Avion précédent">‹</button>
+      <div id="card">
+        <h2 id="pname"></h2>
+        <p id="pdesc"></p>
+        <div class="stat"><span>Vitesse</span><div class="bar"><i id="s-vit"></i></div></div>
+        <div class="stat"><span>Agilité</span><div class="bar"><i id="s-agi"></i></div></div>
+        <div class="stat"><span>Facilité</span><div class="bar"><i id="s-fac"></i></div></div>
+      </div>
+      <button class="arrow" id="next" aria-label="Avion suivant">›</button>
+    </div>
+    <div id="starts"></div>
+    <button id="go">Décoller <kbd>Entrée</kbd></button>
+  </div>
+  <div id="menukeys" class="shadowed">
+    <span><kbd>←</kbd> <kbd>→</kbd> avion</span>
+    <span><kbd>↑</kbd> <kbd>↓</kbd> départ</span>
+    <span>🎮 stick / croix : choisir · A : décoller</span>
+    <span><button id="invert">Tangage : normal</button> <kbd>I</kbd></span>
+  </div>
+</div>
+
+<div id="pause" hidden>
+  <div class="box">
+    <h2>PAUSE</h2>
+    <div id="keys"></div>
+    <div class="row">
+      <button class="main" id="resume">Reprendre <kbd>Échap</kbd></button>
+      <button id="tomenu">Changer d'avion</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading" class="shadowed">Génération de l'île…</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
