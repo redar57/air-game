@@ -34,7 +34,7 @@ export class UI {
       [k('Espace'), 'Freins au sol, aérofreins en vol'],
       [k('G'), 'Rentrer / sortir le train'],
       [k('V'), 'Volets (3 crans) : on vole plus lentement, idéal pour se poser'],
-      [k('X'), 'Missile (jet de chasse) : vise une montgolfière, il la suit tout seul'],
+      [k('X'), 'Armes : missile (jet, vise ~1 s pour verrouiller) · mitrailleuses (chasseur, maintenir)'],
       [k('C'), 'Changer de vue (glisser la souris pour regarder autour)'],
       [k('T'), 'Heure du jour'],
       [k('Retour arrière'), 'Réapparaître en vol'],
@@ -42,7 +42,7 @@ export class UI {
     ];
     this.keysHtml.push(['🎮 Manette', 'Stick gauche : piloter · RT / LT : gaz · LB / RB : palonnier · stick droit : regarder']);
     this.keysHtml.push(['', 'A : freins · B : volets · X : train · Y : vue · Start : pause · Select : réapparaître']);
-    this.keysHtml.push(['', 'Clic stick droit (R3) ou croix bas : missile']);
+    this.keysHtml.push(['', 'Clic stick droit (R3) ou croix bas : missile / mitrailleuse (maintenir)']);
     $('keys').innerHTML = this.keysHtml.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
     this.flightHint = `${k(L.KeyR)} mettre les gaz · ${k(L.KeyS)} cabrer pour décoller · ${k(L.KeyA, L.KeyD)} incliner · ${k('C')} vue · ${k('Échap')} toutes les commandes`;
   }
@@ -113,6 +113,14 @@ export class UI {
   }
 
   gamepad(on) { $('pad').hidden = !on; }
+
+  /** Réticule des mitrailleuses (x, y en pixels) ; null pour le cacher. */
+  sight(x, y) {
+    const el = $('sight');
+    if (x === null) { if (!el.hidden) el.hidden = true; return; }
+    el.hidden = false;
+    el.style.transform = `translate(${x}px, ${y}px)`;
+  }
 
   /** Cadre de visée autour de la cible (x, y en pixels) ; null pour le cacher. */
   lock(x, y, dist, progress = 1) {

@@ -24,7 +24,7 @@ Navigateurs : Chrome, Edge, Firefox ou Safari récents (Safari 16.4 minimum).
 | A/E | LB / RB | Palonnier |
 | R/F | RT / LT | Gaz |
 | V | B (Rond) | Volets (3 crans) |
-| X | R3 ou croix ↓ | Missile (jet de chasse) |
+| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) |
 | G | X (Carré) | Train |
 | Espace | A (Croix) | Freins / aérofreins |
 | C | Y (Triangle) | Changer de vue |
@@ -51,6 +51,10 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   « VISÉE… » se resserre puis devient jaune « VERROUILLÉ » (environ 1 s). Un missile verrouillé suit sa cible,
   sinon il part tout droit. Touchée, la montgolfière retombe en lambeaux puis regonfle 40 s plus tard ;
   le décor, lui, n'est jamais abîmé.
+- **Chasseur à hélice** : mitrailleuses dans les ailes, tir tant que X est maintenue. Le réticule rond montre où
+  convergent les balles ; une rafale d'une seconde abat une montgolfière.
+- **Hydravion amphibie** : G sort les roues (sous les flotteurs) pour la piste, les rentre pour l'eau.
+  Amerrir roues sorties fait capoter l'avion : le voyant « TRAIN ! » et le bandeau préviennent.
 
 ## Si ça bloque
 

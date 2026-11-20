@@ -3,7 +3,7 @@
 
 const GAME_CODES = new Set([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Backspace', 'Tab', 'PageUp', 'PageDown',
-  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyR', 'KeyF',
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyR', 'KeyF', 'KeyX',
 ]);
 
 /** Lettres imprimées sur les touches de pilotage, selon la disposition du clavier. */
@@ -100,6 +100,13 @@ export class Input {
     this.stickDir = dir;
     this.look.x = curve(p.axes[2] || 0);
     this.look.y = curve(p.axes[3] || 0);
+  }
+
+  /** Tir maintenu : touche X, ou clic du stick droit (R3) / croix bas de la manette. */
+  fireHeld() {
+    if (this.has('KeyX')) return true;
+    const p = this.gamepad();
+    return !!(p && ((p.buttons[11] && p.buttons[11].pressed) || (p.buttons[13] && p.buttons[13].pressed)));
   }
 
   /** Petite vibration (si la manette et le navigateur le permettent). */

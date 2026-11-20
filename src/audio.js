@@ -246,6 +246,23 @@ export class Sound {
     this.burst(180, 0.3, 0.5);
   }
 
+  /** Un coup de mitrailleuse : claquement sec + petit grave. */
+  gunshot() {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this.noiseBuf;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.8;
+    f.frequency.setValueAtTime(1600 + Math.random() * 500, t);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(60, t + 0.08);
+    const og = ctx.createGain(); og.gain.setValueAtTime(0.35, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    src.connect(f).connect(g).connect(this.master);
+    o.connect(og).connect(this.master);
+    src.start(t, Math.random() * 1.5); src.stop(t + 0.1); o.start(t); o.stop(t + 0.1);
+  }
+
   /** Explosion lointaine : plus faible, plus sourde, et retardée (le son voyage à 343 m/s). */
   distantBoom(dist, water) {
     if (!this.ctx) return;

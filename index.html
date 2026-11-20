@@ -70,6 +70,9 @@
   #lock { position: fixed; left: -28px; top: -28px; width: 56px; height: 56px; border: 2px solid #ffd34d; transform-origin: center; pointer-events: none; box-shadow: 0 0 8px rgba(255, 211, 77, .6); }
   #lock::before, #lock::after { content: ''; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px; border: 2px solid #ffd34d; transform: rotate(45deg); }
   #lock::after { display: none; }
+  #sight { position: fixed; left: -16px; top: -16px; width: 32px; height: 32px; border: 2px solid rgba(255, 255, 255, .85); border-radius: 50%; pointer-events: none; }
+  #sight i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #ffd34d; }
+  .off-ui #sight { opacity: 0; }
   #lock.locking { border-color: rgba(255, 255, 255, .8); border-style: dashed; box-shadow: none; }
   #lock.locking::before { border-color: rgba(255, 255, 255, .8); }
   #lock.locking span { color: #fff; }
@@ -97,6 +100,7 @@
 <canvas id="compass" width="680" height="76" hidden></canvas>
 <div id="papi" class="shadowed" hidden><div class="lights"><b id="papi-l"></b><i></i><i></i><i></i><i></i><b id="papi-r"></b></div><span id="papi-t"></span></div>
 <div id="pad" class="shadowed" hidden>🎮 Manette</div>
+<div id="sight" hidden><i></i></div>
 <div id="lock" hidden><span class="shadowed"><b id="lock-s">VERROUILLÉ</b><br><b id="lock-t"></b></span></div>
 <div id="toast" class="shadowed"></div>
 <div id="hint" class="shadowed"></div>

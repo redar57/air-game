@@ -118,12 +118,17 @@ export class Plane {
 
   /** Renvoie un petit message à afficher, ou null. */
   toggleGear() {
-    if (!this.spec.retract) return this.spec.floats ? 'Flotteurs fixes' : 'Train fixe';
-    if (this.onGround && this.gearDown) return 'Train verrouillé au sol';
+    const s = this.spec;
+    if (!s.retract) return s.floats ? 'Flotteurs fixes' : 'Train fixe';
+    // amphibie : sur l'eau on peut sortir/rentrer les roues (pour remonter une rampe) ; à terre, non
+    if (this.onGround && (s.amphibian ? this.surface !== 'water' : this.gearDown)) return 'Train verrouillé au sol';
     this.gearDown = !this.gearDown;
     this.events.push({ type: 'gear', down: this.gearDown });
+    if (s.amphibian) return this.gearDown ? 'Roues sorties : pour la piste' : "Roues rentrées : pour l'eau";
     return this.gearDown ? 'Train sorti' : 'Train rentré';
   }
+  /** Posé (ou glissant) sur le ventre : pas pour un hydravion sur l'eau, qui flotte normalement. */
+  get onBelly() { return this.retractUp && !(this.spec.floats && this.surface === 'water'); }
 
   /** Cran de volets suivant (0 -> 1 -> 2 -> 0). Renvoie un message. */
   cycleFlaps() {
@@ -136,9 +141,9 @@ export class Plane {
   }
   get flapLimit() { return this.spec.maxSpeed * 0.68; }
 
-  crash(kind) {
+  crash(kind, why) {
     this.crashed = true;
-    this.events.push({ type: 'crash', kind });
+    this.events.push({ type: 'crash', kind, why });
   }
 
   step(dt, input, world) {
@@ -315,6 +320,8 @@ export class Plane {
     let ok = up.y > 0.6 && sink < s.maxSink && bank < 0.42 && pitch > -0.2 && pitch < 0.55 && -this.agl < 1.3;
     if (g.type === 'water' && !s.floats) ok = false;
     if (g.type === 'land' && _n.y < 0.9) ok = false;
+    // amphibie : amerrir roues sorties, c'est capoter
+    if (g.type === 'water' && s.amphibian && this.gearDown) { this.crash('water', 'wheels'); return; }
     if (!ok) { this.crash(g.type === 'water' ? 'water' : 'ground'); return; }
 
     this.onGround = true;
@@ -325,13 +332,14 @@ export class Plane {
     this.arrest = g.type === 'carrier';
     pos.y = g.h + this.standH;
     this.agl = 0;
-    this.events.push({ type: 'touchdown', surface: g.type, sink, belly: this.retractUp, airTime: this.airTime });
+    this.surface = g.type;
+    this.events.push({ type: 'touchdown', surface: g.type, sink, belly: this.onBelly, floats: !!s.floats, airTime: this.airTime });
   }
 
   // -------------------------------------------------------------------------
   stepGround(dt, input, world) {
     const s = this.spec, pos = this.pos, c = this.ctrl, q = this.quat;
-    const belly = this.retractUp;
+    const belly = this.onBelly;
     let g = world.groundAt(pos.x, pos.z, pos.y + 2);
     let sp = this.groundSpeed;
     const hard = g.type === 'runway' || g.type === 'carrier';
@@ -346,6 +354,7 @@ export class Plane {
     let fr = hard ? 0.35 : g.type === 'water' ? 1.5 : 2.2;
     if (belly) fr += 14;
     if (input.brake) fr += g.type === 'water' ? 3 : s.brake;
+    if (g.type === 'water' && s.amphibian && this.gearDown) fr += 2; // roues dans l'eau
     if (g.type === 'carrier') {
       if (this.arrest) {
         // brins d'arrêt

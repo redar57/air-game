@@ -183,7 +183,7 @@ export function buildScenery(scene) {
     balloons,
     /** Abat une montgolfière ; elle revient (en gonflant) au bout de 40 s. */
     pop(b) {
-      b.alive = false; b.back = 40; b.col.off = true; b.mesh.visible = false;
+      b.alive = false; b.back = 40; b.col.off = true; b.mesh.visible = false; b.dmg = 0;
     },
     update(t, night, dt = 0) {
       for (const b of balloons) {

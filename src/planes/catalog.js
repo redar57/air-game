@@ -37,10 +37,10 @@ export const PLANES = [
   },
   {
     id: 'hydravion', name: "L'Hydravion",
-    desc: "Se pose sur l'eau comme sur la piste. Idéal pour explorer les criques et les îlots.",
+    desc: "Amphibie : roues sorties (G) pour la piste, rentrées dans les flotteurs pour l'eau. Idéal pour les criques.",
     maxSpeed: 58, stall: 24, accel: 4.4, pitchRate: 1.05, rollRate: 1.45, yawRate: 0.5, gLimit: 4,
-    brake: 6, maxSink: 6.5, gearH: 1.8, bellyH: 1.8, span: 12.6, len: 9, wingY: 0.9,
-    retract: false, floats: true, jet: false,
+    brake: 6, maxSink: 6.5, gearH: 2.35, bellyH: 1.9, span: 12.6, len: 9, wingY: 0.9,
+    retract: true, floats: true, amphibian: true, jet: false,
     cam: { dist: 19, height: 4.8 }, eye: [0, 0.46, -1.25],
     inertia: 0.36, stallBite: 0.3, flaps: true, turb: 0.95,
     engine: { kind: 'piston', cyl: 9, radial: true, idle: 600, max: 2200, blades: 3, gear: 1, exhaust: 85, rough: 0.45 },
@@ -48,13 +48,14 @@ export const PLANES = [
   },
   {
     id: 'chasseur', name: 'Le Chasseur à hélice',
-    desc: "Long nez, gros moteur. Rapide et nerveux, il demande un peu de piste pour s'arrêter.",
+    desc: "Long nez, gros moteur, mitrailleuses dans les ailes (X maintenue). Rapide et nerveux.",
     maxSpeed: 150, stall: 36, accel: 9.5, pitchRate: 1.55, rollRate: 2.7, yawRate: 0.6, gLimit: 8,
     brake: 8, maxSink: 7, gearH: 1.7, bellyH: 0.72, span: 11.2, len: 9.4, wingY: -0.1,
     retract: true, floats: false, jet: false,
     cam: { dist: 19, height: 4.4 }, eye: [0, 0.66, -0.45],
     inertia: 0.2, stallBite: 1, flaps: true, turb: 0.6,
     engine: { kind: 'piston', cyl: 12, idle: 900, max: 3000, blades: 3, gear: 0.48, exhaust: 150, rough: 0.3 },
+    guns: [[-2.7, -0.3, -2.3], [2.7, -0.3, -2.3]], // canons dans le bord d'attaque (gauche, droite)
     stats: [0.58, 0.78, 0.55],
   },
   {

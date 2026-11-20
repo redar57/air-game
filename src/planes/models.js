@@ -284,6 +284,15 @@ function hydravion(spec) {
   bar2(hull, [0.45, -0.5, 0.1], [1.5, -1.3, 0.1], 0.08, METAL);
   bar(hull, [-1.5, -1.3, -1.9], [1.5, -1.3, -1.9], 0.06, METAL);
   bar(hull, [-1.5, -1.3, 0.1], [1.5, -1.3, 0.1], 0.06, METAL);
+  // roues d'amphibie : elles sortent sous les flotteurs (et y rentrent en glissant vers le haut)
+  const gear = new THREE.Group();
+  for (const s of [-1, 1]) {
+    wheel(gear, 0.2, 0.14, s * 1.5, -2.15, -2.4);
+    wheel(gear, 0.27, 0.18, s * 1.5, -2.08, 0.45);
+    bar(gear, [s * 1.5, -1.75, -2.4], [s * 1.5, -2.15, -2.4], 0.07, METAL);
+    bar(gear, [s * 1.5, -1.75, 0.45], [s * 1.5, -2.08, 0.45], 0.08, METAL);
+  }
+  hull.add(gear); m.gear = gear; m.gearSlide = 0.55;
 
   wingS(m, always, [6.05, 1.75, 1.3, 0.18, 0.05, 0.15], W, 0.25, 0.95, -1.05,
     [{ kind: 'flap', t0: 0.02, t1: 0.52 }, { kind: 'aileron', t0: 0.55, t1: 0.97 }], 0.26);
@@ -432,7 +441,8 @@ export function animateModel(m, dt, { throttle, gear, burner, cockpitView, ctrl,
   }
   if (m.gear) {
     m.gear.visible = gear > 0.03;
-    m.gear.scale.y = Math.max(0.03, gear);
+    if (m.gearSlide) m.gear.position.y = (1 - gear) * m.gearSlide; // rentre dans les flotteurs
+    else m.gear.scale.y = Math.max(0.03, gear);
   }
   for (const f of m.flames) {
     f.visible = burner > 0.01;

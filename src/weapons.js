@@ -161,3 +161,100 @@ export class Missiles {
     return popped;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Mitrailleuses du chasseur à hélice : on tire tant que la touche est maintenue.
+// Balles traçantes, pas de guidage ; il faut une dizaine d'impacts pour abattre une montgolfière.
+
+const BULLET_V = 880, RATE = 16, BULLET_LIFE = 1.6, MAX_B = 96, HP = 10, CONVERGE = 350;
+const _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3(), _c = new THREE.Vector3();
+
+export class Guns {
+  constructor(scene, fx, sound) {
+    this.fx = fx; this.sound = sound;
+    this.list = [];
+    this.acc = 0; this.side = 1; this.firing = false;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_B * 6), 3));
+    geo.setDrawRange(0, 0);
+    this.lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.lines.frustumCulled = false;
+    scene.add(this.lines);
+  }
+
+  reset() { this.list.length = 0; this.acc = 0; this.lines.geometry.setDrawRange(0, 0); }
+
+  /** Point visé par les canons (convergence) : pour le réticule. */
+  aimPoint(plane, out) { return out.copy(plane.pos).addScaledVector(plane.fwd, CONVERGE); }
+
+  /** firing : touche maintenue. Renvoie les montgolfières abattues pendant ce pas. */
+  update(dt, plane, firing, world, balloons) {
+    const pts = plane.spec.guns;
+    this.firing = !!(pts && firing && !plane.onGround && !plane.crashed);
+    if (this.firing) {
+      this.acc += dt * RATE;
+      while (this.acc >= 1) {
+        this.acc -= 1;
+        this.side = -this.side;
+        const gp = pts[this.side > 0 ? 0 : 1];
+        const pos = new THREE.Vector3(...gp).applyQuaternion(plane.quat).add(plane.pos);
+        // les deux canons convergent à CONVERGE mètres, avec une légère dispersion
+        const dir = this.aimPoint(plane, new THREE.Vector3()).sub(pos).normalize();
+        dir.x += (Math.random() - 0.5) * 0.008; dir.y += (Math.random() - 0.5) * 0.008; dir.z += (Math.random() - 0.5) * 0.008;
+        dir.normalize();
+        this.list.push({ pos, vel: dir.multiplyScalar(BULLET_V).add(plane.vel), t: 0 });
+        if (this.list.length > MAX_B) this.list.shift();
+        this.fx.emit(pos, plane.vel, 0.05, 0.5, 0xffe08a, 6, 0);
+        this.sound.gunshot();
+      }
+    } else this.acc = Math.min(1, this.acc + dt * RATE); // recharge : premier coup immédiat à la prochaine pression
+
+    const popped = [];
+    const arr = this.lines.geometry.attributes.position.array;
+    let n = 0;
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const b = this.list[i];
+      b.t += dt;
+      _p0.copy(b.pos);
+      b.vel.y -= 9.81 * dt;
+      b.pos.addScaledVector(b.vel, dt);
+      let dead = b.t > BULLET_LIFE;
+      // montgolfières : test segment / sphère (les balles vont trop vite pour un simple test de point)
+      if (!dead) {
+        for (const t of balloons) {
+          if (!t.alive) continue;
+          _p1.subVectors(b.pos, _p0);
+          const len2 = _p1.lengthSq();
+          const k = Math.max(0, Math.min(1, _c.subVectors(t.pos, _p0).dot(_p1) / len2));
+          if (_c.copy(_p0).addScaledVector(_p1, k).distanceToSquared(t.pos) < t.r * t.r) {
+            dead = true;
+            t.dmg = (t.dmg || 0) + 1;
+            _c.copy(_p0).addScaledVector(_p1, k);
+            this.fx.emit(_c, b.vel.clone().multiplyScalar(-0.02), 0.6, 0.9, Math.random() < 0.5 ? 0xe84c3d : 0xfff1d6, 0, 8);
+            if (t.dmg >= HP) { t.dmg = 0; popped.push(t); }
+            break;
+          }
+        }
+      }
+      if (!dead) {
+        const g = world.groundAt(b.pos.x, b.pos.z, b.pos.y);
+        if (b.pos.y < g.h || world.hit(b.pos.x, b.pos.y, b.pos.z)) {
+          dead = true;
+          _c.set((Math.random() - 0.5) * 4, 3 + Math.random() * 3, (Math.random() - 0.5) * 4);
+          this.fx.emit(b.pos, _c, 0.7, 1.1, g.type === 'water' ? 0xffffff : 0x9a8466, 1.5, 6);
+        }
+      }
+      if (dead) { this.list.splice(i, 1); continue; }
+      // traçante : un trait de ~20 m derrière la balle
+      if (n < MAX_B) {
+        _c.copy(b.vel).normalize();
+        arr[n * 6] = b.pos.x; arr[n * 6 + 1] = b.pos.y; arr[n * 6 + 2] = b.pos.z;
+        arr[n * 6 + 3] = b.pos.x - _c.x * 32; arr[n * 6 + 4] = b.pos.y - _c.y * 32; arr[n * 6 + 5] = b.pos.z - _c.z * 32;
+        n++;
+      }
+    }
+    this.lines.geometry.setDrawRange(0, n * 2);
+    this.lines.geometry.attributes.position.needsUpdate = true;
+    return popped;
+  }
+}
