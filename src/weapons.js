@@ -3,8 +3,10 @@ import * as THREE from 'three';
 // Missiles du jet de chasse : illimités, guidés vers la montgolfière visée.
 // Ils n'abîment pas le décor : contre le sol, l'eau ou un bâtiment, ils explosent simplement.
 
-const SPEED_MAX = 620, BOOST = 260, TURN = 2.6, LIFE = 9, COOLDOWN = 0.55;
-const LOCK_RANGE = 4200, LOCK_COS = Math.cos(0.5), SEEK_COS = Math.cos(0.35);
+// Verrouillage volontairement exigeant : il faut garder la cible dans un cône étroit (~10°) pendant
+// LOCK_TIME secondes ; le missile vire assez mollement et perd sa cible s'il la dépasse.
+const SPEED_MAX = 620, BOOST = 260, TURN = 1.3, LIFE = 9, COOLDOWN = 0.55;
+const LOCK_RANGE = 2600, LOCK_COS = Math.cos(0.17), LOCK_TIME = 1.1, LOSE_COS = Math.cos(0.9);
 const FWD = new THREE.Vector3(0, 0, -1);
 const _d = new THREE.Vector3(), _a = new THREE.Vector3(), _q = new THREE.Quaternion(), _v = new THREE.Vector3();
 
@@ -34,6 +36,7 @@ export class Missiles {
     this.scene = scene; this.fx = fx; this.sound = sound;
     this.list = [];
     this.cool = 0; this.side = 1; this.hits = 0;
+    this.aim = null; this.aimT = 0; // cible dans le viseur, et depuis combien de temps
     this.flameMat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.9, depthWrite: false });
     this.flameGeo = new THREE.ConeGeometry(0.16, 1.4, 6).rotateX(Math.PI / 2).translate(0, 0, 2);
   }
@@ -41,7 +44,7 @@ export class Missiles {
   reset() {
     for (const m of this.list) this.scene.remove(m.mesh);
     this.list.length = 0;
-    this.cool = 0;
+    this.cool = 0; this.aim = null; this.aimT = 0;
   }
 
   /** Montgolfière la plus proche de l'axe de l'avion, dans un cône devant lui (ou null). */
@@ -57,6 +60,16 @@ export class Missiles {
     }
     return best;
   }
+
+  /** À chaque image : suit la cible visée ; renvoie { target, progress (0..1), locked } ou null. */
+  updateLock(dt, plane, balloons) {
+    const t = plane.spec.missiles && !plane.onGround ? this.target(plane, balloons) : null;
+    if (t !== this.aim) { this.aim = t; this.aimT = 0; } else if (t) this.aimT += dt;
+    if (!t) return null;
+    const progress = Math.min(1, this.aimT / LOCK_TIME);
+    return { target: t, progress, locked: progress >= 1 };
+  }
+  get locked() { return this.aim && this.aimT >= LOCK_TIME ? this.aim : null; }
 
   /** Tire un missile depuis l'aile gauche puis droite ; renvoie true si parti. */
   fire(plane, balloons) {
@@ -74,7 +87,7 @@ export class Missiles {
     this.scene.add(mesh);
     // largué un peu vers le bas, puis le moteur s'allume
     const vel = plane.vel.clone().addScaledVector(plane.up, -4);
-    this.list.push({ mesh, flame, pos, vel, dir: plane.fwd.clone(), t: 0, smoke: 0, target: this.target(plane, balloons) });
+    this.list.push({ mesh, flame, pos, vel, dir: plane.fwd.clone(), t: 0, smoke: 0, target: this.locked });
     this.sound.missile();
     return true;
   }
@@ -90,16 +103,12 @@ export class Missiles {
       let speed = m.vel.length();
       if (armed) {
         if (m.target && !m.target.alive) m.target = null;
-        if (!m.target) { // pas de cible au départ : on cherche dans un cône étroit devant le missile
-          for (const b of balloons) {
-            if (!b.alive) continue;
-            _d.subVectors(b.pos, m.pos);
-            const dist = _d.length();
-            if (dist < 1800 && _d.dot(m.dir) / dist > SEEK_COS) { m.target = b; break; }
-          }
-        }
+        // sans verrouillage, le missile part tout droit ; s'il dépasse sa cible, il la perd
         if (m.target) {
           _d.subVectors(m.target.pos, m.pos).normalize();
+          if (_d.dot(m.dir) < LOSE_COS) m.target = null;
+        }
+        if (m.target) {
           const ang = Math.acos(Math.min(1, Math.max(-1, m.dir.dot(_d))));
           if (ang > 1e-4) {
             _a.crossVectors(m.dir, _d).normalize();

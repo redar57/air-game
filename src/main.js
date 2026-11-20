@@ -243,11 +243,12 @@ function updateWeapons(dt) {
     ui.toast(`Montgolfière abattue ! (${missiles.hits})`, 1800);
     input.rumble(0.4, 0.6, 220);
   }
-  const t = state === 'fly' && plane.spec.missiles ? missiles.target(plane, scenery.balloons) : null;
-  if (t) {
+  const lk = state === 'fly' ? missiles.updateLock(dt, plane, scenery.balloons) : null;
+  if (lk) {
+    const t = lk.target;
     _sv.copy(t.pos).project(camera);
     if (_sv.z < 1) {
-      ui.lock((_sv.x + 1) / 2 * window.innerWidth, (1 - _sv.y) / 2 * window.innerHeight, t.pos.distanceTo(plane.pos));
+      ui.lock((_sv.x + 1) / 2 * window.innerWidth, (1 - _sv.y) / 2 * window.innerHeight, t.pos.distanceTo(plane.pos), lk.progress);
       return;
     }
   }

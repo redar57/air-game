@@ -115,11 +115,15 @@ export class UI {
   gamepad(on) { $('pad').hidden = !on; }
 
   /** Cadre de visée autour de la cible (x, y en pixels) ; null pour le cacher. */
-  lock(x, y, dist) {
+  lock(x, y, dist, progress = 1) {
     const el = $('lock');
     if (x === null) { if (!el.hidden) el.hidden = true; return; }
     el.hidden = false;
-    el.style.transform = `translate(${x}px, ${y}px)`;
+    const locked = progress >= 1;
+    // le cadre se resserre pendant l'acquisition, puis devient jaune une fois verrouillé
+    el.style.transform = `translate(${x}px, ${y}px) scale(${locked ? 1 : 1.9 - 0.9 * progress})`;
+    el.classList.toggle('locking', !locked);
+    $('lock-s').textContent = locked ? 'VERROUILLÉ' : 'VISÉE…';
     $('lock-t').textContent = `${(dist / 1000).toFixed(1).replace('.', ',')} km`;
   }
   toggleHud() { return document.body.classList.toggle('off-ui'); }

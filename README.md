@@ -47,8 +47,10 @@ des roues, au décrochage et au crash (si le navigateur le permet).
 - **Aide à l'atterrissage** : en approche d'une piste ou du porte-avions, 4 feux indiquent le plan de descente
   (2 blancs + 2 rouges = parfait ; tout blanc = trop haut ; tout rouge = trop bas) et une flèche ramène vers l'axe.
 - Les gouvernes (ailerons, profondeur, direction) et les volets bougent sur les avions.
-- **Jet de chasse** : missiles illimités guidés. Un cadre jaune entoure la montgolfière visée ; touchée, elle
-  retombe en lambeaux puis regonfle 40 s plus tard. Le décor, lui, n'est jamais abîmé.
+- **Jet de chasse** : missiles illimités. Garde une montgolfière bien au centre de l'écran : le cadre blanc
+  « VISÉE… » se resserre puis devient jaune « VERROUILLÉ » (environ 1 s). Un missile verrouillé suit sa cible,
+  sinon il part tout droit. Touchée, la montgolfière retombe en lambeaux puis regonfle 40 s plus tard ;
+  le décor, lui, n'est jamais abîmé.
 
 ## Si ça bloque
 
