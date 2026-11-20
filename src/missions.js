@@ -54,7 +54,7 @@ class Fires {
     // largage (X maintenue)
     this.dropping = input.fireHeld() && this.water > 0 && !plane.onGround;
     if (this.dropping) {
-      const big = !s.heli, amt = Math.min(this.water, dt * (big ? 0.9 : 0.6)), rad = big ? 95 : 70;
+      const big = !s.heli, amt = Math.min(this.water, dt * (big ? 0.33 : 0.25)), rad = big ? 95 : 70;
       this.water -= amt;
       for (let k = 0; k < (big ? 6 : 3); k++) {
         _v.copy(plane.vel).multiplyScalar(0.85).add(_p.set((Math.random() - 0.5) * 3, -3 - Math.random() * 3, (Math.random() - 0.5) * 3));
