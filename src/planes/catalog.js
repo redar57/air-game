@@ -84,6 +84,19 @@ export const PLANES = [
   },
 ];
 
+PLANES.push({
+  id: 'helico', name: "L'Hélicoptère",
+  desc: "Bombardier d'eau rouge et blanc. Vol stationnaire : R / F pour monter ou descendre, le manche pour avancer, Espace pour se stabiliser.",
+  // maxSpeed : vitesse de pointe ; climb : vitesse verticale maxi (m/s) ; stall : seulement pour les arcs de l'anémomètre
+  maxSpeed: 72, stall: 10, accel: 0, pitchRate: 1, rollRate: 1, yawRate: 1.4, gLimit: 3.5, climb: 9,
+  brake: 6, maxSink: 4.5, gearH: 1.66, bellyH: 1.66, span: 12.4, len: 15, wingY: 2.2,
+  retract: false, floats: false, jet: false, heli: true,
+  cam: { dist: 22, height: 6 }, eye: [0, 0.55, -1.65],
+  inertia: 0.32, stallBite: 0, flaps: false, turb: 0.7,
+  engine: { kind: 'turboprop', count: 1, blades: 4, prop: 390, spool: 0.8 },
+  stats: [0.25, 0.6, 0.8],
+});
+
 for (const p of PLANES) p.takeoff = p.stall * 1.12;
 
 /** Points de départ proposés au menu. */

@@ -166,7 +166,7 @@ export class Sound {
     set(this.engineGain.gain, engineOn ? (cockpit && !open ? 0.85 : 1) : 0, engineOn ? 0.05 : 0.25);
     const e = this.engine;
     if (e && !e.simple) {
-      set(e.rpm, rpm, 0.03); set(e.load, plane.power, 0.05); set(e.burner, plane.burner, 0.08);
+      set(e.rpm, rpm, 0.03); set(e.load, spec.heli ? plane.throttle : plane.power, 0.05); set(e.burner, plane.burner, 0.08);
       set(e.pitch, doppler, 0.05); set(e.speed, speedRatio, 0.2);
     } else if (e) {
       const f = (this.jet ? 90 : 46) + 70 * rpm;

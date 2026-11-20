@@ -59,6 +59,7 @@ export class Plane {
     this.airTime = 0; this.time = 0;
     this.rpm = IDLE; this.flaps = 0; this.flapAnim = 0; this.yawRate = 0;
     this.buffet = 0; this.dropSide = 0; this.ground = 0; this.seed = Math.random() * 100;
+    this.hPitch = 0; this.hBank = 0;
     this.events.length = 0;
   }
 
@@ -119,7 +120,7 @@ export class Plane {
   /** Renvoie un petit message à afficher, ou null. */
   toggleGear() {
     const s = this.spec;
-    if (!s.retract) return s.floats ? 'Flotteurs fixes' : 'Train fixe';
+    if (!s.retract) return s.heli ? 'Patins fixes' : s.floats ? 'Flotteurs fixes' : 'Train fixe';
     // amphibie : sur l'eau on peut sortir/rentrer les roues (pour remonter une rampe) ; à terre, non
     if (this.onGround && (s.amphibian ? this.surface !== 'water' : this.gearDown)) return 'Train verrouillé au sol';
     this.gearDown = !this.gearDown;
@@ -162,13 +163,15 @@ export class Plane {
     c.yaw = ease(c.yaw, input.yaw, ir);
     this.throttle = clamp(this.throttle + input.throttle * 0.6 * dt, 0, 1);
     // régime moteur : un piston répond vite, une turbine monte lentement en régime (surtout au ralenti)
-    const target = IDLE + (1 - IDLE) * this.throttle, e = s.engine || {};
+    // (hélicoptère : le rotor tourne à régime constant, c'est le pas collectif qui varie)
+    const target = s.heli ? 1 : IDLE + (1 - IDLE) * this.throttle, e = s.engine || {};
     const spool = e.spool ? (0.3 + 1.7 * this.rpm * this.rpm) / e.spool : 5;
     this.rpm += (target - this.rpm) * (1 - Math.exp(-spool * dt));
     this.flapAnim = damp(this.flapAnim, this.flaps, 1.4, dt);
     this.gearAnim = damp(this.gearAnim, this.gearDown ? 1 : 0, 5, dt);
     this.braking = input.brake;
-    if (this.onGround) this.stepGround(dt, input, world);
+    if (s.heli) this.stepHeli(dt, input, world);
+    else if (this.onGround) this.stepGround(dt, input, world);
     else this.stepAir(dt, input, world);
     this.speed = this.vel.length();
   }
@@ -305,6 +308,98 @@ export class Plane {
       }
     }
     // obstacles
+    if (world.hit(pos.x, pos.y, pos.z)) { this.crash('obstacle'); return; }
+    for (const hp of this.hitPts) {
+      _p.copy(hp).applyQuaternion(q).add(pos);
+      if (world.hit(_p.x, _p.y, _p.z)) { this.crash('obstacle'); return; }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Hélicoptère, version arcade :
+  //  - le manche incline l'appareil (et il revient à plat quand on lâche) : l'inclinaison fait avancer,
+  //    reculer ou glisser de côté ; incliné en avançant, il vire tout seul ;
+  //  - R / F donnent la vitesse verticale voulue (relâchés : il tient son altitude), le pas collectif suit ;
+  //  - palonnier : pivoter sur place ; Espace : stabilisation automatique en vol stationnaire.
+  stepHeli(dt, input, world) {
+    const s = this.spec, q = this.quat, v = this.vel, c = this.ctrl, pos = this.pos;
+    const hdg0 = Math.atan2(-this.fwd.x, -this.fwd.z);
+    const fx = -Math.sin(hdg0), fz = -Math.cos(hdg0);
+    const vFwd = v.x * fx + v.z * fz, vSide = v.x * -fz + v.z * fx; // vitesse avant / vers la droite
+
+    if (this.onGround) {
+      this.hPitch = damp(this.hPitch, 0, 6, dt); this.hBank = damp(this.hBank, 0, 6, dt);
+      this.yawRate = damp(this.yawRate, c.yaw * s.yawRate * 0.6, 4, dt);
+      q.setFromUnitVectors(Y, this.gNormal).multiply(_q.setFromAxisAngle(Y, hdg0 - this.yawRate * dt));
+      this.axes();
+      v.set(0, 0, 0);
+      this.throttle = damp(this.throttle, 0.15, 3, dt);
+      this.gLoad = 1; this.stalling = false; this.stallWarn = false; this.buffet = 0; this.pitchRate = 0; this.rollRate = 0;
+      if (input.throttle > 0.1) { // décollage
+        this.onGround = false; this.airTime = 0; v.y = 1.5; pos.y += 0.05;
+        this.events.push({ type: 'takeoff' });
+      }
+      return;
+    }
+    this.airTime += dt;
+
+    // attitude voulue
+    let tp = c.pitch * 0.42, tb = c.roll * 0.5;
+    if (input.brake) { // freinage automatique vers le vol stationnaire
+      tp = clamp(vFwd * 0.025, -0.4, 0.4);
+      tb = clamp(-vSide * 0.03, -0.4, 0.4);
+    }
+    const p0 = this.hPitch, b0 = this.hBank;
+    this.hPitch = damp(this.hPitch, tp, 1 / s.inertia, dt);
+    this.hBank = damp(this.hBank, tb, 1.2 / s.inertia, dt);
+    this.pitchRate = (this.hPitch - p0) / dt; this.rollRate = (this.hBank - b0) / dt;
+    // lacet : palonnier + virage coordonné quand on avance incliné
+    const coord = this.hBank * 1.1 * clamp(vFwd / 25, 0, 1);
+    this.yawRate = damp(this.yawRate, c.yaw * s.yawRate + coord, 4, dt);
+    const hdg = hdg0 - this.yawRate * dt;
+    q.setFromAxisAngle(Y, hdg).multiply(_q.setFromAxisAngle(X, this.hPitch)).multiply(_q.setFromAxisAngle(Z, -this.hBank));
+    this.axes();
+
+    // pas collectif : on vise une vitesse verticale (R / F), sinon on tient l'altitude
+    // (aide arcade : près du sol, la descente est freinée automatiquement)
+    const vsWanted = Math.max(input.throttle * s.climb, this.agl < 14 ? -1.2 - this.agl * 0.25 : -99);
+    const aUp = G + clamp((vsWanted - v.y) * 2.2, -G * 0.9, G * 1.2);
+    const lift = clamp(aUp / Math.max(this.up.y, 0.45), 0, G * 2.3);
+    this.throttle = lift / (G * 2.3);
+    this.gLoad = lift / G;
+
+    // forces : portance du rotor, poids, traînée
+    const V = v.length();
+    _acc.copy(this.up).multiplyScalar(lift);
+    _acc.y -= G;
+    _acc.addScaledVector(v, -(0.035 + 0.0009 * V));
+    _acc.y -= v.y * 0.25;
+    _acc.y += s.turb * 0.6 * wobble((this.time + this.seed) * 0.9, 1.3); // petites turbulences
+    v.addScaledVector(_acc, dt);
+    pos.addScaledVector(v, dt);
+
+    // sol
+    const g = world.groundAt(pos.x, pos.z, pos.y);
+    this.agl = pos.y - this.standH - g.h;
+    this.surface = g.type;
+    this.stalling = false; this.stallWarn = false; this.buffet = 0;
+    if (this.agl <= 0) {
+      if (g.type === 'land') world.normalAt(pos.x, pos.z, _n); else _n.set(0, 1, 0);
+      const hs = Math.hypot(v.x, v.z), ok = g.type !== 'water' && -v.y < s.maxSink && hs < 14 && this.up.y > 0.82 && _n.y > 0.85;
+      if (!ok) { this.crash(g.type === 'water' ? 'water' : 'ground'); return; }
+      pos.y = g.h + this.standH; this.agl = 0;
+      this.onGround = true; this.gNormal.copy(_n); this.surface = g.type;
+      this.events.push({ type: 'touchdown', surface: g.type, sink: -v.y, airTime: this.airTime });
+      v.set(0, 0, 0);
+      return;
+    }
+    if (this.agl < 20) {
+      for (const hp of this.hitPts) {
+        _p.copy(hp).applyQuaternion(q).add(pos);
+        const gp = world.groundAt(_p.x, _p.z, _p.y);
+        if (_p.y < gp.h - 0.25) { this.crash(gp.type === 'water' ? 'water' : 'ground'); return; }
+      }
+    }
     if (world.hit(pos.x, pos.y, pos.z)) { this.crash('obstacle'); return; }
     for (const hp of this.hitPts) {
       _p.copy(hp).applyQuaternion(q).add(pos);

@@ -405,7 +405,61 @@ function cargo(spec) {
   return m;
 }
 
-const BUILDERS = { tourisme, biplan, hydravion, chasseur, jet, cargo };
+// Hélicoptère bombardier d'eau : design original (rouge et blanc, nez rond, queue rayée, patins).
+function helico(spec) {
+  const m = base(), { hull, always } = m;
+  const R = 0xd8352a, W = 0xf3f1ec, K = 0x2a2e33;
+  // cabine : un gros œuf rouge sur un ventre blanc, nez arrondi
+  hull.add(blob(1.5, R, 0, 0.35, -0.9, 1.0, 1.0, 1.75));
+  hull.add(blob(1.48, W, 0, -0.15, -0.95, 1.02, 0.78, 1.72));
+  hull.add(blob(1.0, GLASS, 0, 0.62, -2.72, 1.18, 0.6, 0.9));     // grand pare-brise bombé
+  for (const s of [-1, 1]) {
+    hull.add(box(0.05, 0.5, 0.75, GLASS, s * 1.47, 0.55, -0.55));  // hublots
+    hull.add(box(0.05, 0.5, 0.6, GLASS, s * 1.4, 0.55, 0.45));
+    hull.add(box(0.06, 0.08, 3.2, W, s * 1.5, 0.95, -0.4));        // liseré blanc
+    hull.add(box(0.45, 0.32, 2.3, R, s * 1.42, -0.85, 0.1));        // réservoirs latéraux
+  }
+  // bosse moteur, entrées d'air, mât
+  hull.add(blob(0.95, R, 0, 1.55, 0.1, 0.95, 0.62, 1.9));
+  for (const s of [-1, 1]) hull.add(box(0.06, 0.28, 0.6, K, s * 0.86, 1.62, -0.55));
+  always.add(tube(0.16, 0.16, -0.1, 0.1, METAL, { y: 2.05 }));
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 0.7, 8), M(METAL));
+  mast.position.set(0, 2.0, -0.05); always.add(mast);
+  always.add(blob(0.32, R, 0, 2.38, -0.05, 1, 0.55, 1));
+  // poutre de queue, stabilisateur, dérive rayée rouge et blanc
+  hull.add(tube(0.78, 0.26, 1.0, 7.6, R, { y: 0.75 }));
+  hull.add(box(2.8, 0.09, 0.7, R, 0, 0.82, 6.2));
+  for (let k = 0; k < 6; k++) hull.add(box(0.14, 0.38, 0.62 - k * 0.04, k % 2 ? W : R, 0, 1.05 + k * 0.38, 7.55 + k * 0.05));
+  hull.add(box(0.12, 0.7, 0.5, R, 0, 0.45, 7.45));                 // petite dérive basse
+  // patins
+  for (const s of [-1, 1]) {
+    hull.add(tube(0.07, 0.07, -2.3, 1.7, METAL, { x: s * 1.25, y: -1.59 }));
+    bar(hull, [s * 1.25, -1.59, -2.3], [s * 1.25, -1.3, -2.78], 0.14, METAL); // bout relevé
+    bar(hull, [s * 0.75, -0.9, -1.4], [s * 1.25, -1.59, -1.4], 0.08, METAL);
+    bar(hull, [s * 0.75, -0.9, 0.9], [s * 1.25, -1.59, 0.9], 0.08, METAL);
+  }
+  // rotor principal (4 pales fines) et rotor de queue
+  const rotor = (r, n, chord, x, y, z, rot) => {
+    const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.set(rot[0], rot[1], rot[2]);
+    const blades = new THREE.Group();
+    for (let k = 0; k < n; k++) {
+      const geo = new THREE.BoxGeometry(chord, r, 0.05); geo.translate(0, r / 2, 0);
+      const b = new THREE.Mesh(geo, M(0x2b2d31)); b.rotation.z = (k / n) * Math.PI * 2; blades.add(b);
+    }
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 28),
+      new THREE.MeshBasicMaterial({ color: 0xd5dbe0, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false }));
+    disc.userData.noShadow = true;
+    g.add(blades, disc); always.add(g);
+    m.props.push({ blades, disc });
+  };
+  rotor(6.2, 4, 0.38, 0, 2.48, -0.05, [-Math.PI / 2, 0, 0]);
+  rotor(1.05, 2, 0.2, -0.32, 2.75, 7.75, [0, Math.PI / 2, 0]);
+  m.cockpit = makeCockpit(spec.eye, { w: 1.55, frame: true, nose: { w: 1.5, len: 0.8, color: R, drop: 0.35 } });
+  m.tips = [[6.1, 2.48, 0], [-6.1, 2.48, 0]];
+  return m;
+}
+
+const BUILDERS = { tourisme, biplan, hydravion, chasseur, jet, cargo, helico };
 const cache = new Map();
 
 /** Construit (une seule fois) le modèle 3D d'un avion. */

@@ -106,7 +106,7 @@ function startFlight() {
       toWorld(rw, 0, rw.length / 2 - 40 - spec.len, _w);
       plane.placeOnGround(_w.x, _w.z, rw.yaw, world);
     }
-    ui.hint(ui.flightHint);
+    ui.hint(spec.heli ? ui.heliHint : ui.flightHint);
   }
   state = 'fly';
   accu = 0; edgeWarned = false;

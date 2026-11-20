@@ -44,6 +44,7 @@ export class UI {
     this.keysHtml.push(['', 'A : freins · B : volets · X : train · Y : vue · Start : pause · Select : réapparaître']);
     this.keysHtml.push(['', 'Clic stick droit (R3) ou croix bas : missile / mitrailleuse (maintenir)']);
     $('keys').innerHTML = this.keysHtml.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
+    this.heliHint = `${k(L.KeyR)} monter (décoller) · ${k(L.KeyF)} descendre · ${k(L.KeyW, L.KeyS)} ${k(L.KeyA, L.KeyD)} avancer / glisser · ${k(L.KeyQ, L.KeyE)} pivoter · ${k('Espace')} stationnaire`;
     this.flightHint = `${k(L.KeyR)} mettre les gaz · ${k(L.KeyS)} cabrer pour décoller · ${k(L.KeyA, L.KeyD)} incliner · ${k('C')} vue · ${k('Échap')} toutes les commandes`;
   }
 
