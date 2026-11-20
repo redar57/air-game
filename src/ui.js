@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 
 /** Menu, affichage minimal en vol, messages furtifs et écran de pause. */
 export class UI {
-  constructor(starts, labels) {
+  constructor(starts, labels, planes) {
     this.handlers = {};
     this.toastT = 0; this.hintT = 0;
     this.hudCache = ['', '', '', '', ''];
@@ -16,10 +16,23 @@ export class UI {
       box.appendChild(b);
       return b;
     });
-    $('prev').addEventListener('click', () => this.emit('plane', -1));
-    $('next').addEventListener('click', () => this.emit('plane', 1));
     $('go').addEventListener('click', () => this.emit('go'));
     $('invert').addEventListener('click', () => this.emit('invert'));
+    $('daytime').addEventListener('click', () => this.emit('daytime'));
+    $('mutebtn').addEventListener('click', () => this.emit('mute'));
+
+    // liste des appareils (vignettes ajoutées plus tard par setThumb)
+    this.planes = planes; this.cat = 'all'; this.sel = 0;
+    this.items = planes.map((p, i) => {
+      const b = document.createElement('button');
+      b.className = 'item';
+      b.innerHTML = `<span class="ph"></span><span><b>${p.name}</b><small>${this.tagsOf(p).slice(0, 2).join(' · ') || (p.heli ? 'Hélicoptère' : 'Avion')}</small></span>`;
+      b.addEventListener('click', () => this.emit('plane-select', i));
+      $('list').appendChild(b);
+      return b;
+    });
+    this.tabs = [...document.querySelectorAll('#tabs button')];
+    this.tabs.forEach((t) => t.addEventListener('click', () => this.setCat(t.dataset.cat, true)));
     $('resume').addEventListener('click', () => this.emit('resume'));
     $('tomenu').addEventListener('click', () => this.emit('menu'));
     // un clic ne doit pas laisser le focus sur un bouton (Espace/Entrée le réactiveraient)
@@ -43,8 +56,9 @@ export class UI {
     this.keysHtml.push(['🎮 Manette', 'Stick gauche : piloter · RT / LT : gaz · LB / RB : palonnier · stick droit : regarder']);
     this.keysHtml.push(['', 'A : freins · B : volets · X : train · Y : vue · Start : pause · Select : réapparaître']);
     this.keysHtml.push(['', 'Clic stick droit (R3) ou croix bas : missile / mitrailleuse (maintenir)']);
+    this.L = L; this.k = k;
     $('keys').innerHTML = this.keysHtml.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
-    this.heliHint = `${k(L.KeyR)} monter (décoller) · ${k(L.KeyF)} descendre · ${k(L.KeyW, L.KeyS)} ${k(L.KeyA, L.KeyD)} avancer / glisser · ${k(L.KeyQ, L.KeyE)} pivoter · ${k('Espace')} stationnaire`;
+    this.heliHint = `${k(L.KeyR)} gaz au-dessus de 50 % pour décoller · ${k(L.KeyW, L.KeyS)} avancer / reculer · ${k(L.KeyA, L.KeyD)} tourner · ${k(L.KeyQ, L.KeyE)} pivoter · ${k('Espace')} stationnaire`;
     this.flightHint = `${k(L.KeyR)} mettre les gaz · ${k(L.KeyS)} cabrer pour décoller · ${k(L.KeyA, L.KeyD)} incliner · ${k('C')} vue · ${k('Échap')} toutes les commandes`;
   }
 
@@ -53,13 +67,87 @@ export class UI {
 
   loaded() { $('loading').classList.add('done'); }
 
-  showPlane(spec) {
+  /** Atouts affichés en étiquettes. */
+  tagsOf(p) {
+    const t = [];
+    if (p.heli) t.push('Vol stationnaire');
+    if (p.missiles) t.push('Missiles');
+    if (p.guns) t.push('Mitrailleuses');
+    if (p.amphibian) t.push('Amphibie'); else if (p.floats) t.push('Flotteurs');
+    if (p.afterburner) t.push('Postcombustion');
+    if (p.engine && p.engine.count > 1) t.push(p.heli ? `${p.engine.count} rotors` : `${p.engine.count} moteurs`);
+    if (p.retract && !p.amphibian) t.push('Train rentrant');
+    if (p.flaps) t.push('Volets');
+    return t;
+  }
+
+  /** Commandes propres à l'appareil (clavier, puis manette). */
+  controlsOf(p) {
+    const L = this.L, k = this.k, rows = [];
+    if (p.heli) {
+      rows.push([k(L.KeyR, L.KeyF), 'Gaz : 50 % = vol stationnaire, plus pour monter']);
+      rows.push([k(L.KeyW, L.KeyS), 'Avancer / reculer']);
+      rows.push([k(L.KeyA, L.KeyD), 'Tourner']);
+      rows.push([k(L.KeyQ, L.KeyE), 'Pivoter sur place']);
+      rows.push([k('Espace'), 'Retour au vol stationnaire']);
+    } else {
+      rows.push([k(L.KeyR, L.KeyF), 'Gaz']);
+      rows.push([k(L.KeyW, L.KeyS), 'Piquer / cabrer']);
+      rows.push([k(L.KeyA, L.KeyD), 'Incliner (et virer)']);
+      if (p.flaps) rows.push([k('V'), 'Volets']);
+      if (p.retract) rows.push([k('G'), p.amphibian ? 'Roues : piste (sorties) / eau (rentrées)' : 'Train']);
+    }
+    if (p.missiles) rows.push([k('X'), 'Missile : vise ~1 s pour verrouiller']);
+    if (p.guns) rows.push([k('X'), 'Mitrailleuses (maintenir)']);
+    rows.push(['🎮', p.heli ? 'Stick gauche · RT / LT gaz · LB / RB pivot' : 'Stick gauche · RT / LT gaz · LB / RB palonnier']);
+    return rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
+  }
+
+  showPlane(spec, index = this.sel) {
+    this.sel = index;
+    $('pkind').textContent = spec.heli ? 'Hélicoptère' : 'Avion';
     $('pname').textContent = spec.name;
     $('pdesc').textContent = spec.desc;
+    $('tags').innerHTML = this.tagsOf(spec).map((t) => `<span>${t}</span>`).join('');
     $('s-vit').style.width = `${spec.stats[0] * 100}%`;
     $('s-agi').style.width = `${spec.stats[1] * 100}%`;
     $('s-fac').style.width = `${spec.stats[2] * 100}%`;
+    $('pctrl').innerHTML = this.controlsOf(spec);
+    // l'appareil choisi doit être visible dans le filtre courant
+    if (!this.inCat(spec)) this.setCat('all');
+    this.items.forEach((b, n) => b.classList.toggle('on', n === index));
+    this.items[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
+
+  inCat(p) { return this.cat === 'all' || (this.cat === 'helico') === !!p.heli; }
+  setCat(cat, pick) {
+    this.cat = cat;
+    this.tabs.forEach((t) => t.classList.toggle('on', t.dataset.cat === cat));
+    this.items.forEach((b, n) => { b.hidden = !this.inCat(this.planes[n]); });
+    if (pick && !this.inCat(this.planes[this.sel])) this.emit('plane-select', this.planes.findIndex((p) => this.inCat(p)));
+  }
+  /** Catégorie suivante / précédente (manette LB / RB). */
+  cycleCat(d) {
+    const cats = this.tabs.map((t) => t.dataset.cat);
+    this.setCat(cats[(cats.indexOf(this.cat) + d + cats.length) % cats.length], true);
+  }
+  /** Appareil suivant / précédent dans le filtre courant. */
+  step(d) {
+    const n = this.planes.length;
+    for (let k = 1; k <= n; k++) {
+      const i = (this.sel + d * k + n * 4) % n;
+      if (this.inCat(this.planes[i])) return i;
+    }
+    return this.sel;
+  }
+  setThumb(i, url) {
+    const ph = this.items[i].querySelector('.ph, img');
+    const img = document.createElement('img');
+    img.src = url; img.alt = '';
+    ph.replaceWith(img);
+  }
+  setDaytime(name) { $('daytime').textContent = `Heure : ${name}`; }
+  setMute(m) { $('mutebtn').textContent = `Son : ${m ? 'coupé' : 'activé'}`; }
   showStart(i) { this.chips.forEach((c, n) => c.classList.toggle('on', n === i)); }
   setInvert(v) { $('invert').textContent = `Tangage : ${v ? 'inversé' : 'normal'}`; }
 

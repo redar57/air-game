@@ -109,7 +109,7 @@ export class Plane {
     this.axes();
     this.vel.copy(this.fwd).multiplyScalar(speed);
     this.speed = speed;
-    this.throttle = 0.7;
+    this.throttle = this.spec.heli ? 0.5 : 0.7; // hélico : pile le stationnaire
     this.rpm = IDLE + (1 - IDLE) * this.throttle;
     this.gearDown = !this.spec.retract;
     this.gearAnim = this.gearDown ? 1 : 0;
@@ -317,63 +317,72 @@ export class Plane {
 
   // -------------------------------------------------------------------------
   // Hélicoptère, version arcade :
-  //  - le manche incline l'appareil (et il revient à plat quand on lâche) : l'inclinaison fait avancer,
-  //    reculer ou glisser de côté ; incliné en avançant, il vire tout seul ;
-  //  - R / F donnent la vitesse verticale voulue (relâchés : il tient son altitude), le pas collectif suit ;
-  //  - palonnier : pivoter sur place ; Espace : stabilisation automatique en vol stationnaire.
+  //  - la manette des gaz (R / F, gâchettes) règle le pas collectif et ne bouge jamais toute seule :
+  //    50 % = vol stationnaire, plus = on monte, moins = on descend ;
+  //  - le manche avant / arrière incline l'appareil pour avancer ou reculer (avec un coup de pouce arcade) ;
+  //  - le manche gauche / droite fait virer (en s'inclinant), même en stationnaire ; le palonnier pivote sur place ;
+  //  - Espace : retour automatique au vol stationnaire (assiette à plat, gaz à 50 %).
   stepHeli(dt, input, world) {
     const s = this.spec, q = this.quat, v = this.vel, c = this.ctrl, pos = this.pos;
     const hdg0 = Math.atan2(-this.fwd.x, -this.fwd.z);
-    const fx = -Math.sin(hdg0), fz = -Math.cos(hdg0);
+    const fx = -Math.sin(hdg0), fz = -Math.cos(hdg0);           // avant (horizontal)
     const vFwd = v.x * fx + v.z * fz, vSide = v.x * -fz + v.z * fx; // vitesse avant / vers la droite
+    if (input.brake) this.throttle = damp(this.throttle, 0.5, 3, dt);
 
     if (this.onGround) {
       this.hPitch = damp(this.hPitch, 0, 6, dt); this.hBank = damp(this.hBank, 0, 6, dt);
-      this.yawRate = damp(this.yawRate, c.yaw * s.yawRate * 0.6, 4, dt);
+      this.yawRate = damp(this.yawRate, (c.yaw + c.roll * 0.5) * s.yawRate * 0.6, 4, dt);
       q.setFromUnitVectors(Y, this.gNormal).multiply(_q.setFromAxisAngle(Y, hdg0 - this.yawRate * dt));
       this.axes();
       v.set(0, 0, 0);
-      this.throttle = damp(this.throttle, 0.15, 3, dt);
       this.gLoad = 1; this.stalling = false; this.stallWarn = false; this.buffet = 0; this.pitchRate = 0; this.rollRate = 0;
-      if (input.throttle > 0.1) { // décollage
-        this.onGround = false; this.airTime = 0; v.y = 1.5; pos.y += 0.05;
+      if (this.throttle > 0.53) { // assez de pas : on décolle
+        this.onGround = false; this.airTime = 0; v.y = 0.8; pos.y += 0.05;
         this.events.push({ type: 'takeoff' });
       }
       return;
     }
     this.airTime += dt;
 
-    // attitude voulue
-    let tp = c.pitch * 0.42, tb = c.roll * 0.5;
-    if (input.brake) { // freinage automatique vers le vol stationnaire
-      tp = clamp(vFwd * 0.025, -0.4, 0.4);
-      tb = clamp(-vSide * 0.03, -0.4, 0.4);
+    // assiette voulue
+    // (en stationnaire, le manche latéral fait surtout pivoter : peu d'inclinaison, donc peu de glissade)
+    const fwdK = clamp(vFwd / 25, 0, 1);
+    let tp = c.pitch * s.tilt, tb = c.roll * s.tilt * 0.7 * (0.25 + 0.75 * fwdK);
+    if (input.brake) {
+      tp = clamp(vFwd * 0.03, -s.tilt, s.tilt);
+      tb = clamp(-vSide * 0.04, -s.tilt, s.tilt);
     }
     const p0 = this.hPitch, b0 = this.hBank;
     this.hPitch = damp(this.hPitch, tp, 1 / s.inertia, dt);
     this.hBank = damp(this.hBank, tb, 1.2 / s.inertia, dt);
     this.pitchRate = (this.hPitch - p0) / dt; this.rollRate = (this.hBank - b0) / dt;
-    // lacet : palonnier + virage coordonné quand on avance incliné
-    const coord = this.hBank * 1.1 * clamp(vFwd / 25, 0, 1);
-    this.yawRate = damp(this.yawRate, c.yaw * s.yawRate + coord, 4, dt);
+    // lacet : palonnier + virage commandé par le manche (plus franc avec de la vitesse)
+    const turn = c.roll * s.turnRate * (0.6 + 0.4 * clamp(vFwd / 30, 0, 1));
+    this.yawRate = damp(this.yawRate, c.yaw * s.yawRate + turn, 5, dt);
     const hdg = hdg0 - this.yawRate * dt;
     q.setFromAxisAngle(Y, hdg).multiply(_q.setFromAxisAngle(X, this.hPitch)).multiply(_q.setFromAxisAngle(Z, -this.hBank));
     this.axes();
 
-    // pas collectif : on vise une vitesse verticale (R / F), sinon on tient l'altitude
-    // (aide arcade : près du sol, la descente est freinée automatiquement)
-    const vsWanted = Math.max(input.throttle * s.climb, this.agl < 14 ? -1.2 - this.agl * 0.25 : -99);
-    const aUp = G + clamp((vsWanted - v.y) * 2.2, -G * 0.9, G * 1.2);
-    const lift = clamp(aUp / Math.max(this.up.y, 0.45), 0, G * 2.3);
-    this.throttle = lift / (G * 2.3);
+    // portance : 50 % de gaz = stationnaire (quelle que soit l'inclinaison)
+    let liftV = G * (1 + (this.throttle - 0.5) * 2.4);
+    if (this.agl < 12) { // coussin arcade près du sol : on ne s'écrase pas en descendant à la verticale
+      const vmin = -(1.5 + this.agl * 0.3);
+      if (v.y < vmin) liftV += (vmin - v.y) * 4;
+    }
+    const lift = clamp(liftV / Math.max(this.up.y, 0.5), 0, G * 3);
     this.gLoad = lift / G;
 
-    // forces : portance du rotor, poids, traînée
-    const V = v.length();
+    // forces : rotor, poids, poussée arcade du manche, traînée
     _acc.copy(this.up).multiplyScalar(lift);
     _acc.y -= G;
-    _acc.addScaledVector(v, -(0.035 + 0.0009 * V));
-    _acc.y -= v.y * 0.25;
+    const push = s.push * (input.brake ? 0 : 1);
+    _acc.x += fx * -c.pitch * push;
+    _acc.z += fz * -c.pitch * push;
+    // la vitesse latérale s'amortit vite (l'hélico « suit » son nez dans les virages)
+    _acc.x -= -fz * vSide * 0.8; _acc.z -= fx * vSide * 0.8;
+    const vh = Math.hypot(v.x, v.z), kd = 0.02 + 0.001 * vh;
+    _acc.x -= v.x * kd; _acc.z -= v.z * kd;
+    _acc.y -= v.y * 1.2;
     _acc.y += s.turb * 0.6 * wobble((this.time + this.seed) * 0.9, 1.3); // petites turbulences
     v.addScaledVector(_acc, dt);
     pos.addScaledVector(v, dt);
@@ -391,6 +400,8 @@ export class Plane {
       this.onGround = true; this.gNormal.copy(_n); this.surface = g.type;
       this.events.push({ type: 'touchdown', surface: g.type, sink: -v.y, airTime: this.airTime });
       v.set(0, 0, 0);
+      // posé : on réduit les gaz sous le stationnaire pour rester au sol
+      this.throttle = Math.min(this.throttle, 0.45);
       return;
     }
     if (this.agl < 20) {

@@ -73,7 +73,7 @@ function setPlane(i) {
   scene.add(model.root);
   sky.setShadowSpan(Math.max(45, spec.span * 1.7));
   sound.setPlane(spec);
-  ui.showPlane(spec);
+  ui.showPlane(spec, selPlane);
   if (state === 'menu') plane.placeInAir(show.x, show.y, show.z, show.yaw, 0);
 }
 
@@ -196,13 +196,16 @@ function handleKeys() {
   for (const { code, key, stick } of input.take()) {
     if (stick && state !== 'menu') continue;
     if (state === 'menu') {
-      if (code === 'ArrowLeft' || code === 'KeyA') setPlane(selPlane - 1);
-      else if (code === 'ArrowRight' || code === 'KeyD') setPlane(selPlane + 1);
-      else if (code === 'ArrowUp' || code === 'KeyW') setStart(selStart - 1);
-      else if (code === 'ArrowDown' || code === 'KeyS') setStart(selStart + 1);
+      if (code === 'ArrowUp' || code === 'KeyW') setPlane(ui.step(-1));
+      else if (code === 'ArrowDown' || code === 'KeyS') setPlane(ui.step(1));
+      else if (code === 'ArrowLeft' || code === 'KeyA') setStart(selStart - 1);
+      else if (code === 'ArrowRight' || code === 'KeyD') setStart(selStart + 1);
+      else if (code === 'PadLB') ui.cycleCat(-1);
+      else if (code === 'PadRB') ui.cycleCat(1);
+      else if (key === 'm') ui.setMute(sound.toggleMute());
       else if (code === 'Enter' || code === 'NumpadEnter' || code === 'Space') startFlight();
       else if (key === 'i') toggleInvert();
-      else if (key === 't') sky.cycle();
+      else if (key === 't') ui.setDaytime(sky.cycle());
     } else if (state === 'pause') {
       if (code === 'Escape' || code === 'Enter' || key === 'p') resume();
     } else if (state === 'fly') {
@@ -216,9 +219,9 @@ function handleKeys() {
         else if (!plane.spec.missiles) ui.toast('Armes : missiles sur le jet, mitrailleuses sur le chasseur', 1800);
         else if (missiles.fire(plane, scenery.balloons)) input.rumble(0.25, 0.35, 120);
       }
-      else if (key === 't') ui.toast(sky.cycle(), 1500);
+      else if (key === 't') { const n = sky.cycle(); ui.toast(n, 1500); ui.setDaytime(n); }
       else if (key === 'h') ui.toggleHud();
-      else if (key === 'm') ui.toast(sound.toggleMute() ? 'Son coupé' : 'Son activé', 1200);
+      else if (key === 'm') { const m = sound.toggleMute(); ui.setMute(m); ui.toast(m ? 'Son coupé' : 'Son activé', 1200); }
     }
   }
 }
@@ -263,6 +266,36 @@ function updateWeapons(dt) {
     }
   }
   ui.lock(null);
+}
+
+/** Vignettes du menu : chaque appareil rendu une fois, de trois quarts avant, dans un petit moteur à part. */
+function makeThumbs() {
+  const W = 184, H = 112;
+  let r;
+  try { r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); } catch { return; }
+  r.setPixelRatio(1); r.setSize(W, H, false);
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xe4f1ff, 0x6c7a58, 2.3));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(-4, 6, -3); sc.add(sun);
+  const cam = new THREE.PerspectiveCamera(28, W / H, 0.1, 1000);
+  PLANES.forEach((spec, i) => {
+    const m = getModel(spec);
+    const keep = [m.cockpit.visible, m.hull.visible, ...m.props.map((p) => [p.blades.visible, p.disc.visible])];
+    m.cockpit.visible = false; m.hull.visible = true;
+    for (const p of m.props) { p.blades.visible = true; p.disc.visible = false; }
+    const root = m.root.clone(true);
+    m.cockpit.visible = keep[0]; m.hull.visible = keep[1];
+    m.props.forEach((p, k) => { [p.blades.visible, p.disc.visible] = keep[2 + k]; });
+    root.position.set(0, 0, 0); root.quaternion.identity();
+    sc.add(root);
+    const d = Math.max(spec.span, spec.len) * 1.45;
+    cam.position.set(-0.95, 0.5, -1.05).normalize().multiplyScalar(d);
+    cam.lookAt(0, -spec.gearH * 0.15, 0);
+    r.render(sc, cam);
+    ui.setThumb(i, r.domElement.toDataURL('image/png'));
+    sc.remove(root);
+  });
+  r.dispose(); r.forceContextLoss();
 }
 
 /** Tout ce qu'affiche la planche de bord. */
@@ -377,12 +410,14 @@ async function boot() {
   missiles = new Missiles(scene, fx, sound);
   guns = new Guns(scene, fx, sound);
   rig = new CameraRig(camera, canvas);
-  ui = new UI(STARTS, labels);
+  ui = new UI(STARTS, labels, PLANES);
 
   const rw = runways[0];
   show = { x: rw.x - 500, y: rw.alt + 250, z: rw.z + 1250, yaw: rw.yaw + 0.5 };
 
-  ui.on('plane', (d) => setPlane(selPlane + d));
+  ui.on('plane-select', (i) => setPlane(i));
+  ui.on('daytime', () => ui.setDaytime(sky.cycle()));
+  ui.on('mute', () => ui.setMute(sound.toggleMute()));
   ui.on('start-select', setStart);
   ui.on('go', startFlight);
   ui.on('invert', toggleInvert);
@@ -395,6 +430,7 @@ async function boot() {
   setStart(0);
   enterMenu();
   ui.loaded();
+  setTimeout(makeThumbs, 50);
 
   // petit accès pour le débogage depuis la console
   window.airgame = {

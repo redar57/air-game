@@ -29,7 +29,7 @@ export async function keyLabels() {
 //   clic du stick droit (R3) ou croix bas : missile (jet de chasse)
 const PAD_KEYS = {
   0: { code: 'Enter', key: 'enter' }, 1: { code: 'KeyV', key: 'v' }, 2: { code: 'KeyG', key: 'g' },
-  3: { code: 'KeyC', key: 'c' }, 8: { code: 'Backspace', key: 'backspace' }, 9: { code: 'Escape', key: 'escape' },
+  3: { code: 'KeyC', key: 'c' }, 4: { code: 'PadLB', key: '' }, 5: { code: 'PadRB', key: '' }, 8: { code: 'Backspace', key: 'backspace' }, 9: { code: 'Escape', key: 'escape' },
   11: { code: 'KeyX', key: 'x' },
   12: { code: 'ArrowUp', key: 't', pad: true }, 13: { code: 'ArrowDown', key: 'x', pad: true },
   14: { code: 'ArrowLeft', key: '' }, 15: { code: 'ArrowRight', key: '' },

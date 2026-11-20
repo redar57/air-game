@@ -1,7 +1,8 @@
 # Air Game — vol libre
 
-Petit simulateur de vol arcade au-dessus d'une île : six avions (tourisme, biplan de voltige, hydravion amphibie,
-chasseur à hélice, jet avec postcombustion, quadrimoteur) et un hélicoptère, un aéroport, un altiport et un porte-avions.
+Petit simulateur de vol arcade au-dessus d'une île : sept avions (tourisme, biplan de voltige, hydravion amphibie,
+chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur) et trois hélicoptères (bombardier d'eau,
+Libellule à bulle, Bi-rotor de transport), un aéroport, un altiport et un porte-avions.
 Tout est généré par le code : relief, avions, sons. Aucune installation.
 
 ## Jouer
@@ -55,9 +56,13 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   convergent les balles ; une rafale d'une seconde abat une montgolfière.
 - **Hydravion amphibie** : G sort les roues (sous les flotteurs) pour la piste, les rentre pour l'eau.
   Amerrir roues sorties fait capoter l'avion : le voyant « TRAIN ! » et le bandeau préviennent.
-- **Hélicoptère** (bombardier d'eau rouge et blanc) : R pour décoller et monter, F pour descendre (relâchés, il tient
-  son altitude ; près du sol, la descente est freinée toute seule). Le manche l'incline pour avancer ou glisser,
-  Q/E le font pivoter sur place, Espace le ramène en vol stationnaire. Il se pose partout où c'est assez plat.
+- **Hélicoptères** : la manette des gaz règle le pas du rotor et ne bouge jamais seule — **50 % = vol stationnaire**,
+  plus pour monter, moins pour descendre (près du sol, la descente est freinée toute seule). Avant / arrière pour
+  avancer ou reculer, gauche / droite pour tourner, A/E (palonnier) pour pivoter sur place, Espace pour revenir en
+  stationnaire. Ils se posent partout où c'est assez plat.
+- **Menu** : liste des appareils avec vignettes et filtre Avions / Hélicos, fiche avec atouts et commandes propres à
+  chaque appareil, choix du départ, de l'heure, du sens du tangage et du son. ↑/↓ change d'appareil, ←/→ de départ
+  (à la manette : croix ou stick, LB/RB pour la catégorie, A pour décoller).
 
 ## Si ça bloque
 

@@ -405,6 +405,22 @@ function cargo(spec) {
   return m;
 }
 
+/** Rotor d'hélicoptère : n pales fines + disque flou ; rot = orientation du moyeu (Euler). */
+function rotorAt(m, parent, r, n, chord, x, y, z, rot, color = 0x2b2d31) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.set(rot[0], rot[1], rot[2]);
+  const blades = new THREE.Group();
+  for (let k = 0; k < n; k++) {
+    const geo = new THREE.BoxGeometry(chord, r, 0.05); geo.translate(0, r / 2, 0);
+    const b = new THREE.Mesh(geo, M(color)); b.rotation.z = (k / n) * Math.PI * 2; blades.add(b);
+  }
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 28),
+    new THREE.MeshBasicMaterial({ color: 0xd5dbe0, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false }));
+  disc.userData.noShadow = true;
+  g.add(blades, disc); parent.add(g);
+  m.props.push({ blades, disc });
+}
+const ROTOR_UP = [-Math.PI / 2, 0, 0], ROTOR_SIDE = [0, Math.PI / 2, 0];
+
 // Hélicoptère bombardier d'eau : design original (rouge et blanc, nez rond, queue rayée, patins).
 function helico(spec) {
   const m = base(), { hull, always } = m;
@@ -439,27 +455,95 @@ function helico(spec) {
     bar(hull, [s * 0.75, -0.9, 0.9], [s * 1.25, -1.59, 0.9], 0.08, METAL);
   }
   // rotor principal (4 pales fines) et rotor de queue
-  const rotor = (r, n, chord, x, y, z, rot) => {
-    const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.set(rot[0], rot[1], rot[2]);
-    const blades = new THREE.Group();
-    for (let k = 0; k < n; k++) {
-      const geo = new THREE.BoxGeometry(chord, r, 0.05); geo.translate(0, r / 2, 0);
-      const b = new THREE.Mesh(geo, M(0x2b2d31)); b.rotation.z = (k / n) * Math.PI * 2; blades.add(b);
-    }
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 28),
-      new THREE.MeshBasicMaterial({ color: 0xd5dbe0, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false }));
-    disc.userData.noShadow = true;
-    g.add(blades, disc); always.add(g);
-    m.props.push({ blades, disc });
-  };
-  rotor(6.2, 4, 0.38, 0, 2.48, -0.05, [-Math.PI / 2, 0, 0]);
-  rotor(1.05, 2, 0.2, -0.32, 2.75, 7.75, [0, Math.PI / 2, 0]);
+  rotorAt(m, always, 6.2, 4, 0.38, 0, 2.48, -0.05, ROTOR_UP);
+  rotorAt(m, always, 1.05, 2, 0.2, -0.32, 2.75, 7.75, ROTOR_SIDE);
   m.cockpit = makeCockpit(spec.eye, { w: 1.55, frame: true, nose: { w: 1.5, len: 0.8, color: R, drop: 0.35 } });
   m.tips = [[6.1, 2.48, 0], [-6.1, 2.48, 0]];
   return m;
 }
 
-const BUILDERS = { tourisme, biplan, hydravion, chasseur, jet, cargo, helico };
+// Petit hélicoptère à bulle (jaune et noir)
+function libellule(spec) {
+  const m = base(), { hull, always } = m;
+  const Y = 0xf2c230, K = 0x26292d;
+  hull.add(blob(1.0, GLASS, 0, 0.32, -0.55, 0.95, 0.95, 1.15));   // bulle
+  hull.add(blob(0.98, Y, 0, -0.12, -0.2, 0.97, 0.7, 1.15));
+  hull.add(box(0.9, 0.75, 1.3, K, 0, 0.32, 0.85));                  // moteur
+  hull.add(box(0.6, 0.12, 1.4, Y, 0, 0.75, 0.8));
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.6, 6), M(METAL));
+  mast.position.set(0, 1.05, 0.35); always.add(mast);
+  hull.add(tube(0.16, 0.07, 1.4, 5.7, Y, { y: 0.48 }));            // poutre
+  hull.add(box(1.4, 0.05, 0.35, K, 0, 0.5, 5.1));
+  hull.add(box(0.06, 0.75, 0.5, K, 0, 0.72, 5.55));
+  for (const s of [-1, 1]) {
+    hull.add(tube(0.05, 0.05, -1.5, 1.2, METAL, { x: s * 0.82, y: -1.0 }));
+    bar(hull, [s * 0.82, -1.0, -1.5], [s * 0.82, -0.82, -1.85], 0.1, METAL);
+    bar(hull, [s * 0.45, -0.55, -0.7], [s * 0.82, -1.0, -0.7], 0.06, METAL);
+    bar(hull, [s * 0.45, -0.55, 0.65], [s * 0.82, -1.0, 0.65], 0.06, METAL);
+  }
+  rotorAt(m, always, 4.2, 2, 0.24, 0, 1.38, 0.35, ROTOR_UP);
+  rotorAt(m, always, 0.62, 2, 0.12, -0.12, 0.95, 5.75, ROTOR_SIDE);
+  m.cockpit = makeCockpit(spec.eye, { w: 1.2, frame: false, nose: { w: 1.0, len: 0.4, color: Y, drop: 0.4 } });
+  m.tips = [[4.1, 1.38, 0.35], [-4.1, 1.38, 0.35]];
+  return m;
+}
+
+// Hélicoptère de transport à rotors en tandem (kaki)
+function birotor(spec) {
+  const m = base(), { hull, always } = m;
+  const O = 0x6b7448, D = 0x4d5434, W = 0xe9e4d4;
+  hull.add(box(2.9, 2.7, 15.5, O, 0, 0, 0));
+  hull.add(blob(1.45, O, 0, -0.05, -7.75, 1.0, 0.93, 0.85));
+  hull.add(blob(1.0, GLASS, 0, 0.55, -8.25, 1.2, 0.55, 0.65));
+  hull.add(box(2.95, 0.12, 15.6, W, 0, -0.45, 0));                  // bande claire
+  for (let k = 0; k < 5; k++) for (const s of [-1, 1]) hull.add(box(0.05, 0.5, 0.6, GLASS, s * 1.46, 0.45, -5 + k * 2.2));
+  hull.add(box(1.5, 1.1, 2.6, O, 0, 1.75, -6.4));                    // pylône avant
+  hull.add(box(1.8, 2.6, 4.2, O, 0, 2.3, 6.2));                      // pylône arrière
+  for (const s of [-1, 1]) {
+    hull.add(box(0.7, 0.9, 5.5, D, s * 1.75, -0.6, 0.5));            // carénages de train
+    wheel(hull, 0.45, 0.35, s * 1.75, -1.75, -0.6); wheel(hull, 0.45, 0.35, s * 1.75, -1.75, 1.6);
+    wheel(hull, 0.4, 0.3, s * 0.9, -1.8, -6.3);
+    bar(hull, [s * 0.9, -1.3, -6.3], [s * 0.9, -1.8, -6.3], 0.15, METAL);
+  }
+  for (const z of [-6.4, 6.3]) {
+    const y = z < 0 ? 2.45 : 3.75;
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.22, 0.6, 8), M(METAL));
+    mast.position.set(0, y - 0.25, z); always.add(mast);
+    rotorAt(m, always, 9, 3, 0.55, 0, y, z, ROTOR_UP);
+  }
+  m.cockpit = makeCockpit(spec.eye, { w: 2.2, frame: true, nose: { w: 2.2, len: 0.9, color: O, drop: 0.3 } });
+  m.tips = [[0, 2.45, -15.4], [0, 3.75, 15.3]];
+  return m;
+}
+
+// Avion de course (rouge et blanc)
+function racer(spec) {
+  const m = base(), { hull, always } = m;
+  const R = 0xd62f2f, W = 0xf5f3ee, K = 0x2a2d31;
+  hull.add(tube(0.05, 0.24, -3.45, -3.12, W));                       // cône d'hélice
+  hull.add(tube(0.36, 0.5, -3.12, -1.6, R, { sy: 1.05 }));
+  hull.add(tube(0.5, 0.45, -1.6, 0.6, R, { sy: 1.15 }));
+  hull.add(tube(0.45, 0.1, 0.6, 3.9, R, { y: 0.06 }));
+  hull.add(tube(0.51, 0.47, -1.0, -0.2, W, { sy: 1.16 }));           // bande blanche
+  hull.add(blob(0.38, GLASS, 0, 0.5, -0.05, 0.8, 0.75, 1.8));        // verrière
+  hull.add(box(0.12, 0.28, 1.6, R, 0, 0.42, 1.2));                   // dos
+  wingS(m, hull, [1.25, 0.75, 0.45, 0.06, 0.18], R, 0.06, 0.1, 3.5, [{ kind: 'elevator', t0: 0, t1: 1 }], 0.42);
+  finS(m, hull, [1.1, 1.0, 0.45, 0.07, 0.6], W, 0, 0.18, 3.3, 0, 0.42);
+  for (const s of [-1, 1]) {
+    bar(hull, [s * 0.4, -0.35, -1.3], [s * 0.85, -0.95, -1.35], 0.07, K);
+    hull.add(blob(0.36, W, s * 0.88, -0.95, -1.35, 0.45, 0.6, 1.3)); // carénage de roue
+    wheel(hull, 0.3, 0.12, s * 0.88, -0.97, -1.35);
+  }
+  wheel(hull, 0.12, 0.06, 0, -0.22, 3.6);
+  wingS(m, always, [3.3, 1.45, 0.8, 0.13, 0.12, 0.18], W, 0.3, -0.38, -0.85,
+    [{ kind: 'aileron', t0: 0.45, t1: 0.95 }], 0.26, R);
+  m.props.push(makeProp(always, 0.95, 3, 0, 0, -3.2));
+  m.cockpit = makeCockpit(spec.eye, { w: 0.62, frame: true, nose: { w: 0.85, len: 2.6, color: R, drop: 0.05 } });
+  m.tips = [[3.6, -0.2, -0.6], [-3.6, -0.2, -0.6]];
+  return m;
+}
+
+const BUILDERS = { tourisme, biplan, hydravion, chasseur, jet, cargo, helico, libellule, birotor, racer };
 const cache = new Map();
 
 /** Construit (une seule fois) le modèle 3D d'un avion. */

@@ -86,15 +86,52 @@ export const PLANES = [
 
 PLANES.push({
   id: 'helico', name: "L'Hélicoptère",
-  desc: "Bombardier d'eau rouge et blanc. Vol stationnaire : R / F pour monter ou descendre, le manche pour avancer, Espace pour se stabiliser.",
+  desc: "Bombardier d'eau rouge et blanc. Gaz à 50 % = vol stationnaire, plus pour monter. Manche pour avancer et tourner, Espace pour se stabiliser.",
   // maxSpeed : vitesse de pointe ; climb : vitesse verticale maxi (m/s) ; stall : seulement pour les arcs de l'anémomètre
-  maxSpeed: 72, stall: 10, accel: 0, pitchRate: 1, rollRate: 1, yawRate: 1.4, gLimit: 3.5, climb: 9,
+  maxSpeed: 75, stall: 10, accel: 0, pitchRate: 1, rollRate: 1, yawRate: 1.6, gLimit: 3.5,
+  tilt: 0.55, push: 3, turnRate: 1.1, // hélico : inclinaison maxi (rad), poussée arcade du manche, virage au manche
   brake: 6, maxSink: 4.5, gearH: 1.66, bellyH: 1.66, span: 12.4, len: 15, wingY: 2.2,
   retract: false, floats: false, jet: false, heli: true,
   cam: { dist: 22, height: 6 }, eye: [0, 0.55, -1.65],
-  inertia: 0.32, stallBite: 0, flaps: false, turb: 0.7,
+  inertia: 0.25, stallBite: 0, flaps: false, turb: 0.7,
   engine: { kind: 'turboprop', count: 1, blades: 4, prop: 390, spool: 0.8 },
   stats: [0.25, 0.6, 0.8],
+});
+
+PLANES.push({
+  id: 'libellule', name: 'La Libellule',
+  desc: 'Petit hélicoptère à bulle vitrée, léger et ultra-maniable. Pour se faufiler partout et se poser n\'importe où.',
+  maxSpeed: 62, stall: 9, accel: 0, pitchRate: 1, rollRate: 1, yawRate: 2.3, gLimit: 3.5,
+  tilt: 0.65, push: 4.2, turnRate: 1.7,
+  brake: 6, maxSink: 4, gearH: 1.06, bellyH: 1.06, span: 8.4, len: 9, wingY: 1.45,
+  retract: false, floats: false, jet: false, heli: true,
+  cam: { dist: 15, height: 4 }, eye: [0, 0.42, -0.62],
+  inertia: 0.16, stallBite: 0, flaps: false, turb: 0.9,
+  engine: { kind: 'turboprop', count: 1, blades: 2, prop: 520, spool: 0.6 },
+  stats: [0.2, 1, 0.95],
+});
+PLANES.push({
+  id: 'birotor', name: 'Le Bi-rotor',
+  desc: 'Gros hélicoptère de transport à deux rotors en tandem. Lent à réagir, mais stable comme un rocher.',
+  maxSpeed: 80, stall: 12, accel: 0, pitchRate: 1, rollRate: 1, yawRate: 0.8, gLimit: 3,
+  tilt: 0.38, push: 2, turnRate: 0.65,
+  brake: 6, maxSink: 5, gearH: 2.2, bellyH: 2.2, span: 14, len: 30, wingY: 3,
+  retract: false, floats: false, jet: false, heli: true,
+  cam: { dist: 42, height: 11 }, eye: [0, 0.75, -7.6],
+  inertia: 0.5, stallBite: 0, flaps: false, turb: 0.35,
+  engine: { kind: 'turboprop', count: 2, blades: 3, prop: 230, spool: 1 },
+  stats: [0.35, 0.3, 0.75],
+});
+PLANES.splice(PLANES.findIndex((p) => p.id === 'jet'), 0, {
+  id: 'racer', name: 'Le Racer',
+  desc: 'Avion de course minuscule au moteur énorme. Le plus rapide des avions à hélice, et le plus nerveux.',
+  maxSpeed: 135, stall: 31, accel: 12, pitchRate: 2.2, rollRate: 4.8, yawRate: 0.8, gLimit: 10,
+  brake: 8, maxSink: 6.5, gearH: 1.27, bellyH: 1.27, span: 7.6, len: 7.2, wingY: -0.3,
+  retract: false, floats: false, jet: false,
+  cam: { dist: 13, height: 3.3 }, eye: [0, 0.62, -0.05],
+  inertia: 0.08, stallBite: 0.9, flaps: false, turb: 0.8, inputRate: 8, arcade: 2,
+  engine: { kind: 'piston', cyl: 8, idle: 950, max: 3300, blades: 3, gear: 0.6, exhaust: 135, rough: 0.35 },
+  stats: [0.6, 1, 0.45],
 });
 
 for (const p of PLANES) p.takeoff = p.stall * 1.12;
