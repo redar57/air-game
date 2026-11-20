@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildTerrain, heightAt, normalAt } from './world/terrain.js';
+import { buildTerrain, heightAt, normalAt, setBig, BIG, HALF } from './world/terrain.js';
 import { defineAirfields, buildAirfields, buildCarrier, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, DECK_AXIS_X } from './world/airfields.js';
 import { Sky } from './world/sky.js';
 import { buildScenery } from './world/scenery.js';
@@ -9,6 +9,8 @@ import { IslandMap } from './world/map.js';
 import { PLANES, STARTS, LIVERIES } from './planes/catalog.js';
 import { createWaterBomber, canScoop } from './missions.js';
 import { save } from './save.js';
+// la taille du monde se choisit avant toute construction (le bouton du menu recharge la page)
+setBig(save.get('bigMap'));
 import { getModel, animateModel } from './planes/models.js';
 import { drawInstruments } from './planes/instruments.js';
 import { Plane, IDLE } from './flight/physics.js';
@@ -24,7 +26,7 @@ import { Effects } from './fx.js';
 import { toWorld, clamp } from './util.js';
 
 const STEP = 1 / 120;       // pas fixe de la physique
-const EDGE = 7600;          // au-delà (en mètres du centre de l'île), on est ramené en douceur
+const EDGE = BIG ? 12600 : 7600; // au-delà (en mètres du centre), on est ramené en douceur
 const Y = new THREE.Vector3(0, 1, 0);
 const _q = new THREE.Quaternion(), _w = { x: 0, z: 0 };
 
@@ -454,7 +456,7 @@ function frame(now) {
   if (cockpit && frameNo % 2 === 0) drawInstruments(cockpitData());
 
   const dist = Math.hypot(plane.pos.x, plane.pos.z);
-  sky.update(dt, camera, plane.pos, 1 - 0.8 * clamp((dist - 6300) / 3200, 0, 1));
+  sky.update(dt, camera, plane.pos, 1 - 0.8 * clamp((dist - (EDGE - 1300)) / 3200, 0, 1));
 
   if (state === 'fly') {
     const flags = [];
@@ -493,7 +495,8 @@ async function boot() {
   buildCarrier(scene);
   sky = new Sky(scene);
   scenery = buildScenery(scene);
-  defineThermals(heightAt);
+  defineThermals(heightAt, HALF * 1.82, BIG ? 30 : 14);
+  if (BIG) STARTS.splice(2, 0, { id: 'nord', name: 'Aéroport Nord' }, { id: 'est', name: "Piste de l'Est" });
   buildThermalClouds(scene);
   fx = new Effects(scene);
   missiles = new Missiles(scene, fx, sound);
@@ -510,6 +513,7 @@ async function boot() {
   window.addEventListener('pointerdown', wake); window.addEventListener('keydown', wake);
   ui.on('fires', toggleFires);
   ui.on('livery-select', setLivery);
+  ui.on('bigmap', () => { save.set('bigMap', !BIG); ui.toast('Chargement de la carte…', 4000); setTimeout(() => location.reload(), 60); });
   ui.on('fuel', () => { const on = !save.get('fuel'); save.set('fuel', on); plane.fuelOn = on; ui.setFuel(on); });
   ui.on('daytime', () => ui.setDaytime(sky.cycle()));
   ui.on('mute', () => ui.setMute(sound.toggleMute()));
@@ -525,6 +529,7 @@ async function boot() {
   // réglages gardés de la dernière partie
   input.invert = !!save.get('invert'); ui.setInvert(input.invert);
   ui.setFuel(!!save.get('fuel'));
+  ui.setBigMap(BIG);
   setPlane(Math.min(save.get('plane') || 0, PLANES.length - 1));
   setStart(save.get('start') || 0);
   enterMenu();

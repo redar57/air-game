@@ -6,11 +6,11 @@ import { mulberry32, mergeColored, xform } from '../util.js';
 
 export const thermals = [];
 
-export function defineThermals(heightAt) {
+export function defineThermals(heightAt, span = 10000, count = 14) {
   thermals.length = 0;
   const rnd = mulberry32(7741);
-  for (let n = 0; n < 600 && thermals.length < 14; n++) {
-    const x = (rnd() - 0.5) * 10000, z = (rnd() - 0.5) * 10000, h = heightAt(x, z);
+  for (let n = 0; n < 600 * (count / 14) && thermals.length < count; n++) {
+    const x = (rnd() - 0.5) * span, z = (rnd() - 0.5) * span, h = heightAt(x, z);
     if (h < 15 || h > 650) continue;
     if (thermals.some((t) => Math.hypot(t.x - x, t.z - z) < 1100)) continue;
     thermals.push({ x, z, r: 230 + rnd() * 90, w: 3 + rnd() * 2.5, base: h, top: Math.max(h + 950, 1350 + rnd() * 400) });

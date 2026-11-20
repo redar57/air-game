@@ -21,6 +21,7 @@ export class UI {
     $('daytime').addEventListener('click', () => this.emit('daytime'));
     $('mutebtn').addEventListener('click', () => this.emit('mute'));
     $('fuelbtn').addEventListener('click', () => this.emit('fuel'));
+    $('mapbtn').addEventListener('click', () => this.emit('bigmap'));
     $('r-again').addEventListener('click', () => this.emit('again'));
     $('r-menu').addEventListener('click', () => this.emit('menu'));
     this.liveries = liveries;
@@ -185,6 +186,10 @@ export class UI {
     $('fuelbtn').textContent = `Carburant : ${on ? 'oui' : 'non'}`;
     $('fuelbtn').title = on ? "Le plein se fait à l'arrêt sur la station devant les hangars de l'aéroport" : '';
     $('fuelbtn').classList.toggle('on', on);
+  }
+  setBigMap(big) {
+    $('mapbtn').textContent = `Carte : ${big ? 'grande' : 'petite'}`;
+    $('mapbtn').title = big ? "L'île, deux grandes îles voisines et des îlots, 4 pistes (cliquer recharge le jeu)" : "L'île seule (cliquer recharge le jeu)";
   }
   setDaytime(name) { $('daytime').textContent = `Heure : ${name}`; }
   setMute(m) { $('mutebtn').textContent = `Son : ${m ? 'coupé' : 'activé'}`; }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightAt, normalAt, flatInfo, coastPoint, VOLCANO } from './terrain.js';
+import { heightAt, normalAt, flatInfo, coastPoint, VOLCANO, BIG, HALF } from './terrain.js';
 import { makeNoise2D, fbm } from './noise.js';
 import { mulberry32, mergeColored, xform, toLocal, smoothstep } from '../util.js';
 import { addCylinder, addSphere, addCustom } from './colliders.js';
@@ -33,8 +33,9 @@ function buildTrees(scene) {
     { geo: new THREE.IcosahedronGeometry(2.9, 0), color: 0x6fb850, matrix: xform(0, 5.2, 0, 0, 1, 0.9, 1) },
   ]);
   const a = [], b = [];
-  for (let n = 0; n < 90000 && a.length + b.length < 8200; n++) {
-    const x = (rnd() - 0.5) * 9800, z = (rnd() - 0.5) * 9800;
+  const span = HALF * 1.78, max = BIG ? 17000 : 8200;
+  for (let n = 0; n < (BIG ? 300000 : 90000) && a.length + b.length < max; n++) {
+    const x = (rnd() - 0.5) * span, z = (rnd() - 0.5) * span;
     const h = heightAt(x, z);
     if (h < 5 || h > 480) continue;
     if (normalAt(x, z, _n).y < 0.83) continue;
@@ -141,7 +142,9 @@ function buildRocks(scene) {
 
 function buildBalloons(scene) {
   const spots = [[1700, 330, 1300], [-800, 400, 2300], [2700, 300, -2700], [-3400, 420, -500], [300, 560, -2900]];
+  if (BIG) spots.push([1800, 450, -9500], [9200, 300, 2600], [-500, 380, -11000], [8000, 350, -600], [-9000, 320, -6000]);
   const palettes = [[0xe84c3d, 0xfff1d6], [0x2f7fdc, 0xffd34d], [0x8e5cc9, 0xfff1d6], [0x2fae7a, 0xfff1d6], [0xf08a2c, 0x2f4a7a]];
+  palettes.push(...palettes);
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const out = [];
   spots.forEach(([x, y, z], i) => {

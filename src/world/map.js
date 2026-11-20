@@ -1,11 +1,12 @@
 import { toWorld } from '../util.js';
 import { fuelStation } from './airfields.js';
+import { BIG } from './terrain.js';
 
 // Carte de l'île : un fond pré-calculé une fois (relief ombré, plages, pistes), puis à chaque image
 // une mini-carte qui tourne avec l'avion et, sur demande (touche N), la grande carte.
 
-const E = 7200;   // demi-côté de la zone cartographiée (m)
-const S = 384;    // résolution du fond
+let E = 7200;   // demi-côté de la zone cartographiée (m)
+let S = 384;    // résolution du fond
 const _w = { x: 0, z: 0 };
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -14,6 +15,7 @@ function mix(c1, c2, t) { return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), 
 export class IslandMap {
   constructor(heightAt, runways, carrier, deckAxisX) {
     this.runways = runways; this.carrier = carrier; this.deckAxisX = deckAxisX;
+    if (BIG) { E = 13200; S = 600; }
     this.bg = document.createElement('canvas');
     this.bg.width = this.bg.height = S;
     const g = this.bg.getContext('2d'), img = g.createImageData(S, S), H = new Float32Array(S * S);
@@ -141,7 +143,7 @@ export class IslandMap {
       g.lineWidth = 4; g.strokeStyle = 'rgba(0,20,40,.7)'; g.strokeText(text, x, y + dy);
       g.fillStyle = '#fff'; g.fillText(text, x, y + dy);
     };
-    for (const rw of this.runways) label(rw, rw.small ? 'Altiport' : 'Aéroport', -14);
+    for (const rw of this.runways) label(rw, rw.name, -14);
     label(this.carrier, 'Porte-avions', -14);
     if (extras.fuel) label(fuelStation, 'Carburant', 22 * W / 1100 + 14);
     const [x, y] = f(plane.pos.x, plane.pos.z);

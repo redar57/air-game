@@ -67,6 +67,9 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   incendies, on peut quand même écoper et larguer où l'on veut.
 - **Planeur** : sans moteur, il part en altitude. Les gros nuages ronds marquent les thermiques : tourne dedans pour
   monter, le vario bipe d'autant plus vite que ça monte.
+- **Petite ou grande carte** (option *Carte* du menu, le jeu se recharge) : la petite, c'est l'île seule ; la grande
+  ajoute l'île du Nord (montagne et *Aéroport Nord*), l'île de l'Est (*Piste de l'Est*) et cinq îlots, soit 4 pistes
+  au choix du départ. Elle met quelques secondes de plus à se générer.
 - **Carte** : mini-carte en bas à droite (tourne avec l'appareil), grande carte avec N (croix ← à la manette) :
   pistes, thermiques, montgolfières, feux.
 - **Carburant** (option du menu) : la consommation dépend des gaz. Le plein se fait à l'arrêt sur la station

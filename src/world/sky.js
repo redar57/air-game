@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { HALF } from './terrain.js';
 import { mulberry32, lerp } from '../util.js';
 import { nightLights } from './airfields.js';
 
@@ -102,8 +103,9 @@ export class Sky {
 
     // nuages low-poly
     const puffs = [];
-    for (let c = 0; c < 46; c++) {
-      const a = rnd() * Math.PI * 2, r = 900 + rnd() * 8600;
+    const wide = HALF / 5500;
+    for (let c = 0; c < Math.round(46 * wide * 0.9); c++) {
+      const a = rnd() * Math.PI * 2, r = 900 + rnd() * 8600 * wide;
       const cx = Math.cos(a) * r, cz = Math.sin(a) * r, cy = 950 + rnd() * 900, big = 0.7 + rnd() * 0.9;
       const n = 4 + Math.floor(rnd() * 5);
       for (let k = 0; k < n; k++) {

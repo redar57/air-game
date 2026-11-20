@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Effects } from './fx.js';
 import { mulberry32, clamp } from './util.js';
+import { HALF } from './world/terrain.js';
 
 // Bombardier d'eau (hélicoptère rouge) : écopage, largage, et feux de forêt si l'option est activée.
 // update(dt, plane, input), hud() -> panneau, fires (pour la carte), dispose().
@@ -25,7 +26,7 @@ class Fires {
     const { heightAt, normalAt, runways } = this.ctx, rnd = mulberry32((Math.random() * 1e9) | 0), n = new THREE.Vector3();
     this.fires = [];
     for (let k = 0; k < 2000 && this.fires.length < this.count; k++) {
-      const x = (rnd() - 0.5) * 9000, z = (rnd() - 0.5) * 9000, h = heightAt(x, z);
+      const x = (rnd() - 0.5) * HALF * 1.64, z = (rnd() - 0.5) * HALF * 1.64, h = heightAt(x, z);
       if (h < 20 || h > 380 || normalAt(x, z, n).y < 0.85) continue;
       if (runways.some((r) => Math.hypot(r.x - x, r.z - z) < 1200)) continue;
       if (this.fires.some((f) => Math.hypot(f.x - x, f.z - z) < 900)) continue;

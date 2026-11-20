@@ -2,8 +2,27 @@ import * as THREE from 'three';
 import { makeNoise2D, fbm, ridged } from './noise.js';
 import { clamp, lerp, smoothstep, toLocal } from '../util.js';
 
-export const SIZE = 11000, SEG = 352, CELL = SIZE / SEG, HALF = SIZE / 2;
+// Taille du monde : petite carte (l'île seule) ou grande carte (l'île + d'autres îles autour).
+// setBig() doit être appelé avant toute construction (le choix change au menu, avec rechargement).
+export let BIG = false, SIZE = 11000, SEG = 352, CELL = SIZE / SEG, HALF = SIZE / 2;
+export function setBig(big) {
+  BIG = !!big;
+  SIZE = BIG ? 27000 : 11000; SEG = BIG ? 720 : 352; CELL = SIZE / SEG; HALF = SIZE / 2;
+  EXTRA.length = 0;
+  if (BIG) EXTRA.push(...BIG_ISLANDS);
+}
 export const ISLAND_R = 4400;
+/** Îles de la grande carte : centre, rayon, relief, éventuel sommet. */
+const BIG_ISLANDS = [
+  { name: 'Île du Nord', x: 1300, z: -9700, r: 3100, hills: 120, peak: { x: 3000, z: -10900, r: 1150, h: 700 }, seed: 31 },
+  { name: "Île de l'Est", x: 9600, z: 1600, r: 2300, hills: 50, seed: 57 },
+  { x: -9200, z: -6600, r: 900, hills: 110, seed: 71, islet: true },
+  { x: -9600, z: 6900, r: 760, hills: 90, seed: 83, islet: true },
+  { x: 4300, z: 10000, r: 820, hills: 100, seed: 97, islet: true },
+  { x: 10200, z: -7800, r: 700, hills: 80, seed: 113, islet: true },
+  { x: -11300, z: 400, r: 560, hills: 70, seed: 127, islet: true },
+];
+export const EXTRA = [];
 /** Chaîne de montagnes : centre, orientation, demi-longueur et demi-largeur. */
 export const MTN = { x: 800, z: -900, ang: 0.45, len: 2600, wid: 1250 };
 export const VOLCANO = { x: -2500, z: 1000, rimR: 300, baseR: 1350, h: 760, depth: 230 };
@@ -26,6 +45,16 @@ export function canyonDist(x, z) {
   return Math.abs(v - f) / Math.sqrt(1 + fp * fp);
 }
 
+/** Masque (0 en mer, 1 dans les terres) d'une île supplémentaire de la grande carte. */
+function extraMask(it, x, z) {
+  const dx = x - it.x, dz = z - it.z;
+  if (dx * dx + dz * dz > (it.r * 1.5) ** 2) return 0;
+  const wx = dx + it.r * 0.12 * nB(x * 0.0006 + it.seed, z * 0.0006);
+  const wz = dz + it.r * 0.12 * nB(x * 0.0006, z * 0.0006 + it.seed);
+  const c = Math.hypot(wx, wz) / it.r + 0.15 * fbm(nA, x * 0.0005 + it.seed, z * 0.0005 - it.seed, 3);
+  return 1 - smoothstep(0.55, 1.02, c);
+}
+
 function islandMask(x, z) {
   const wx = x + 420 * nB(x * 0.00045, z * 0.00045);
   const wz = z + 420 * nB(x * 0.00045 + 40, z * 0.00045 + 17);
@@ -36,9 +65,17 @@ function islandMask(x, z) {
 
 /** Relief « naturel », avant aplanissement des terrains d'aviation. */
 export function rawBase(x, z) {
-  const m = islandMask(x, z);
+  let m = islandMask(x, z), amp = 95, extra = 0;
+  for (const it of EXTRA) {
+    const me = extraMask(it, x, z);
+    if (me > m) { m = me; amp = it.hills; }
+    if (me > 0 && it.peak) {
+      const d2 = ((x - it.peak.x) ** 2 + (z - it.peak.z) ** 2) / (it.peak.r * it.peak.r);
+      if (d2 < 6) extra += me * me * it.peak.h * Math.exp(-d2 * 1.6) * (0.75 + 0.5 * (ridged(nB, x * 0.0007 + it.seed, z * 0.0007, 3)));
+    }
+  }
   const hills = fbm(nA, x * 0.0012, z * 0.0012, 4) * 0.5 + 0.5;
-  let h = lerp(-60, 16, Math.pow(m, 0.75)) + m * hills * 95;
+  let h = lerp(-60, 16, Math.pow(m, 0.75)) + m * hills * amp + extra;
   h += m * fbm(nC, x * 0.004, z * 0.004, 2) * 7;
 
   // montagnes

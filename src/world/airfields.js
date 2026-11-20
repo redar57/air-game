@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MTN, rawBase } from './terrain.js';
+import { MTN, rawBase, BIG } from './terrain.js';
 import { mergeColored, xform, toLocal, toWorld, clamp, smoothstep, lerp } from '../util.js';
 import { addBox } from './colliders.js';
 
@@ -32,6 +32,17 @@ export function defineAirfields() {
     length: 520, width: 26, alt: Math.round(clamp(rawBase(ax, az), 170, 400)),
     halfLen: 320, halfWid: 62, margin: 150, small: true,
   });
+
+  if (BIG) { // grande carte : un aéroport sur l'île du Nord, une piste sur l'île de l'Est
+    runways.push({
+      id: 'nord', name: 'Aéroport Nord', x: 700, z: -8900, yaw: Math.atan2(-1, 0),
+      length: 1300, width: 42, alt: Math.round(clamp(rawBase(700, -8900), 10, 160)), halfLen: 770, halfWid: 150, margin: 260, small: false,
+    });
+    runways.push({
+      id: 'est', name: "Piste de l'Est", x: 9500, z: 1700, yaw: Math.atan2(-0.5, 0.86),
+      length: 760, width: 30, alt: Math.round(clamp(rawBase(9500, 1700), 8, 120)), halfLen: 440, halfWid: 70, margin: 170, small: true,
+    });
+  }
 
   const main = runways[0];
   fuelStation.lx = main.width / 2 + 47; fuelStation.lz = main.length / 2 - 260;
@@ -130,7 +141,8 @@ export function buildAirfields(scene) {
       hangar(side + 108, L / 2 - 180, 30, 9, 34, 0x3f79b8);
       hangar(side + 108, L / 2 - 230, 30, 9, 34, 0xc8452f);
       hangar(side + 108, L / 2 - 280, 30, 9, 34, 0xe8b23a);
-      // station de carburant : aire cerclée de jaune, pompes et panneau
+      // station de carburant (aéroport principal seulement) : aire cerclée de jaune, pompes et panneau
+      if (rw === runways[0]) {
       const fx = fuelStation.lx, fz = fuelStation.lz, hf = fuelStation.half;
       for (const [w, d, x, z] of [[hf * 2, 0.9, fx, fz - hf], [hf * 2, 0.9, fx, fz + hf], [0.9, hf * 2, fx - hf, fz], [0.9, hf * 2, fx + hf, fz]]) B(w, 0.06, d, 0xf2c230, x, 0.33, z);
       B(10, 0.06, 1.4, 0xf2c230, fx, 0.33, fz); B(1.4, 0.06, 10, 0xf2c230, fx, 0.33, fz);
@@ -142,6 +154,7 @@ export function buildAirfields(scene) {
       for (const dz of [-6.5, 6.5]) B(0.35, 5.2, 0.35, 0xb9bec4, fx - hf - 4, 2.6, fz + dz);
       B(6.4, 0.35, 16, 0xf2c230, fx - hf - 4, 5.3, fz);                        // auvent
       B(0.2, 2.4, 3.4, 0x1f8a4c, fx - hf - 4, 7.0, fz);                        // panneau
+      }
       // tour de contrôle
       const tx = side + 104, tz = L / 2 - 350;
       parts.push({ geo: new THREE.CylinderGeometry(3, 3.6, 20, 8), color: 0xeceff1, matrix: xform(tx, 10, tz) });
@@ -161,7 +174,7 @@ export function buildAirfields(scene) {
 
     // balisage nocturne
     const pos = [];
-    if (!rw.small) {
+    if (rw === runways[0]) {
       const fx = fuelStation.lx, fz = fuelStation.lz, hf = fuelStation.half;
       for (const [x, z] of [[-hf, -hf], [hf, -hf], [hf, hf], [-hf, hf]]) pos.push(fx + x, 0.7, fz + z);
     }
