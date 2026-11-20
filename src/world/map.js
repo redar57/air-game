@@ -1,4 +1,5 @@
 import { toWorld } from '../util.js';
+import { fuelStation } from './airfields.js';
 
 // Carte de l'île : un fond pré-calculé une fois (relief ombré, plages, pistes), puis à chaque image
 // une mini-carte qui tourne avec l'avion et, sur demande (touche N), la grande carte.
@@ -59,7 +60,14 @@ export class IslandMap {
 
   /** Dessine les repères (thermiques, montgolfières, feux…) ; f(x, z) -> [px, py] sur le canevas. */
   marks(g, f, extras, scale, rk) {
-    const { thermals = [], balloons = [], fires = [] } = extras;
+    const { thermals = [], balloons = [], fires = [], fuel = false } = extras;
+    if (fuel) { // station de carburant
+      const [x, y] = f(fuelStation.x, fuelStation.z), r = 5 * scale;
+      g.fillStyle = '#f2c230'; g.strokeStyle = '#2b2205'; g.lineWidth = scale;
+      g.beginPath(); g.roundRect(x - r, y - r, 2 * r, 2 * r, r * 0.35); g.fill(); g.stroke();
+      g.fillStyle = '#2b2205'; g.font = `800 ${Math.round(r * 1.5)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('⛽', x, y + r * 0.08);
+    }
     g.lineWidth = Math.max(1, scale * 0.8);
     g.strokeStyle = 'rgba(255,255,255,.75)'; g.setLineDash([3 * scale, 3 * scale]);
     for (const t of thermals) {
@@ -135,6 +143,7 @@ export class IslandMap {
     };
     for (const rw of this.runways) label(rw, rw.small ? 'Altiport' : 'Aéroport', -14);
     label(this.carrier, 'Porte-avions', -14);
+    if (extras.fuel) label(fuelStation, 'Carburant', 22 * W / 1100 + 14);
     const [x, y] = f(plane.pos.x, plane.pos.z);
     this.planeIcon(g, x, y, heading, W / 300);
   }

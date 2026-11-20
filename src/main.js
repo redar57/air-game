@@ -1,14 +1,13 @@
 import * as THREE from 'three';
 import { buildTerrain, heightAt, normalAt } from './world/terrain.js';
-import { defineAirfields, buildAirfields, buildCarrier, runways, carrier, runwayAt, onCarrierDeck, DECK_AXIS_X } from './world/airfields.js';
+import { defineAirfields, buildAirfields, buildCarrier, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, DECK_AXIS_X } from './world/airfields.js';
 import { Sky } from './world/sky.js';
 import { buildScenery } from './world/scenery.js';
 import { hitObstacle } from './world/colliders.js';
 import { defineThermals, updraft, buildThermalClouds, thermals } from './world/thermals.js';
 import { IslandMap } from './world/map.js';
 import { PLANES, STARTS, LIVERIES } from './planes/catalog.js';
-import { MODES } from './modes-list.js';
-import { createMission } from './missions.js';
+import { createWaterBomber, canScoop } from './missions.js';
 import { save } from './save.js';
 import { getModel, animateModel } from './planes/models.js';
 import { drawInstruments } from './planes/instruments.js';
@@ -56,15 +55,16 @@ const world = {
   normalAt,
   hit: hitObstacle,
   updraft,
+  atFuel: atFuelStation,
 };
 
 let sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
-let mission = null; // mission en cours (voltige, chasse, feux), ou null en vol libre
+let mission = null; // bombardier d'eau (hélicoptère rouge), ou null
 const _sv = new THREE.Vector3();
 let kills = 0; // montgolfières abattues depuis le lancement
 const input = new Input(), sound = new Sound(), tricks = new Tricks();
 let state = 'loading';
-let selPlane = 0, selStart = 0, selMode = 0;
+let selPlane = 0, selStart = 0;
 let time = 0, last = 0, accu = 0, frameNo = 0;
 let crashT = 0, edgeWarned = false, show = { x: 0, y: 300, z: 0, yaw: 0 };
 // valeurs dérivées pour les instruments (lissées)
@@ -83,8 +83,7 @@ function setPlane(i) {
   sound.setPlane(spec);
   ui.showPlane(spec, selPlane);
   ui.showLiveries(spec, save.livery(spec.id));
-  if (!MODES[selMode].ok(spec)) selMode = 0;
-  ui.showModes(spec, selMode);
+  ui.showFires(canScoop(spec), !!save.get('fires'));
   if (state === 'menu') save.set('plane', selPlane);
   if (state === 'menu') plane.placeInAir(show.x, show.y, show.z, show.yaw, 0);
 }
@@ -96,11 +95,12 @@ function setStart(i) {
   save.set('start', selStart);
 }
 
-function setMode(i) {
-  if (!MODES[i].ok(plane.spec)) return;
-  selMode = i;
-  ui.showModes(plane.spec, selMode);
-  save.set('mode', MODES[i].id);
+function toggleFires() {
+  if (!canScoop(plane.spec)) return;
+  const on = !save.get('fires');
+  save.set('fires', on);
+  ui.showFires(true, on);
+  sound.click(on);
 }
 
 function setLivery(i) {
@@ -154,11 +154,14 @@ function startFlight() {
   accu = 0; edgeWarned = false;
   tricks.reset();
   endMission();
-  const mid = MODES[selMode].id;
-  if (mid !== 'libre') {
-    mission = createMission(mid, { scene, sound, ui, scenery, save, heightAt, normalAt, runways, plane: () => plane });
+  if (canScoop(spec)) {
+    const fires = !!save.get('fires');
+    mission = createWaterBomber({ scene, sound, ui, scenery, save, heightAt, normalAt, runways, fires, plane: () => plane });
     ui.mission(mission.hud());
-    if (mid === 'feux') ui.hint(`Écope au ras de l'eau (mer ou lac), puis maintiens ${'<kbd>X</kbd>'} au-dessus des flammes · ${'<kbd>N</kbd>'} carte des feux`);
+    const how = spec.heli ? "Écope en stationnaire au ras de l'eau (mer ou lac)" : "Écope en rasant l'eau (mer ou lac), roues rentrées <kbd>G</kbd>";
+    ui.hint(fires
+      ? `${how}, puis maintiens <kbd>X</kbd> au-dessus des flammes · <kbd>N</kbd> carte des feux`
+      : `${how}, puis maintiens <kbd>X</kbd> pour larguer`);
   }
   tele.gMax = 1; tele.prev = null;
   ui.menu(false); ui.hud(true);
@@ -213,9 +216,9 @@ function handleEvents() {
       ui.toast(e.what === 'stop' ? 'PANNE MOTEUR ! Pose-toi sur une piste' : 'Moteur affaibli ! Pose-toi pour réparer', 3200);
       sound.failure(); input.rumble(0.8, 0.8, 500);
     } else if (e.type === 'fuel') {
-      if (e.what === 'low') { ui.toast('Carburant bas : direction une piste', 2600); sound.chime(2); }
-      else if (e.what === 'empty') { ui.toast(plane.spec.heli ? 'Panne sèche ! Autorotation…' : 'Panne sèche ! Plane jusqu\'à une piste', 3200); sound.failure(); }
-      else if (e.what === 'full') { ui.toast(e.fixed ? 'Plein fait, moteur réparé' : 'Plein fait', 2000); sound.chime(1); }
+      if (e.what === 'low') { ui.toast("Carburant bas : direction la station devant les hangars de l'aéroport (⛽ sur la carte)", 3400); sound.chime(2); }
+      else if (e.what === 'empty') { ui.toast(plane.spec.heli ? 'Panne sèche ! Autorotation…' : 'Panne sèche ! Plane jusqu\'à un terrain', 3200); sound.failure(); }
+      else if (e.what === 'full') { ui.toast('Plein fait ⛽', 2000); sound.chime(1); }
     }
     else if (e.type === 'flaps') { sound.flaps(); if (e.blown) ui.toast('Volets rentrés : trop vite !', 1600); }
     else if (e.type === 'takeoff') ui.clearHint();
@@ -270,6 +273,7 @@ function handleKeys() {
       else if (code === 'Enter' || code === 'NumpadEnter' || code === 'Space') startFlight();
       else if (key === 'i') toggleInvert();
       else if (key === 't') ui.setDaytime(sky.cycle());
+      else if (key === 'f') toggleFires();
     } else if (state === 'result') {
       if (code === 'Enter' || code === 'NumpadEnter') { ui.result(null); startFlight(); }
       else if (code === 'Escape' || code === 'Backspace') enterMenu();
@@ -283,8 +287,8 @@ function handleKeys() {
       else if (key === 'v') ui.toast(plane.cycleFlaps(), 1300);
       else if (key === 'n') ui.bigMap(!ui.bigMapOpen);
       else if (key === 'x') {
-        if (plane.spec.guns || (mission && mission.id === 'feux')) { /* tir / largage maintenus : gérés ailleurs */ }
-        else if (!plane.spec.missiles) ui.toast('Armes : missiles sur le jet, mitrailleuses sur le chasseur', 1800);
+        if (plane.spec.guns || mission) { /* tir / largage maintenus : gérés ailleurs */ }
+        else if (!plane.spec.missiles) ui.toast('Armes : missiles sur le jet, mitrailleuses sur le chasseur, eau sur l\'hélicoptère rouge et l\'écopeur', 1800);
         else if (missiles.fire(plane, scenery.balloons)) input.rumble(0.25, 0.35, 120);
       }
       else if (key === 't') { const n = sky.cycle(); ui.toast(n, 1500); ui.setDaytime(n); }
@@ -308,7 +312,7 @@ function resume() {
 /** Mini-carte (toutes les 3 images) et grande carte si elle est ouverte. */
 function drawMaps() {
   if (!islandMap) return;
-  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [] };
+  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider };
   if (frameNo % 3 === 0) islandMap.drawMini(document.getElementById('minimap'), plane, tele.hdg, extras, plane.spec.maxSpeed > 120 ? 3500 : 2200);
   if (ui.bigMapOpen && frameNo % 4 === 0) islandMap.drawFull(document.getElementById('bigmapc'), plane, tele.hdg, extras);
 }
@@ -456,7 +460,6 @@ function frame(now) {
     const flags = [];
     if (plane.stalling) flags.push('DÉCROCHAGE');
     if (plane.burner > 0) flags.push('POSTCOMBUSTION');
-    if (plane.fuelOn && plane.failure) flags.push(plane.failure === 'stop' ? 'PANNE MOTEUR' : 'MOTEUR AFFAIBLI');
     if (plane.fuelOn && !plane.spec.glider && plane.fuel <= 0) flags.push('PANNE SÈCHE');
     if (plane.fuelOn && plane.refuelT > 0) flags.push('PLEIN EN COURS…');
     if (plane.flaps) flags.push(`VOLETS ${plane.flaps}`);
@@ -496,7 +499,7 @@ async function boot() {
   missiles = new Missiles(scene, fx, sound);
   guns = new Guns(scene, fx, sound);
   rig = new CameraRig(camera, canvas);
-  ui = new UI(STARTS, labels, PLANES, MODES, LIVERIES);
+  ui = new UI(STARTS, labels, PLANES, LIVERIES);
 
   const rw = runways[0];
   show = { x: rw.x - 500, y: rw.alt + 250, z: rw.z + 1250, yaw: rw.yaw + 0.5 };
@@ -505,7 +508,7 @@ async function boot() {
   // le son ne peut démarrer qu'après un geste : dès le premier clic ou la première touche au menu
   const wake = () => { sound.start(); window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); };
   window.addEventListener('pointerdown', wake); window.addEventListener('keydown', wake);
-  ui.on('mode-select', setMode);
+  ui.on('fires', toggleFires);
   ui.on('livery-select', setLivery);
   ui.on('fuel', () => { const on = !save.get('fuel'); save.set('fuel', on); plane.fuelOn = on; ui.setFuel(on); });
   ui.on('daytime', () => ui.setDaytime(sky.cycle()));
@@ -522,7 +525,6 @@ async function boot() {
   // réglages gardés de la dernière partie
   input.invert = !!save.get('invert'); ui.setInvert(input.invert);
   ui.setFuel(!!save.get('fuel'));
-  selMode = Math.max(0, MODES.findIndex((m) => m.id === save.get('mode')));
   setPlane(Math.min(save.get('plane') || 0, PLANES.length - 1));
   setStart(save.get('start') || 0);
   enterMenu();

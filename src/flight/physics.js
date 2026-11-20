@@ -74,8 +74,8 @@ export class Plane {
   /** Part de la puissance disponible (1 normal, 0,45 moteur affaibli, 0 coupé). */
   get engineFactor() { return !this.engineRunning ? 0 : this.fuelOn && this.failure === 'partial' ? 0.45 : 1; }
 
-  /** Carburant, pannes, plein et réparation au sol. */
-  stepFuel(dt) {
+  /** Carburant : consommation en vol, plein à la station de l'aéroport (devant les hangars). */
+  stepFuel(dt, world) {
     const s = this.spec;
     if (!this.fuelOn || s.glider) return;
     const load = s.heli ? this.throttle : this.power;
@@ -84,20 +84,15 @@ export class Plane {
       if (!this.fuelWarned && this.fuel < 0.15) { this.fuelWarned = true; this.events.push({ type: 'fuel', what: 'low' }); }
       if (this.fuel <= 0) this.events.push({ type: 'fuel', what: 'empty' });
     }
-    // pannes : en vol seulement, en moyenne une toutes les ~7 minutes
-    if (!this.onGround && !this.failure && this.airTime > 20 && Math.random() < dt / 420) {
-      this.failure = Math.random() < 0.55 ? 'stop' : 'partial';
-      this.events.push({ type: 'failure', what: this.failure });
-    }
-    // plein et réparation : arrêté sur une piste ou sur le porte-avions
-    const pit = this.onGround && this.groundSpeed < 1 && this.speed < 1 && (this.surface === 'runway' || this.surface === 'carrier');
-    if (pit && (this.fuel < 0.999 || this.failure)) {
+    // plein : arrêté sur l'aire de la station de carburant
+    const pit = this.onGround && this.groundSpeed < 1 && this.speed < 1 && !!(world && world.atFuel && world.atFuel(this.pos.x, this.pos.z));
+    this.atPump = pit;
+    if (pit && this.fuel < 0.999) {
       this.refuelT += dt;
       this.fuel = Math.min(1, this.fuel + dt / 6);
       if (this.refuelT > 3 && this.fuel >= 0.999) {
-        const fixed = !!this.failure;
-        this.failure = null; this.fuelWarned = false; this.refuelT = 0;
-        this.events.push({ type: 'fuel', what: 'full', fixed });
+        this.fuelWarned = false; this.refuelT = 0;
+        this.events.push({ type: 'fuel', what: 'full' });
       }
     } else this.refuelT = 0;
   }
@@ -198,7 +193,7 @@ export class Plane {
     this.throttle = clamp(this.throttle + input.throttle * 0.6 * dt, 0, 1);
     // régime moteur : un piston répond vite, une turbine monte lentement en régime (surtout au ralenti)
     // (hélicoptère : le rotor tourne à régime constant, c'est le pas collectif qui varie)
-    this.stepFuel(dt);
+    this.stepFuel(dt, world);
     const ef = this.engineFactor;
     const target = ef === 0 ? 0 : s.heli ? 1 : IDLE + (1 - IDLE) * this.throttle * ef, e = s.engine || {};
     const spool = e.spool ? (0.3 + 1.7 * this.rpm * this.rpm) / e.spool : 5;

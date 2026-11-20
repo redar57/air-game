@@ -307,6 +307,56 @@ function hydravion(spec) {
   return m;
 }
 
+/** Bombardier d'eau amphibie : coque de bateau, aile haute, deux turbopropulseurs, empennage en T. */
+function canadair(spec) {
+  const m = base(), { hull, always } = m;
+  const Y = 0xf2c230, R = 0xd8352a, W = 0xf4f1ea;
+  // coque : nez arrondi, fond en V (bande rouge), queue relevée
+  hull.add(tube(0.35, 1.25, -9.9, -8.2, Y, { y: -0.15, sy: 1.05 }));
+  hull.add(tube(1.25, 1.4, -8.2, -5.5, Y, { sy: 1.12 }));
+  hull.add(tube(1.4, 1.4, -5.5, 2.5, Y, { sy: 1.15 }));
+  hull.add(tube(1.4, 0.45, 2.5, 9.9, Y, { y: 0.6, sy: 1.05 }));
+  hull.add(box(2.1, 0.55, 12.5, R, 0, -1.35, -2.4));                  // carène
+  const keel = box(1.1, 0.4, 4.6, R, 0, -1.05, 4.6); keel.rotation.x = -0.12; hull.add(keel); // redan arrière
+  hull.add(box(2.85, 0.16, 15.5, W, 0, 0.15, -1.6));                  // liseré
+  hull.add(box(2.0, 0.55, 1.4, GLASS, 0, 1.05, -7.6));                // pare-brise
+  hull.add(box(2.62, 0.38, 2.6, GLASS, 0, 0.9, -6.2));
+  hull.add(box(0.5, 0.95, 2.6, R, 0, 1.55, -2.2));                     // carénage d'aile
+  // trappes de largage sous la soute
+  hull.add(box(1.5, 0.08, 3.2, DARK, 0, -1.63, -1.4));
+  // empennage en T
+  finS(m, hull, [4.4, 3.6, 2.1, 0.3, 1.8], Y, 0, 1.1, 7.6, 0, 0.36, 0.06, 0.92);
+  wingS(m, hull, [4.6, 2.2, 1.3, 0.2, 0.7], Y, 0, 5.45, 9.3, [{ kind: 'elevator', t0: 0.03, t1: 1 }], 0.38);
+  hull.add(box(0.7, 0.4, 2.4, R, 0, 5.45, 9.3));
+  // train : roues principales sur les flancs, roulette de nez ; rentrent dans la coque
+  const gear = new THREE.Group();
+  for (const s of [-1, 1]) {
+    wheel(gear, 0.48, 0.34, s * 1.75, -2.77, 0.6);
+    bar(gear, [s * 1.45, -1.0, 0.6], [s * 1.75, -2.75, 0.6], 0.2, METAL);
+  }
+  wheel(gear, 0.36, 0.26, 0, -2.89, -7.0);
+  bar(gear, [0, -1.2, -7.0], [0, -2.85, -7.0], 0.15, METAL);
+  hull.add(gear); m.gear = gear; m.gearSlide = 1.5;
+
+  // aile haute avec moteurs et flotteurs de bout d'aile
+  wingS(m, always, [13.4, 3.4, 2.1, 0.42, 0.35, 0.1, 0.6], Y, 0.85, 1.95, -2.2,
+    [{ kind: 'flap', t0: 0.03, t1: 0.55 }, { kind: 'aileron', t0: 0.58, t1: 0.96 }], 0.25);
+  always.add(box(1.8, 0.5, 3.4, Y, 0, 1.95, -2.2));
+  for (const s of [-1, 1]) {
+    const x = s * 4.6;
+    always.add(tube(0.55, 0.75, -5.6, -2.9, W, { x, y: 1.75 }), tube(0.75, 0.3, -2.9, 0.6, W, { x, y: 1.75 }));
+    always.add(tube(0.08, 0.32, -6.2, -5.6, DARK, { x, y: 1.75 }));
+    m.props.push(makeProp(always, 2.0, 4, x, 1.75, -5.95));
+    const fx = s * 11.4;
+    always.add(tube(0.1, 0.38, -2.2, -1.2, R, { x: fx, y: -0.25 }), tube(0.38, 0.12, -1.2, 1.0, R, { x: fx, y: -0.25 }));
+    bar(always, [fx, 0.05, -1.4], [fx, 1.9, -1.6], 0.12, METAL);
+    always.add(box(0.3, 0.1, 2.3, R, s * 14.3, 2.08, -1.9));
+  }
+  m.cockpit = makeCockpit(spec.eye, { w: 1.6, frame: true, nose: { w: 2.1, len: 2.2, color: Y, drop: 0.15 } });
+  m.tips = [[14.4, 2.1, -1.6], [-14.4, 2.1, -1.6]];
+  return m;
+}
+
 function chasseur(spec) {
   const m = base(), { hull, always } = m;
   const G = 0x5f6f3f, Y = 0xf2c230, W = 0xf4f1ea;
@@ -564,7 +614,7 @@ function planeur(spec) {
   return m;
 }
 
-const BUILDERS = { planeur, tourisme, biplan, hydravion, chasseur, jet, cargo, helico, libellule, birotor, racer };
+const BUILDERS = { planeur, tourisme, biplan, hydravion, canadair, chasseur, jet, cargo, helico, libellule, birotor, racer };
 const cache = new Map();
 
 /** Construit (une seule fois par livrée) le modèle 3D d'un appareil. */

@@ -63,6 +63,18 @@ export const PLANES = [
     stats: [0.2, 0.42, 0.9],
   },
   {
+    id: 'canadair', name: "L'Écopeur",
+    desc: "Bombardier d'eau amphibie bimoteur, façon Canadair : rase un lac ou la mer pour remplir sa soute, puis largue sur les flammes avec X. Roues rentrées (G) pour l'eau.",
+    maxSpeed: 100, stall: 30, accel: 5, pitchRate: 0.8, rollRate: 1.05, yawRate: 0.35, gLimit: 3.5,
+    brake: 6, maxSink: 6.5, gearH: 3.25, bellyH: 1.75, span: 28.6, len: 19.8, wingY: 1.9,
+    retract: true, floats: true, amphibian: true, jet: false,
+    cam: { dist: 42, height: 9.5 }, eye: [-0.45, 1.05, -7.1],
+    inertia: 0.38, stallBite: 0.35, flaps: true, turb: 0.45, arcade: 1.8,
+    engine: { kind: 'turboprop', count: 2, blades: 4, prop: 1150, spool: 1.0 },
+    paint: [0xf2c230, 0xd8352a, 0xf4f1ea], // jaune, rouge, blanc (remplacées par les livrées)
+    stats: [0.38, 0.32, 0.7],
+  },
+  {
     id: 'chasseur', name: 'Le Chasseur à hélice',
     desc: "Long nez, gros moteur, mitrailleuses dans les ailes (X maintenue). Rapide et nerveux.",
     maxSpeed: 150, stall: 36, accel: 9.5, pitchRate: 1.55, rollRate: 2.7, yawRate: 0.6, gLimit: 8,

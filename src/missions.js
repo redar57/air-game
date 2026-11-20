@@ -2,84 +2,23 @@ import * as THREE from 'three';
 import { Effects } from './fx.js';
 import { mulberry32, clamp } from './util.js';
 
-// Modes de jeu : voltige notée, chasse aux montgolfières, feux de forêt.
-// Chaque mission expose : update(dt, plane, input) -> résultat final ou null, hud() -> panneau,
-// et éventuellement onTrick(texte) / onPop(montgolfière) / fires (pour la carte).
+// Bombardier d'eau (hélicoptère rouge) : écopage, largage, et feux de forêt si l'option est activée.
+// update(dt, plane, input), hud() -> panneau, fires (pour la carte), dispose().
 
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const _v = new THREE.Vector3(), _p = new THREE.Vector3();
 
-// --------------------------------------------------------------------------- voltige
-const PTS = [
-  [/Looping inversé/, 180], [/Looping/, 120], [/Tonneau ×(\d+)/, (m) => 50 * +m[1]], [/Tonneau/, 50],
-  [/Vol dos/, 100], [/tranche/, 110], [/Rase/, 80], [/arche/, 300], [/cratère/, 250], [/canyon/, 250],
-];
-
-class Aerobatics {
-  constructor(ctx) {
-    this.ctx = ctx; this.id = 'voltige'; this.title = 'Voltige notée';
-    this.time = 180; this.score = 0; this.mult = 1; this.lastT = -99; this.t = 0;
-  }
-  onTrick(msg) {
-    let pts = 0;
-    for (const [re, v] of PTS) { const m = msg.match(re); if (m) { pts = typeof v === 'function' ? v(m) : v; break; } }
-    if (!pts) return msg;
-    this.mult = this.t - this.lastT < 6 ? Math.min(4, this.mult + 0.5) : 1;
-    this.lastT = this.t;
-    const got = Math.round(pts * this.mult);
-    this.score += got;
-    this.ctx.sound.chime(1);
-    return `${msg}  +${got}${this.mult > 1 ? ` ×${this.mult}` : ''}`;
-  }
-  onCrash() { this.mult = 1; this.score = Math.max(0, this.score - 150); }
-  update(dt) {
-    this.t += dt; this.time -= dt;
-    if (this.t - this.lastT > 6) this.mult = 1;
-    if (this.time <= 0) return this.finish();
-    return null;
-  }
-  finish() {
-    const r = this.ctx.save.record('voltige', this.score);
-    return { title: 'Voltige terminée', big: `${this.score} points`, line: r.isNew ? 'Nouveau record !' : `Record : ${r.best} points`, isNew: r.isNew };
-  }
-  hud() {
-    return { title: this.title, big: `${this.score}`, unit: 'points', lines: [`⏱ ${fmt(Math.max(0, this.time))}`, this.mult > 1 ? `combo ×${this.mult}` : 'enchaîne les figures !'] };
-  }
-  dispose() {}
-}
-
-// --------------------------------------------------------------------------- chasse
-class Hunt {
-  constructor(ctx) {
-    this.ctx = ctx; this.id = 'chasse'; this.title = 'Chasse';
-    this.time = 180; this.score = 0;
-    ctx.scenery.respawn = 8;
-  }
-  onPop() { this.score++; }
-  update(dt) {
-    this.time -= dt;
-    if (this.time <= 0) {
-      const r = this.ctx.save.record('chasse', this.score);
-      return { title: 'Chasse terminée', big: `${this.score} montgolfière${this.score > 1 ? 's' : ''}`, line: r.isNew ? 'Nouveau record !' : `Record : ${r.best}`, isNew: r.isNew };
-    }
-    return null;
-  }
-  hud() {
-    const near = this.ctx.scenery.balloons.filter((b) => b.alive).length;
-    return { title: this.title, big: `${this.score}`, unit: 'abattues', lines: [`⏱ ${fmt(Math.max(0, this.time))}`, `${near} en l'air`] };
-  }
-  dispose() { this.ctx.scenery.respawn = 40; }
-}
-
 // --------------------------------------------------------------------------- feux de forêt
 class Fires {
   constructor(ctx) {
-    this.ctx = ctx; this.id = 'feux'; this.title = 'Feux de forêt';
+    this.ctx = ctx; this.id = 'feux';
+    this.withFires = !!ctx.fires; this.title = this.withFires ? 'Feux de forêt' : "Bombardier d'eau";
     this.t = 0; this.water = 0; this.scooping = false; this.dropping = false; this.full = false;
     this.fx = new Effects(ctx.scene, { max: 360 });                          // flammes, eau
     this.smoke = new Effects(ctx.scene, { max: 220, opacity: 0.5, drag: 0.35 }); // fumée translucide
     this.fires = [];
-    this.count = 4;
+    this.count = this.withFires ? 4 : 0;
+    this.wave = 0; this.waveT = 0; this.nextT = 0;
     this.spawn();
   }
   spawn() {
@@ -92,17 +31,19 @@ class Fires {
       if (this.fires.some((f) => Math.hypot(f.x - x, f.z - z) < 900)) continue;
       this.fires.push({ x, z, y: h, power: 0.8 + rnd() * 0.3, out: false, smoke: 0 });
     }
+    this.wave++; this.waveT = 0;
   }
   update(dt, plane, input) {
-    this.t += dt;
+    this.t += dt; this.waveT += dt;
     const s = plane.spec, sound = this.ctx.sound;
     // écopage : hélico en stationnaire au ras de l'eau, hydravion qui glisse sur l'eau
     const overWater = plane.surface === 'water';
-    const heliScoop = s.heli && !plane.onGround && overWater && plane.agl < 8 && plane.speed < 20;
-    const seaScoop = s.amphibian && overWater && plane.speed > 8 && (plane.onGround || plane.agl < 2);
-    this.scooping = (heliScoop || seaScoop) && this.water < 1;
+    // hélico : stationnaire au ras de l'eau ; écopeur : coque qui rase l'eau en gardant de la vitesse
+    const scoopOk = s.heli ? !plane.onGround && overWater && plane.agl < 8 && plane.speed < 20
+      : overWater && plane.speed > 15 && (plane.onGround || plane.agl < 1.5) && !plane.gearDown;
+    this.scooping = scoopOk && this.water < 1;
     if (this.scooping) {
-      this.water = Math.min(1, this.water + dt / (s.heli ? 4 : 3.5));
+      this.water = Math.min(1, this.water + dt / (s.heli ? 4 : 5));
       if (Math.random() < 0.5) {
         _v.set((Math.random() - 0.5) * 6, 3 + Math.random() * 4, (Math.random() - 0.5) * 6);
         this.fx.emit(_p.set(plane.pos.x, plane.pos.y - plane.agl - plane.standH + 0.5, plane.pos.z), _v, 0.9, 1.2, 0xe8f6ff, 1.5, 9);
@@ -113,11 +54,11 @@ class Fires {
     // largage (X maintenue)
     this.dropping = input.fireHeld() && this.water > 0 && !plane.onGround;
     if (this.dropping) {
-      const amt = Math.min(this.water, dt * 0.6);
+      const big = !s.heli, amt = Math.min(this.water, dt * (big ? 0.9 : 0.6)), rad = big ? 95 : 70;
       this.water -= amt;
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < (big ? 6 : 3); k++) {
         _v.copy(plane.vel).multiplyScalar(0.85).add(_p.set((Math.random() - 0.5) * 3, -3 - Math.random() * 3, (Math.random() - 0.5) * 3));
-        this.fx.emit(_p.copy(plane.pos).addScaledVector(plane.up, -1.5), _v, 2.2, 1.4 + Math.random(), Math.random() < 0.5 ? 0xdff2ff : 0xffffff, 1.2, 9.8);
+        this.fx.emit(_p.copy(plane.pos).addScaledVector(plane.up, -1.5).addScaledVector(plane.fwd, big ? (Math.random() - 0.5) * 4 : 0), _v, 2.2, (big ? 2 : 1.4) + Math.random(), Math.random() < 0.5 ? 0xdff2ff : 0xffffff, big ? 1.8 : 1.2, 9.8);
       }
       // point d'impact : chute libre depuis la hauteur actuelle
       const g = 9.8, vy = plane.vel.y, h = Math.max(1, plane.agl + plane.standH);
@@ -126,12 +67,12 @@ class Fires {
       for (const f of this.fires) {
         if (f.out) continue;
         const d = Math.hypot(f.x - ix, f.z - iz);
-        if (d < 70) {
-          f.power -= amt * 1.7 * (1 - d / 70);
+        if (d < rad) {
+          f.power -= amt * 1.7 * (1 - d / rad);
           if (f.power <= 0) {
             f.out = true; f.smoke = 8;
             const left = this.fires.filter((x) => !x.out).length;
-            this.ctx.ui.toast(left ? `Feu éteint ! Encore ${left}` : 'Tous les feux sont éteints !', 1800);
+            this.ctx.ui.toast(left ? `Feu éteint ! Encore ${left}` : `Tous les feux sont éteints en ${fmt(this.waveT)} ! D'autres se déclareront bientôt…`, 3000);
             sound.chime(2);
           }
         }
@@ -160,21 +101,27 @@ class Fires {
     }
     this.fx.update(dt); this.smoke.update(dt);
     sound.fireAmbience(this.fires, plane.pos, this.scooping, this.dropping);
-    if (this.fires.every((f) => f.out)) {
-      const r = this.ctx.save.record(`feux:${this.count}`, Math.round(this.t), true);
-      return { title: 'Feux éteints !', big: fmt(this.t), line: r.isNew ? 'Nouveau record !' : `Record : ${fmt(r.best)}`, isNew: r.isNew };
+    // vol libre : une fois tous les feux éteints, une nouvelle série se déclare un peu plus tard
+    if (this.withFires && this.fires.every((f) => f.out && f.smoke <= 0)) {
+      this.nextT += dt;
+      if (this.nextT > 20) { this.nextT = 0; this.spawn(); this.ctx.ui.toast('Nouveaux départs de feu ! (N : carte)', 2600); sound.chime(1); }
     }
     return null;
   }
   hud() {
     const left = this.fires.filter((f) => !f.out), tank = Math.round(this.water * 100);
+    const tankLine = `💧 ${tank} %${this.scooping ? ' · écopage…' : this.dropping ? ' · largage !' : ''}`;
+    if (!this.withFires) {
+      const how = this.ctx.plane().spec.heli ? "écope en stationnaire au ras de l'eau" : "rase l'eau, roues rentrées, pour écoper";
+      return { title: this.title, big: `${tank} %`, unit: 'réservoir', lines: [this.scooping ? 'écopage…' : this.dropping ? 'largage !' : tank ? 'X : larguer' : how], bar: this.water };
+    }
     let near = Infinity;
     // (distance au feu le plus proche, utile quand on ne le voit pas encore)
     const p = this.ctx.plane();
     for (const f of left) near = Math.min(near, Math.hypot(f.x - p.pos.x, f.z - p.pos.z));
     return {
       title: this.title, big: `${this.fires.length - left.length}/${this.fires.length}`, unit: 'éteints',
-      lines: [`⏱ ${fmt(this.t)}`, `💧 ${tank} %${this.scooping ? ' · écopage…' : this.dropping ? ' · largage !' : ''}`,
+      lines: [left.length ? `⏱ ${fmt(this.waveT)}` : 'prochains feux bientôt…', tankLine,
         left.length ? `feu le plus proche : ${(near / 1000).toFixed(1).replace('.', ',')} km` : ''],
       bar: this.water,
     };
@@ -188,10 +135,7 @@ class Fires {
   }
 }
 
-export function createMission(id, ctx) {
-  if (id === 'voltige') return new Aerobatics(ctx);
-  if (id === 'chasse') return new Hunt(ctx);
-  if (id === 'feux') return new Fires(ctx);
-  return null;
-}
+/** Appareils qui emportent un réservoir d'eau : l'hélicoptère rouge et l'écopeur. */
+export const canScoop = (spec) => spec.id === 'helico' || spec.id === 'canadair';
+export function createWaterBomber(ctx) { return new Fires(ctx); }
 export { clamp };

@@ -5,6 +5,8 @@ import { addBox } from './colliders.js';
 
 export const runways = [];
 export const carrier = { x: 0, z: 0, yaw: -Math.PI / 2, deckY: 21, halfLen: 145, halfWid: 30 };
+/** Station de carburant (devant les hangars de l'aéroport) : centre en coordonnées monde, demi-côté. */
+export const fuelStation = { x: 0, z: 0, yaw: 0, lx: 0, lz: 0, half: 24 };
 /** Matériaux des balises lumineuses (leur opacité suit la tombée de la nuit). */
 export const nightLights = [];
 
@@ -31,6 +33,11 @@ export function defineAirfields() {
     halfLen: 320, halfWid: 62, margin: 150, small: true,
   });
 
+  const main = runways[0];
+  fuelStation.lx = main.width / 2 + 47; fuelStation.lz = main.length / 2 - 260;
+  toWorld(main, fuelStation.lx, fuelStation.lz, _w);
+  fuelStation.x = _w.x; fuelStation.z = _w.z; fuelStation.yaw = main.yaw; fuelStation.rw = main;
+
   carrier.x = -1900;
   carrier.z = zc + 2000;
   return runways;
@@ -42,6 +49,13 @@ export function runwayAt(x, z) {
     if (Math.abs(_l.x) <= rw.width / 2 && Math.abs(_l.z) <= rw.length / 2) return rw;
   }
   return null;
+}
+
+/** Vrai si (x, z) est sur l'aire de la station de carburant. */
+export function atFuelStation(x, z) {
+  if (!fuelStation.rw) return false;
+  toLocal(fuelStation.rw, x, z, _l);
+  return Math.abs(_l.x - fuelStation.lx) <= fuelStation.half && Math.abs(_l.z - fuelStation.lz) <= fuelStation.half;
 }
 
 export function onCarrierDeck(x, z) {
@@ -116,6 +130,18 @@ export function buildAirfields(scene) {
       hangar(side + 108, L / 2 - 180, 30, 9, 34, 0x3f79b8);
       hangar(side + 108, L / 2 - 230, 30, 9, 34, 0xc8452f);
       hangar(side + 108, L / 2 - 280, 30, 9, 34, 0xe8b23a);
+      // station de carburant : aire cerclée de jaune, pompes et panneau
+      const fx = fuelStation.lx, fz = fuelStation.lz, hf = fuelStation.half;
+      for (const [w, d, x, z] of [[hf * 2, 0.9, fx, fz - hf], [hf * 2, 0.9, fx, fz + hf], [0.9, hf * 2, fx - hf, fz], [0.9, hf * 2, fx + hf, fz]]) B(w, 0.06, d, 0xf2c230, x, 0.33, z);
+      B(10, 0.06, 1.4, 0xf2c230, fx, 0.33, fz); B(1.4, 0.06, 10, 0xf2c230, fx, 0.33, fz);
+      B(5, 0.5, 14, 0x9aa0a6, fx - hf - 4, 0.25, fz);                          // îlot
+      for (const dz of [-4, 4]) {
+        B(1.3, 2.1, 0.9, 0xd8402f, fx - hf - 4, 1.55, fz + dz);                // pompes
+        B(1.0, 0.5, 0.95, 0xf5f5f0, fx - hf - 4, 2.2, fz + dz);
+      }
+      for (const dz of [-6.5, 6.5]) B(0.35, 5.2, 0.35, 0xb9bec4, fx - hf - 4, 2.6, fz + dz);
+      B(6.4, 0.35, 16, 0xf2c230, fx - hf - 4, 5.3, fz);                        // auvent
+      B(0.2, 2.4, 3.4, 0x1f8a4c, fx - hf - 4, 7.0, fz);                        // panneau
       // tour de contrôle
       const tx = side + 104, tz = L / 2 - 350;
       parts.push({ geo: new THREE.CylinderGeometry(3, 3.6, 20, 8), color: 0xeceff1, matrix: xform(tx, 10, tz) });
@@ -135,6 +161,10 @@ export function buildAirfields(scene) {
 
     // balisage nocturne
     const pos = [];
+    if (!rw.small) {
+      const fx = fuelStation.lx, fz = fuelStation.lz, hf = fuelStation.half;
+      for (const [x, z] of [[-hf, -hf], [hf, -hf], [hf, hf], [-hf, hf]]) pos.push(fx + x, 0.7, fz + z);
+    }
     for (let z = -L / 2; z <= L / 2 + 1; z += 50) pos.push(-side - 1.5, 0.7, z, side + 1.5, 0.7, z);
     const lights = lightsPoints(pos, 0xffe9a8, rw.small ? 4 : 6);
     lights.position.copy(decor.position);

@@ -56,13 +56,13 @@
   .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s; }
   #pctrl { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: .82rem; align-items: center; }
   #pctrl span:nth-child(odd) { white-space: nowrap; }
-  #starts, #opts, #modes, #liveries { display: flex; gap: 6px; flex-wrap: wrap; }
-  #mdesc { font-size: .8rem !important; opacity: .8 !important; }
+  #starts, #opts, #liveries { display: flex; gap: 6px; flex-wrap: wrap; }
+  #firesdesc { font-size: .8rem !important; opacity: .8 !important; }
   .chip:disabled { opacity: .35; cursor: not-allowed; }
   .chip .sw { display: inline-flex; margin-right: 6px; vertical-align: -2px; }
   .chip .sw i { width: 10px; height: 14px; display: inline-block; }
   .chip .sw i:first-child { border-radius: 3px 0 0 3px; } .chip .sw i:last-child { border-radius: 0 3px 3px 0; }
-  #fuelbtn.on { background: var(--accent); color: #2b2205; border-color: transparent; font-weight: 700; }
+  #fuelbtn.on, #firesbtn.on { background: var(--accent); color: #2b2205; border-color: transparent; font-weight: 700; }
   .chip, #opts button { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .08); color: #fff; font: inherit; font-size: .84rem; cursor: pointer; }
   .chip.on { background: #fff; color: #17304d; border-color: #fff; font-weight: 600; }
   #go { position: sticky; bottom: 0; z-index: 1; margin-top: 4px; padding: 13px 20px; border-radius: 14px; border: none; background: var(--accent); color: #2b2205; font: inherit; font-size: 1.1rem; font-weight: 800; cursor: pointer; box-shadow: 0 6px 22px rgba(0, 20, 40, .3); transition: transform .1s; }
@@ -187,21 +187,23 @@
     </div>
     <h3>Commandes</h3>
     <div id="pctrl"></div>
-    <h3>Mode</h3>
-    <div id="modes"></div>
-    <p id="mdesc"></p>
+    <div id="waterbox" hidden>
+      <h3>Bombardier d'eau</h3>
+      <div><button id="firesbtn" class="chip">Incendies : non</button></div>
+      <p id="firesdesc"></p>
+    </div>
     <h3>Départ</h3>
     <div id="starts"></div>
     <h3>Livrée</h3>
     <div id="liveries"></div>
     <h3>Options</h3>
-    <div id="opts"><button id="fuelbtn">Carburant et pannes : non</button><button id="invert">Tangage : normal</button><button id="daytime">Heure : Plein jour</button><button id="mutebtn">Son : activé</button></div>
+    <div id="opts"><button id="fuelbtn">Carburant : non</button><button id="invert">Tangage : normal</button><button id="daytime">Heure : Plein jour</button><button id="mutebtn">Son : activé</button></div>
     <button id="go">Décoller <kbd>Entrée</kbd></button>
   </section>
   <div id="menukeys" class="shadowed">
     <span><kbd>↑</kbd> <kbd>↓</kbd> appareil</span>
     <span><kbd>←</kbd> <kbd>→</kbd> départ</span>
-    <span><kbd>T</kbd> heure · <kbd>I</kbd> tangage · <kbd>M</kbd> son</span>
+    <span><kbd>T</kbd> heure · <kbd>I</kbd> tangage · <kbd>M</kbd> son · <kbd>F</kbd> incendies (bombardiers d'eau)</span>
     <span>🎮 croix / stick : choisir · LB / RB : catégorie · A : décoller</span>
   </div>
 </div>

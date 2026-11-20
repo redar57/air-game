@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 
 /** Menu, affichage minimal en vol, messages furtifs et écran de pause. */
 export class UI {
-  constructor(starts, labels, planes, modes, liveries) {
+  constructor(starts, labels, planes, liveries) {
     this.handlers = {};
     this.toastT = 0; this.hintT = 0;
     this.hudCache = ['', '', '', '', ''];
@@ -23,14 +23,8 @@ export class UI {
     $('fuelbtn').addEventListener('click', () => this.emit('fuel'));
     $('r-again').addEventListener('click', () => this.emit('again'));
     $('r-menu').addEventListener('click', () => this.emit('menu'));
-    this.modes = modes; this.liveries = liveries;
-    this.modeChips = modes.map((m, i) => {
-      const b = document.createElement('button');
-      b.className = 'chip'; b.textContent = m.name;
-      b.addEventListener('click', () => this.emit('mode-select', i));
-      $('modes').appendChild(b);
-      return b;
-    });
+    this.liveries = liveries;
+    $('firesbtn').addEventListener('click', () => this.emit('fires'));
     this.liveryChips = liveries.map((l, i) => {
       const b = document.createElement('button');
       b.className = 'chip';
@@ -90,6 +84,7 @@ export class UI {
   /** Atouts affichés en étiquettes. */
   tagsOf(p) {
     const t = [];
+    if (p.id === 'helico' || p.id === 'canadair') t.push("Bombardier d'eau");
     if (p.heli) t.push('Vol stationnaire');
     if (p.missiles) t.push('Missiles');
     if (p.guns) t.push('Mitrailleuses');
@@ -119,6 +114,8 @@ export class UI {
     }
     if (p.missiles) rows.push([k('X'), 'Missile : vise ~1 s pour verrouiller']);
     if (p.guns) rows.push([k('X'), 'Mitrailleuses (maintenir)']);
+    if (p.id === 'helico') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en stationnaire au ras de l'eau"]);
+    if (p.id === 'canadair') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en rasant l'eau, roues rentrées"]);
     rows.push(['🎮', p.heli ? 'Stick gauche · RT / LT gaz · LB / RB pivot' : 'Stick gauche · RT / LT gaz · LB / RB palonnier']);
     return rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
   }
@@ -166,15 +163,14 @@ export class UI {
     img.src = url; img.alt = '';
     ph.replaceWith(img);
   }
-  /** Modes : grise ceux auxquels l'appareil n'a pas droit. */
-  showModes(spec, sel) {
-    this.modeChips.forEach((b, i) => {
-      const m = this.modes[i], ok = m.ok(spec);
-      b.disabled = !ok;
-      b.title = ok ? m.desc : `Réservé : ${m.why}`;
-      b.classList.toggle('on', i === sel);
-    });
-    $('mdesc').textContent = this.modes[sel].desc;
+  /** Option « incendies », visible seulement pour l'hélicoptère bombardier d'eau. */
+  showFires(visible, on) {
+    $('waterbox').hidden = !visible;
+    $('firesbtn').textContent = `Incendies : ${on ? 'oui' : 'non'}`;
+    $('firesbtn').classList.toggle('on', on);
+    $('firesdesc').textContent = on
+      ? "Des feux se déclarent sur l'île : écope au ras de l'eau et largue sur les flammes avec X. Une fois tous éteints, d'autres se déclarent."
+      : "Pas d'incendie : tu peux quand même écoper au ras de l'eau et larguer où tu veux avec X.";
   }
   /** Livrées, avec une pastille de leurs couleurs (sur l'appareil choisi). */
   showLiveries(spec, sel) {
@@ -186,7 +182,8 @@ export class UI {
     });
   }
   setFuel(on) {
-    $('fuelbtn').textContent = `Carburant et pannes : ${on ? 'oui' : 'non'}`;
+    $('fuelbtn').textContent = `Carburant : ${on ? 'oui' : 'non'}`;
+    $('fuelbtn').title = on ? "Le plein se fait à l'arrêt sur la station devant les hangars de l'aéroport" : '';
     $('fuelbtn').classList.toggle('on', on);
   }
   setDaytime(name) { $('daytime').textContent = `Heure : ${name}`; }
