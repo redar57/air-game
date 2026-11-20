@@ -8,6 +8,8 @@
  *  stallBite brutalité du décrochage (0 : le nez tombe gentiment, 1 : une aile tombe franchement)
  *  flaps     volets disponibles (abaissent la vitesse de décrochage, freinent l'avion)
  *  turb      sensibilité aux turbulences (un avion léger danse davantage)
+ *  arcade    coup de pouce sur le virage à basse vitesse (1.5 par défaut)
+ *  inputRate vitesse à laquelle une touche maintenue amène la commande en butée (5 par défaut)
  *  engine    réglages du son moteur (cylindres, régime, pales…), voir audio.js
  */
 export const PLANES = [
@@ -58,12 +60,12 @@ export const PLANES = [
   {
     id: 'jet', name: 'Le Jet de chasse',
     desc: 'Postcombustion au-delà de 90 % de gaz, missiles illimités (touche X) pour chasser les montgolfières.',
-    maxSpeed: 230, stall: 55, accel: 13, pitchRate: 1.5, rollRate: 3.3, yawRate: 0.5, gLimit: 9,
+    maxSpeed: 230, stall: 55, accel: 13, pitchRate: 2.1, rollRate: 4.2, yawRate: 0.85, gLimit: 12, // (arcade : un vrai chasseur tient 9 G)
     afterburner: 0.75,
     brake: 10, maxSink: 9, gearH: 2.1, bellyH: 0.86, span: 10.6, len: 15.6, wingY: 0,
     retract: true, floats: false, jet: true,
     cam: { dist: 27, height: 5.6 }, eye: [0, 0.9, -3.75],
-    inertia: 0.15, stallBite: 0.8, flaps: true, turb: 0.35,
+    inertia: 0.09, stallBite: 0.8, flaps: true, turb: 0.35, inputRate: 9, arcade: 2.3,
     engine: { kind: 'jet', spool: 0.55 },
     missiles: [[-4.9, -0.32, 2.4], [4.9, -0.32, 2.4]], // rails sous les ailes (gauche, droite)
     stats: [1, 0.85, 0.4],

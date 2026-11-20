@@ -151,9 +151,10 @@ export class Plane {
       const rate = input.analog ? 18 : Math.abs(want) > Math.abs(cur) && want * cur >= 0 ? slow : 14;
       return cur + (want - cur) * (1 - Math.exp(-rate * dt));
     };
-    c.pitch = ease(c.pitch, input.pitch, 5);
-    c.roll = ease(c.roll, input.roll, 7);
-    c.yaw = ease(c.yaw, input.yaw, 5);
+    const ir = s.inputRate || 5;
+    c.pitch = ease(c.pitch, input.pitch, ir);
+    c.roll = ease(c.roll, input.roll, ir * 1.4);
+    c.yaw = ease(c.yaw, input.yaw, ir);
     this.throttle = clamp(this.throttle + input.throttle * 0.6 * dt, 0, 1);
     // régime moteur : un piston répond vite, une turbine monte lentement en régime (surtout au ralenti)
     const target = IDLE + (1 - IDLE) * this.throttle, e = s.engine || {};
@@ -181,7 +182,7 @@ export class Plane {
     const auth = clamp((vr - 0.15) / 0.85, 0.12, 1) * (1 - 0.25 * clamp((V / s.maxSpeed - 0.95) * 3, 0, 1));
     const nMax = Math.min(s.gLimit, vr * vr);
     const Vs = Math.max(V, 5);
-    const maxPitch = Math.min(s.pitchRate, (ARCADE * nMax * G) / Vs, (1.2 * s.gLimit * G) / Vs) * (0.25 + 0.75 * lf);
+    const maxPitch = Math.min(s.pitchRate, ((s.arcade || ARCADE) * nMax * G) / Vs, (1.2 * s.gLimit * G) / Vs) * (0.25 + 0.75 * lf);
     let pr = c.pitch * maxPitch;
     if (pr < 0) pr *= 0.75;
     // limiteur de G : le virage incliné consomme déjà une partie du facteur de charge disponible

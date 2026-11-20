@@ -421,7 +421,7 @@ export function animateModel(m, dt, { throttle, gear, burner, cockpitView, ctrl,
       else if (s.kind === 'elevator') a = -ctrl.pitch * DEF.elevator;  // cabrer : profondeur levée
       else if (s.kind === 'rudder') a = ctrl.yaw * DEF.rudder;
       else if (s.kind === 'flap') a = fl;
-      s.node.rotation.x = -a;
+      s.node.rotation.x = a; // (rotation autour de la charnière : un angle positif abaisse le bord de fuite)
     }
   }
   const rpm = 0.22 + 0.78 * throttle;
