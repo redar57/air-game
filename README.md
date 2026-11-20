@@ -6,7 +6,9 @@ Tout est généré par le code : relief, avions, sons. Aucune installation.
 
 ## Jouer
 
-**Double-clic sur `jouer.html`.** C'est tout : le jeu s'ouvre dans le navigateur, sous Windows, macOS ou Linux.
+**En ligne : https://redar57.github.io/air-game/** (rien à télécharger).
+
+**Sur ton ordinateur :** télécharge le projet (bouton *Code* → *Download ZIP*), décompresse-le, puis **double-clic sur `jouer.html`.** C'est tout : le jeu s'ouvre dans le navigateur, sous Windows, macOS ou Linux.
 
 Navigateurs : Chrome, Edge, Firefox ou Safari récents (Safari 16.4 minimum).
 
