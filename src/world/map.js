@@ -15,7 +15,7 @@ function mix(c1, c2, t) { return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), 
 export class IslandMap {
   constructor(heightAt, runways, carrier, deckAxisX) {
     this.runways = runways; this.carrier = carrier; this.deckAxisX = deckAxisX;
-    if (BIG) { E = 13200; S = 600; }
+    if (BIG) { E = 10800; S = 600; }
     this.bg = document.createElement('canvas');
     this.bg.width = this.bg.height = S;
     const g = this.bg.getContext('2d'), img = g.createImageData(S, S), H = new Float32Array(S * S);

@@ -35,12 +35,12 @@ export function defineAirfields() {
 
   if (BIG) { // grande carte : un aéroport sur l'île du Nord, une piste sur l'île de l'Est
     runways.push({
-      id: 'nord', name: 'Aéroport Nord', x: 700, z: -8900, yaw: Math.atan2(-1, 0),
-      length: 1300, width: 42, alt: Math.round(clamp(rawBase(700, -8900), 10, 160)), halfLen: 770, halfWid: 150, margin: 260, small: false,
+      id: 'nord', name: 'Aéroport Nord', x: 700, z: -6500, yaw: Math.atan2(-1, 0),
+      length: 1300, width: 42, alt: Math.round(clamp(rawBase(700, -6500), 10, 160)), halfLen: 770, halfWid: 150, margin: 260, small: false,
     });
     runways.push({
-      id: 'est', name: "Piste de l'Est", x: 9500, z: 1700, yaw: Math.atan2(-0.5, 0.86),
-      length: 760, width: 30, alt: Math.round(clamp(rawBase(9500, 1700), 8, 120)), halfLen: 440, halfWid: 70, margin: 170, small: true,
+      id: 'est', name: "Piste de l'Est", x: 7000, z: 800, yaw: Math.atan2(-0.5, 0.86),
+      length: 760, width: 30, alt: Math.round(clamp(rawBase(7000, 800), 8, 120)), halfLen: 440, halfWid: 70, margin: 170, small: true,
     });
   }
 

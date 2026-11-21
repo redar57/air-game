@@ -7,6 +7,7 @@ import { hitObstacle } from './world/colliders.js';
 import { defineThermals, updraft, buildThermalClouds, thermals } from './world/thermals.js';
 import { IslandMap } from './world/map.js';
 import { Birds } from './world/birds.js';
+import { Boats } from './world/boats.js';
 import { PLANES, STARTS, LIVERIES } from './planes/catalog.js';
 import { createWaterBomber, canScoop } from './missions.js';
 import { save } from './save.js';
@@ -27,7 +28,7 @@ import { Effects } from './fx.js';
 import { toWorld, clamp } from './util.js';
 
 const STEP = 1 / 120;       // pas fixe de la physique
-const EDGE = BIG ? 12600 : 7600; // au-delà (en mètres du centre), on est ramené en douceur
+const EDGE = BIG ? 10000 : 7600; // au-delà (en mètres du centre), on est ramené en douceur
 const Y = new THREE.Vector3(0, 1, 0);
 const _q = new THREE.Quaternion(), _w = { x: 0, z: 0 };
 
@@ -61,7 +62,7 @@ const world = {
   atFuel: atFuelStation,
 };
 
-let birds, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
+let birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
 let mission = null; // bombardier d'eau (hélicoptère rouge), ou null
 const _sv = new THREE.Vector3();
 let kills = 0; // montgolfières abattues depuis le lancement
@@ -443,6 +444,7 @@ function frame(now) {
     if (state === 'fly' && plane.buffet > 0.3 && frameNo % 12 === 0) input.rumble(0.25 * plane.buffet, 0.4 * plane.buffet, 180);
     scenery.update(time, sky.night, dt);
     birds.update(dt, time, plane);
+    boats.update(dt, time);
   }
   if (!paused) {
     const hdg = Math.atan2(plane.fwd.x, -plane.fwd.z);
@@ -501,6 +503,7 @@ async function boot() {
   if (BIG) STARTS.splice(2, 0, { id: 'nord', name: 'Aéroport Nord' }, { id: 'est', name: "Piste de l'Est" });
   buildThermalClouds(scene);
   birds = new Birds(scene, heightAt, thermals, runways);
+  boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 450 }]);
   fx = new Effects(scene);
   missiles = new Missiles(scene, fx, sound);
   guns = new Guns(scene, fx, sound);
@@ -544,7 +547,7 @@ async function boot() {
   // petit accès pour le débogage depuis la console
   window.airgame = {
     get plane() { return plane; }, get state() { return state; },
-    world, rig, sky, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
+    world, rig, sky, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
     select(planeId, startId) {
       setPlane(PLANES.findIndex((p) => p.id === planeId));
       setStart(STARTS.findIndex((s) => s.id === startId));

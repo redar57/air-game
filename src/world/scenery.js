@@ -142,7 +142,7 @@ function buildRocks(scene) {
 
 function buildBalloons(scene) {
   const spots = [[1700, 330, 1300], [-800, 400, 2300], [2700, 300, -2700], [-3400, 420, -500], [300, 560, -2900]];
-  if (BIG) spots.push([1800, 450, -9500], [9200, 300, 2600], [-500, 380, -11000], [8000, 350, -600], [-9000, 320, -6000]);
+  if (BIG) spots.push([1800, 450, -6900], [7000, 300, 1700], [-500, 380, -8500], [4500, 350, -2600], [-5600, 320, -2600]);
   const palettes = [[0xe84c3d, 0xfff1d6], [0x2f7fdc, 0xffd34d], [0x8e5cc9, 0xfff1d6], [0x2fae7a, 0xfff1d6], [0xf08a2c, 0x2f4a7a]];
   palettes.push(...palettes);
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });

@@ -7,20 +7,20 @@ import { clamp, lerp, smoothstep, toLocal } from '../util.js';
 export let BIG = false, SIZE = 11000, SEG = 352, CELL = SIZE / SEG, HALF = SIZE / 2;
 export function setBig(big) {
   BIG = !!big;
-  SIZE = BIG ? 27000 : 11000; SEG = BIG ? 720 : 352; CELL = SIZE / SEG; HALF = SIZE / 2;
+  SIZE = BIG ? 22000 : 11000; SEG = BIG ? 600 : 352; CELL = SIZE / SEG; HALF = SIZE / 2;
   EXTRA.length = 0;
   if (BIG) EXTRA.push(...BIG_ISLANDS);
 }
 export const ISLAND_R = 4400;
 /** Îles de la grande carte : centre, rayon, relief, éventuel sommet. */
-const BIG_ISLANDS = [
-  { name: 'Île du Nord', x: 1300, z: -9700, r: 3100, hills: 120, peak: { x: 3000, z: -10900, r: 1150, h: 700 }, seed: 31 },
-  { name: "Île de l'Est", x: 9600, z: 1600, r: 2300, hills: 50, seed: 57 },
-  { x: -9200, z: -6600, r: 900, hills: 110, seed: 71, islet: true },
-  { x: -9600, z: 6900, r: 760, hills: 90, seed: 83, islet: true },
-  { x: 4300, z: 10000, r: 820, hills: 100, seed: 97, islet: true },
-  { x: 10200, z: -7800, r: 700, hills: 80, seed: 113, islet: true },
-  { x: -11300, z: 400, r: 560, hills: 70, seed: 127, islet: true },
+const BIG_ISLANDS = [ // proches de l'île principale : on traverse des détroits, pas le grand large
+  { name: 'Île du Nord', x: 1100, z: -6100, r: 3500, hills: 120, peak: { x: 2800, z: -7500, r: 1100, h: 700 }, seed: 31 },
+  { name: "Île de l'Est", x: 6000, z: 900, r: 2800, hills: 60, seed: 57 },
+  { x: 4300, z: -3500, r: 700, hills: 100, seed: 71, islet: true },
+  { x: -4900, z: -2600, r: 800, hills: 90, seed: 83, islet: true },
+  { x: 4000, z: 3900, r: 620, hills: 90, seed: 97, islet: true },
+  { x: -3900, z: 4400, r: 560, hills: 70, seed: 113, islet: true },
+  { x: -2900, z: -5300, r: 650, hills: 80, seed: 127, islet: true },
 ];
 export const EXTRA = [];
 /** Chaîne de montagnes : centre, orientation, demi-longueur et demi-largeur. */
