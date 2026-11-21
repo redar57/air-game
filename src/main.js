@@ -6,6 +6,7 @@ import { buildScenery } from './world/scenery.js';
 import { hitObstacle } from './world/colliders.js';
 import { defineThermals, updraft, buildThermalClouds, thermals } from './world/thermals.js';
 import { IslandMap } from './world/map.js';
+import { Birds } from './world/birds.js';
 import { PLANES, STARTS, LIVERIES } from './planes/catalog.js';
 import { createWaterBomber, canScoop } from './missions.js';
 import { save } from './save.js';
@@ -60,7 +61,7 @@ const world = {
   atFuel: atFuelStation,
 };
 
-let sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
+let birds, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
 let mission = null; // bombardier d'eau (hélicoptère rouge), ou null
 const _sv = new THREE.Vector3();
 let kills = 0; // montgolfières abattues depuis le lancement
@@ -441,6 +442,7 @@ function frame(now) {
     if (state !== 'crash') rig.update(dt, plane, world, state === 'menu');
     if (state === 'fly' && plane.buffet > 0.3 && frameNo % 12 === 0) input.rumble(0.25 * plane.buffet, 0.4 * plane.buffet, 180);
     scenery.update(time, sky.night, dt);
+    birds.update(dt, time, plane);
   }
   if (!paused) {
     const hdg = Math.atan2(plane.fwd.x, -plane.fwd.z);
@@ -498,6 +500,7 @@ async function boot() {
   defineThermals(heightAt, HALF * 1.82, BIG ? 30 : 14);
   if (BIG) STARTS.splice(2, 0, { id: 'nord', name: 'Aéroport Nord' }, { id: 'est', name: "Piste de l'Est" });
   buildThermalClouds(scene);
+  birds = new Birds(scene, heightAt, thermals);
   fx = new Effects(scene);
   missiles = new Missiles(scene, fx, sound);
   guns = new Guns(scene, fx, sound);
@@ -541,7 +544,7 @@ async function boot() {
   // petit accès pour le débogage depuis la console
   window.airgame = {
     get plane() { return plane; }, get state() { return state; },
-    world, rig, sky, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
+    world, rig, sky, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
     select(planeId, startId) {
       setPlane(PLANES.findIndex((p) => p.id === planeId));
       setStart(STARTS.findIndex((s) => s.id === startId));
