@@ -25,7 +25,7 @@ Navigateurs : Chrome, Edge, Firefox ou Safari récents (Safari 16.4 minimum).
 | A/E | LB / RB | Palonnier |
 | R/F | RT / LT | Gaz |
 | V | B (Rond) | Volets (3 crans) |
-| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) · larguer l'eau (bombardiers d'eau, maintenir) · treuil (secours, maintenir) · élingue (Bi-rotor) · parachutistes (C-17) |
+| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) · larguer l'eau (bombardiers d'eau, maintenir) · treuil (secours, maintenir) · élingue (Bi-rotor) · parachutistes (Gros Porteur) |
 | G | X (Carré) | Train |
 | Espace | A (Croix) | Freins / aérofreins |
 | C | Y (Triangle) | Changer de vue |
@@ -71,7 +71,7 @@ des roues, au décrochage et au crash (si le navigateur le permet).
 - **Bi-rotor et son élingue** : une charge attend sous une colonne bleue (conteneur, citerne, jeep…). Crochet près
   de l'anneau jaune, X pour l'accrocher ; elle se balance et pèse (plus de gaz). Pose-la doucement dans le cercle
   vert de destination, puis X pour la décrocher. Lâchée en l'air, elle s'écrase.
-- **Parachutistes** (C-17) : 12 hommes à bord. Au-dessus de 250 m et sous 340 km/h, X en fait sauter 4 ;
+- **Parachutistes** (Gros Porteur) : 12 hommes à bord. Au-dessus de 250 m et sous 340 km/h, X en fait sauter 4 ;
   ils ouvrent leur voile et se dirigent seuls vers la croix orange, à condition d'être largués assez près. On
   rembarque à l'arrêt sur l'aire verte de la base militaire (sur la petite carte : sur une piste).
 - **Base militaire** (grande carte) : sur l'îlot voisin du porte-avions. Piste, hangars, radar, casernes,

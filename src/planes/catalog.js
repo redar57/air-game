@@ -91,7 +91,7 @@ export const PLANES = [
     stats: [1, 0.85, 0.4],
   },
   {
-    id: 'cargo', name: 'Le C-17',
+    id: 'cargo', name: 'Le Gros Porteur',
     desc: "Quadriréacteur de transport militaire, aile haute et empennage en T, avec une section de 12 parachutistes : X les fait sauter par 4 par la rampe arrière au-dessus de la croix orange. On rembarque à l'arrêt sur l'aire verte de la base militaire.",
     maxSpeed: 140, stall: 38, accel: 4.4, pitchRate: 0.55, rollRate: 0.65, yawRate: 0.27, gLimit: 2.8,
     brake: 6.5, maxSink: 5.5, gearH: 3.55, bellyH: 2.6, span: 42, len: 33, wingY: 2.6,
