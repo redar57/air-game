@@ -2,29 +2,12 @@ import * as THREE from 'three';
 import { makeNoise2D, fbm, ridged } from './noise.js';
 import { clamp, lerp, smoothstep, toLocal } from '../util.js';
 
-// Taille du monde : petite carte (l'île seule) ou grande carte (l'île + d'autres îles autour).
+// Taille du monde : petite carte (l'île d'origine) ou grande carte (une autre île, bien plus grande).
 // setBig() doit être appelé avant toute construction (le choix change au menu, avec rechargement).
 export let BIG = false, SIZE = 11000, SEG = 352, CELL = SIZE / SEG, HALF = SIZE / 2;
-export function setBig(big) {
-  BIG = !!big;
-  SIZE = BIG ? 22000 : 11000; SEG = BIG ? 600 : 352; CELL = SIZE / SEG; HALF = SIZE / 2;
-  EXTRA.length = 0;
-  if (BIG) EXTRA.push(...BIG_ISLANDS);
-}
 export const ISLAND_R = 4400;
-/** Îles de la grande carte : centre, rayon, relief, éventuel sommet. */
-const BIG_ISLANDS = [ // proches de l'île principale : on traverse des détroits, pas le grand large
-  { name: 'Île du Nord', x: 1100, z: -6100, r: 3500, hills: 120, peak: { x: 2800, z: -7500, r: 1100, h: 700 }, seed: 31 },
-  { name: "Île de l'Est", x: 6000, z: 900, r: 2800, hills: 60, seed: 57 },
-  { x: 4300, z: -3500, r: 700, hills: 100, seed: 71, islet: true },
-  { x: -4900, z: -2600, r: 800, hills: 90, seed: 83, islet: true },
-  { x: 4000, z: 3900, r: 620, hills: 90, seed: 97, islet: true },
-  { x: -3900, z: 4400, r: 560, hills: 70, seed: 113, islet: true },
-  { x: -2900, z: -5300, r: 650, hills: 80, seed: 127, islet: true },
-];
-export const EXTRA = [];
-/** Chaîne de montagnes : centre, orientation, demi-longueur et demi-largeur. */
-export const MTN = { x: 800, z: -900, ang: 0.45, len: 2600, wid: 1250 };
+/** Chaîne de montagnes : centre, orientation, demi-longueur et demi-largeur, hauteur des crêtes. */
+export const MTN = { x: 800, z: -900, ang: 0.45, len: 2600, wid: 1250, amp: 1080 };
 export const VOLCANO = { x: -2500, z: 1000, rimR: 300, baseR: 1350, h: 760, depth: 230 };
 const ISLETS = [
   { x: 4300, z: -3700, r: 380, a: 150 },
@@ -32,9 +15,30 @@ const ISLETS = [
   { x: 3500, z: 4300, r: 260, a: 110 },
   { x: -1200, z: -4900, r: 240, a: 105 },
 ];
+/** Grande île : réunion de lobes elliptiques, avec une grande baie creusée au sud-ouest. */
+const LOBES = [
+  { x: -5000, z: -1800, rx: 3400, rz: 3000 },
+  { x: 0, z: 0, rx: 4800, rz: 4000 },
+  { x: 5200, z: 1300, rx: 3400, rz: 3000 },
+  { x: 1500, z: -4200, rx: 3000, rz: 2000 },
+  { x: -1300, z: 3700, rx: 3000, rz: 2100 },
+];
+const BAY = { x: -4500, z: 2500, rx: 1900, rz: 1500 };
+let mca = Math.cos(MTN.ang), msa = Math.sin(MTN.ang);
+
+export function setBig(big) {
+  BIG = !!big;
+  SIZE = BIG ? 22000 : 11000; SEG = BIG ? 600 : 352; CELL = SIZE / SEG; HALF = SIZE / 2;
+  if (!BIG) return;
+  Object.assign(MTN, { x: 1900, z: -2700, ang: -0.32, len: 3900, wid: 1500, amp: 1300 });
+  Object.assign(VOLCANO, { x: -6300, z: -2900, rimR: 340, baseR: 1600, h: 900, depth: 260 });
+  ISLETS.splice(0, ISLETS.length,
+    { x: -9000, z: 900, r: 420, a: 140 }, { x: 9300, z: -1600, r: 360, a: 125 },
+    { x: -800, z: -5900, r: 380, a: 130 }, { x: 9400, z: 3700, r: 300, a: 105 }, { x: 4200, z: 5100, r: 320, a: 115 });
+  mca = Math.cos(MTN.ang); msa = Math.sin(MTN.ang);
+}
 
 const nA = makeNoise2D(1337), nB = makeNoise2D(9001), nC = makeNoise2D(271);
-const mca = Math.cos(MTN.ang), msa = Math.sin(MTN.ang);
 
 /** Distance au fond du canyon (qui serpente le long de la chaîne) et abscisse le long de celui-ci. */
 export function canyonDist(x, z) {
@@ -45,14 +49,14 @@ export function canyonDist(x, z) {
   return Math.abs(v - f) / Math.sqrt(1 + fp * fp);
 }
 
-/** Masque (0 en mer, 1 dans les terres) d'une île supplémentaire de la grande carte. */
-function extraMask(it, x, z) {
-  const dx = x - it.x, dz = z - it.z;
-  if (dx * dx + dz * dz > (it.r * 1.5) ** 2) return 0;
-  const wx = dx + it.r * 0.12 * nB(x * 0.0006 + it.seed, z * 0.0006);
-  const wz = dz + it.r * 0.12 * nB(x * 0.0006, z * 0.0006 + it.seed);
-  const c = Math.hypot(wx, wz) / it.r + 0.15 * fbm(nA, x * 0.0005 + it.seed, z * 0.0005 - it.seed, 3);
-  return 1 - smoothstep(0.55, 1.02, c);
+function bigMask(x, z) {
+  const wx = x + 650 * nB(x * 0.0003, z * 0.0003), wz = z + 650 * nB(x * 0.0003 + 40, z * 0.0003 + 17);
+  let e = 0; // union « douce » des lobes : ils se fondent sans pincement entre eux
+  for (const l of LOBES) e += Math.exp(-Math.hypot((wx - l.x) / l.rx, (wz - l.z) / l.rz) / 0.12);
+  let c = -0.12 * Math.log(e + 1e-9);
+  c += 0.14 * fbm(nA, x * 0.0004 + 5, z * 0.0004 - 3, 3);
+  const bay = Math.hypot((wx - BAY.x) / BAY.rx, (wz - BAY.z) / BAY.rz);
+  return (1 - smoothstep(0.6, 1.02, c)) * smoothstep(0.7, 1.1, bay);
 }
 
 function islandMask(x, z) {
@@ -65,17 +69,9 @@ function islandMask(x, z) {
 
 /** Relief « naturel », avant aplanissement des terrains d'aviation. */
 export function rawBase(x, z) {
-  let m = islandMask(x, z), amp = 95, extra = 0;
-  for (const it of EXTRA) {
-    const me = extraMask(it, x, z);
-    if (me > m) { m = me; amp = it.hills; }
-    if (me > 0 && it.peak) {
-      const d2 = ((x - it.peak.x) ** 2 + (z - it.peak.z) ** 2) / (it.peak.r * it.peak.r);
-      if (d2 < 6) extra += me * me * it.peak.h * Math.exp(-d2 * 1.6) * (0.75 + 0.5 * (ridged(nB, x * 0.0007 + it.seed, z * 0.0007, 3)));
-    }
-  }
+  const m = BIG ? bigMask(x, z) : islandMask(x, z), amp = BIG ? 110 : 95;
   const hills = fbm(nA, x * 0.0012, z * 0.0012, 4) * 0.5 + 0.5;
-  let h = lerp(-60, 16, Math.pow(m, 0.75)) + m * hills * amp + extra;
+  let h = lerp(-60, 16, Math.pow(m, 0.75)) + m * hills * amp;
   h += m * fbm(nC, x * 0.004, z * 0.004, 2) * 7;
 
   // montagnes
@@ -84,7 +80,7 @@ export function rawBase(x, z) {
   const mw = Math.exp(-((u / MTN.len) ** 2 + (v / MTN.wid) ** 2) * 1.9);
   if (mw > 0.003) {
     const rg = ridged(nB, x * 0.0005 + 3, z * 0.0005 + 8, 4);
-    h += m * m * mw * (190 + Math.pow(rg, 1.3) * 1080);
+    h += m * m * mw * (190 + Math.pow(rg, 1.3) * MTN.amp);
   }
 
   // volcan et son cratère
@@ -255,7 +251,7 @@ export function buildTerrain(flatZones) {
 export function coastPoint(angle, offset = 0, fn = heightAt) {
   const dx = Math.cos(angle), dz = Math.sin(angle);
   let r = 1200;
-  while (r < 6200 && fn(dx * r, dz * r) > 0.5) r += 20;
+  while (r < Math.max(6200, HALF * 0.95) && fn(dx * r, dz * r) > 0.5) r += 20;
   r += offset;
   return { x: dx * r, z: dz * r };
 }

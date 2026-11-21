@@ -28,7 +28,7 @@ function check(plane, frame, axisX, aimZ, alt, glide, name, best) {
 export function approachInfo(plane, runways, carrier, deckAxisX) {
   if (plane.onGround) return null;
   let best = null;
-  for (const rw of runways) best = check(plane, rw, 0, rw.length / 2 - rw.length * 0.15, rw.alt, 3, rw.small ? 'ALTIPORT' : 'PISTE', best);
+  for (const rw of runways) best = check(plane, rw, 0, rw.length / 2 - rw.length * 0.15, rw.alt, 3, rw.style === 'small' ? 'ALTIPORT' : 'PISTE', best);
   best = check(plane, { ...carrier, oneWay: true }, deckAxisX, 95, carrier.deckY, 3.5, 'PORTE-AVIONS', best);
   return best;
 }

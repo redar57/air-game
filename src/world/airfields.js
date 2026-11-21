@@ -15,12 +15,13 @@ const _l = { x: 0, z: 0 }, _w = { x: 0, z: 0 };
 
 /** Choisit l'emplacement des pistes et du porte-avions (avant la construction du relief). */
 export function defineAirfields() {
-  // Aéroport principal : plaine côtière au sud.
-  let zc = 1500;
-  while (zc < 5200 && rawBase(500, zc) > 2) zc += 25;
+  // Aéroport principal : plaine côtière au sud (au sud-est sur la grande île).
+  const ax0 = BIG ? 2600 : 500;
+  let zc = BIG ? 0 : 1500;
+  while (zc < 5200 && rawBase(ax0, zc) > 2) zc += 25;
   runways.push({
-    id: 'aeroport', name: 'Aéroport', x: 500, z: zc - 560, yaw: Math.atan2(-1, 0),
-    length: 1500, width: 46, alt: 11, halfLen: 870, halfWid: 150, margin: 260, small: false,
+    id: 'aeroport', name: 'Aéroport', x: ax0, z: zc - 560, yaw: Math.atan2(-1, 0), style: 'main',
+    length: 1500, width: 46, alt: BIG ? Math.round(clamp(rawBase(ax0, zc - 560), 11, 120)) : 11, halfLen: 870, halfWid: 150, margin: 260, small: false,
   });
 
   // Altiport : petit plateau sur le flanc de la chaîne de montagnes.
@@ -29,18 +30,20 @@ export function defineAirfields() {
   const ax = MTN.x + u * ca - v * sa, az = MTN.z + u * sa + v * ca;
   runways.push({
     id: 'altiport', name: 'Altiport', x: ax, z: az, yaw: Math.atan2(-ca, -sa),
-    length: 520, width: 26, alt: Math.round(clamp(rawBase(ax, az), 170, 400)),
+    length: 520, width: 26, alt: Math.round(clamp(rawBase(ax, az), 170, 400)), style: 'small',
     halfLen: 320, halfWid: 62, margin: 150, small: true,
   });
 
-  if (BIG) { // grande carte : un aéroport sur l'île du Nord, une piste sur l'île de l'Est
+  if (BIG) { // grande carte : deux terrains de styles bien distincts
+    // aérodrome de la Baie : piste courte en bord de mer, aérogare, radar, château d'eau
     runways.push({
-      id: 'nord', name: 'Aéroport Nord', x: 700, z: -6500, yaw: Math.atan2(-1, 0),
-      length: 1300, width: 42, alt: Math.round(clamp(rawBase(700, -6500), 10, 160)), halfLen: 770, halfWid: 150, margin: 260, small: false,
+      id: 'baie', name: 'Aérodrome de la Baie', x: -4300, z: 650, yaw: Math.atan2(-1, 0.25), style: 'coast',
+      length: 900, width: 34, alt: Math.round(clamp(rawBase(-4300, 650), 8, 60)), halfLen: 510, halfWid: 130, margin: 220, small: false,
     });
+    // piste en herbe de la Prairie : pas de goudron, une grange, une manche à air, des bottes de foin
     runways.push({
-      id: 'est', name: "Piste de l'Est", x: 7000, z: 800, yaw: Math.atan2(-0.5, 0.86),
-      length: 760, width: 30, alt: Math.round(clamp(rawBase(7000, 800), 8, 120)), halfLen: 440, halfWid: 70, margin: 170, small: true,
+      id: 'prairie', name: 'Piste de la Prairie', x: 6000, z: 700, yaw: Math.atan2(-0.55, 0.84), style: 'grass',
+      length: 700, width: 32, alt: Math.round(clamp(rawBase(6000, 700), 8, 160)), halfLen: 400, halfWid: 80, margin: 180, small: true,
     });
   }
 
@@ -49,8 +52,8 @@ export function defineAirfields() {
   toWorld(main, fuelStation.lx, fuelStation.lz, _w);
   fuelStation.x = _w.x; fuelStation.z = _w.z; fuelStation.yaw = main.yaw; fuelStation.rw = main;
 
-  carrier.x = -1900;
-  carrier.z = zc + 2000;
+  carrier.x = BIG ? ax0 : -1900;
+  carrier.z = zc + (BIG ? 2600 : 2000);
   return runways;
 }
 
@@ -95,6 +98,24 @@ function runwayTexture() {
   return tex;
 }
 
+function grassTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 1024;
+  const g = cv.getContext('2d');
+  for (let y = 0; y < 1024; y += 64) { g.fillStyle = (y / 64) % 2 ? '#6aa84a' : '#7bb957'; g.fillRect(0, y, 128, 64); } // bandes de tonte
+  for (let i = 0; i < 1800; i++) {
+    g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,230,.06)' : 'rgba(20,50,10,.08)';
+    g.fillRect(Math.random() * 128, Math.random() * 1024, 2 + Math.random() * 3, 3 + Math.random() * 8);
+  }
+  g.fillStyle = '#f4f4ee'; // balises blanches de bord de piste et seuils
+  for (let y = 20; y < 1024; y += 90) { g.fillRect(2, y, 8, 26); g.fillRect(118, y, 8, 26); }
+  for (const y0 of [10, 1024 - 10 - 12]) g.fillRect(14, y0, 100, 12);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
 function lightsPoints(positions, color, size) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -106,11 +127,11 @@ function lightsPoints(positions, color, size) {
 }
 
 export function buildAirfields(scene) {
-  const tex = runwayTexture();
+  const tex = runwayTexture(), grass = grassTexture();
   for (const rw of runways) {
     const strip = new THREE.Mesh(
       new THREE.PlaneGeometry(rw.width, rw.length).rotateX(-Math.PI / 2),
-      new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }),
+      new THREE.MeshLambertMaterial({ map: rw.style === 'grass' ? grass : tex, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }),
     );
     strip.position.set(rw.x, rw.alt + RUNWAY_LIFT, rw.z);
     strip.rotation.y = rw.yaw;
@@ -131,7 +152,43 @@ export function buildAirfields(scene) {
       toWorld(rw, x, z, _w);
       addBox(_w.x, _w.z, rw.yaw, w / 2, d / 2, rw.alt, rw.alt + h + w * 0.21);
     };
-    if (rw.small) {
+    const collide = (x, z, hw, hd, h) => { toWorld(rw, x, z, _w); addBox(_w.x, _w.z, rw.yaw, hw, hd, rw.alt, rw.alt + h); };
+    const C = (rt, rb, h, color, x, y, z, seg = 10) => parts.push({ geo: new THREE.CylinderGeometry(rt, rb, h, seg), color, matrix: xform(x, y, z) });
+    if (rw.style === 'grass') {
+      // grange rouge à toit en bâtière, manche à air, bottes de foin, clôture
+      const gx = side + 40, gz = L / 2 - 120;
+      B(16, 7, 24, 0xa63a2b, gx, 3.5, gz);
+      const tri = new THREE.Shape([new THREE.Vector2(-9, 0), new THREE.Vector2(9, 0), new THREE.Vector2(0, 5.5)]);
+      parts.push({ geo: new THREE.ExtrudeGeometry(tri, { depth: 25, bevelEnabled: false }), color: 0x4a4440, matrix: xform(gx, 7, gz - 12.5) });
+      B(8, 5.5, 0.4, 0xf2ead8, gx, 2.75, gz - 12.1);
+      B(0.5, 5.5, 0.45, 0xf2ead8, gx, 2.75, gz - 12.15);
+      collide(gx, gz, 8, 12, 12.5);
+      C(0.18, 0.22, 9, 0x9a9a9a, side + 14, 4.5, -L / 2 + 70, 6);
+      parts.push({ geo: new THREE.CylinderGeometry(0.4, 1.0, 4, 8, 1, true).rotateZ(Math.PI / 2), color: 0xf07a1e, matrix: xform(side + 16, 8.7, -L / 2 + 70) });
+      for (let k = 0; k < 7; k++) {
+        parts.push({ geo: new THREE.CylinderGeometry(1.2, 1.2, 1.6, 10).rotateZ(Math.PI / 2), color: 0xd9b45a, matrix: xform(side + 60 + (k % 3) * 3.4, 1.2, L / 2 - 200 - Math.floor(k / 3) * 5, k * 0.7) });
+      }
+      for (let z = -L / 2; z <= L / 2; z += 12) B(0.25, 1.3, 0.25, 0x7a5a3c, -side - 30, 0.65, z);
+      B(0.12, 0.12, L, 0x7a5a3c, -side - 30, 1.1, 0);
+    } else if (rw.style === 'coast') {
+      // aérogare vitrée, radar sous dôme, château d'eau en damier
+      const tx = side + 70, tz = L / 2 - 210;
+      B(60, 0.3, 150, 0x6b6e73, side + 36, 0.05, tz);
+      B(22, 8, 72, 0xf4f2ec, tx + 10, 4, tz);
+      B(22.4, 2.6, 72.4, 0x3b6e9c, tx + 10, 4.6, tz);
+      B(24, 0.7, 74, 0x8f969c, tx + 10, 8.3, tz);
+      B(8, 3, 8, 0xf4f2ec, tx + 10, 10, tz + 20);
+      collide(tx + 10, tz, 12, 37, 13);
+      const rx = side + 60, rz = -L / 2 + 160;
+      C(2.6, 3.4, 15, 0xd9dcdf, rx, 7.5, rz, 8);
+      parts.push({ geo: new THREE.SphereGeometry(7.5, 12, 8), color: 0xf8f8f6, matrix: xform(rx, 20, rz) });
+      collide(rx, rz, 7.5, 7.5, 27.5);
+      const wx = side + 105, wz = L / 2 - 40;
+      for (const [dx, dz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) B(0.6, 16, 0.6, 0x8a9199, wx + dx, 8, wz + dz);
+      for (let k = 0; k < 4; k++) C(6, 6, 2, k % 2 ? 0xf4f4f0 : 0xd8402f, wx, 17 + k * 2, wz, 12);
+      parts.push({ geo: new THREE.ConeGeometry(6.4, 3, 12), color: 0xd8402f, matrix: xform(wx, 26.5, wz) });
+      collide(wx, wz, 6, 6, 28);
+    } else if (rw.small) {
       B(34, 0.3, 60, 0x595c62, side + 22, 0.05, L / 2 - 90);
       hangar(side + 26, L / 2 - 130, 16, 5.5, 16, 0xc8452f);
     } else {
@@ -178,7 +235,8 @@ export function buildAirfields(scene) {
       const fx = fuelStation.lx, fz = fuelStation.lz, hf = fuelStation.half;
       for (const [x, z] of [[-hf, -hf], [hf, -hf], [hf, hf], [-hf, hf]]) pos.push(fx + x, 0.7, fz + z);
     }
-    for (let z = -L / 2; z <= L / 2 + 1; z += 50) pos.push(-side - 1.5, 0.7, z, side + 1.5, 0.7, z);
+    if (rw.style !== 'grass') for (let z = -L / 2; z <= L / 2 + 1; z += 50) pos.push(-side - 1.5, 0.7, z, side + 1.5, 0.7, z);
+    if (!pos.length) continue;
     const lights = lightsPoints(pos, 0xffe9a8, rw.small ? 4 : 6);
     lights.position.copy(decor.position);
     lights.rotation.y = rw.yaw;

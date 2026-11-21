@@ -500,7 +500,7 @@ async function boot() {
   sky = new Sky(scene);
   scenery = buildScenery(scene);
   defineThermals(heightAt, HALF * 1.82, BIG ? 30 : 14);
-  if (BIG) STARTS.splice(2, 0, { id: 'nord', name: 'Aéroport Nord' }, { id: 'est', name: "Piste de l'Est" });
+  if (BIG) STARTS.splice(2, 0, { id: 'baie', name: 'La Baie' }, { id: 'prairie', name: 'La Prairie' });
   buildThermalClouds(scene);
   birds = new Birds(scene, heightAt, thermals, runways);
   boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 450 }]);
