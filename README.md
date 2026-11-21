@@ -1,7 +1,7 @@
 # Air Game — vol libre
 
 Petit simulateur de vol arcade au-dessus d'une île : neuf avions (tourisme, planeur, biplan de voltige, hydravion
-amphibie, écopeur bombardier d'eau, chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur) et trois hélicoptères (bombardier d'eau,
+amphibie, écopeur bombardier d'eau, chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur) et trois hélicoptères (bombardier d'eau ou secours au treuil,
 Libellule à bulle, Bi-rotor de transport), un aéroport, un altiport et un porte-avions.
 Tout est généré par le code : relief, avions, sons. Aucune installation.
 
@@ -25,7 +25,7 @@ Navigateurs : Chrome, Edge, Firefox ou Safari récents (Safari 16.4 minimum).
 | A/E | LB / RB | Palonnier |
 | R/F | RT / LT | Gaz |
 | V | B (Rond) | Volets (3 crans) |
-| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) · larguer l'eau (bombardiers d'eau, maintenir) |
+| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) · larguer l'eau (bombardiers d'eau, maintenir) · treuil (secours, maintenir) · élingue (Bi-rotor) · parachutistes (Gros Porteur) |
 | G | X (Carré) | Train |
 | Espace | A (Croix) | Freins / aérofreins |
 | C | Y (Triangle) | Changer de vue |
@@ -65,6 +65,21 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   l'hélico, glissade sur l'eau roues rentrées pour l'Écopeur — puis maintiens X pour larguer. Au menu, l'option
   *Incendies* (touche F) fait apparaître des feux sur l'île ; une fois tous éteints, d'autres se déclarent. Sans
   incendies, on peut quand même écoper et larguer où l'on veut.
+- **Hélicoptère de secours** (version *Secours* de l'hélicoptère) : des naufragés et des randonneurs attendent sous
+  des colonnes orange. En stationnaire au-dessus, maintiens X pour descendre le treuil, relâche pour remonter la
+  personne accrochée (3 places), puis pose-toi sur l'hélisurface de l'hôpital (croix verte sur la carte).
+- **Bi-rotor et son élingue** : une charge attend sous une colonne bleue (conteneur, citerne, jeep…). Crochet près
+  de l'anneau jaune, X pour l'accrocher ; elle se balance et pèse (plus de gaz). Pose-la doucement dans le cercle
+  vert de destination, puis X pour la décrocher. Lâchée en l'air, elle s'écrase.
+- **Parachutistes** (Gros Porteur) : 12 hommes à bord. Au-dessus de 250 m et sous 340 km/h, X en fait sauter 4 ;
+  ils ouvrent leur voile et se dirigent seuls vers la croix orange, à condition d'être largués assez près. On
+  rembarque à l'arrêt sur l'aire verte de la base militaire (sur la petite carte : sur une piste).
+- **Base militaire** (grande carte) : sur l'îlot voisin du porte-avions. Piste, hangars, radar, casernes,
+  hélisurfaces, carburant et aire d'embarquement des parachutistes ; c'est aussi un point de départ.
+- **Routes et train** (grande carte) : des voitures, camionnettes, camions et cars circulent sur les routes
+  goudronnées ; un train fait le tour de l'île et s'arrête dans les gares des villages.
+- **Animaux** : bancs de dauphins qui bondissent près des côtes, baleines qui soufflent au large, cerfs à l'orée
+  des bois (ils s'enfuient si on les frôle).
 - **Planeur** : sans moteur, il part en altitude. Les gros nuages ronds marquent les thermiques : tourne dedans pour
   monter, le vario bipe d'autant plus vite que ça monte.
 - **Petite ou grande carte** (option *Carte* du menu, le jeu se recharge) : la petite, c'est l'île seule ; la grande

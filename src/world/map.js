@@ -1,6 +1,7 @@
 import { toWorld } from '../util.js';
-import { fuelStation, loadPad, seaBase } from './airfields.js';
+import { fuelStation, loadPad, seaBase, extraPumps } from './airfields.js';
 import { country } from './country.js';
+import { hospital } from './sites.js';
 import { BIG } from './terrain.js';
 
 // Carte de l'île : un fond pré-calculé une fois (relief ombré, plages, pistes), puis à chaque image
@@ -48,11 +49,23 @@ export class IslandMap {
     // campagne (grande carte) : champs, chemins, villages
     g.fillStyle = '#d6bd62';
     for (const fl of country.fields) this.rect(g, fl, 0, 0, fl.hw * 2, fl.hl * 2);
-    g.strokeStyle = '#e6d3a3'; g.lineWidth = Math.max(1, S / 600); g.lineJoin = 'round';
+    g.lineJoin = 'round';
     for (const path of country.roads) {
+      g.strokeStyle = path.paved ? '#f4f1e6' : '#e6d3a3'; g.lineWidth = Math.max(1, S / (path.paved ? 420 : 600));
       g.beginPath();
       path.forEach((p, i) => (i ? g.lineTo : g.moveTo).call(g, this.px(p.x), this.px(p.z)));
       g.stroke();
+    }
+    if (country.rail) { // voie ferrée : trait sombre à traverses claires
+      const line = (w, col, dash) => {
+        g.strokeStyle = col; g.lineWidth = w; g.setLineDash(dash);
+        g.beginPath();
+        country.rail.pts.forEach((p, i) => (i ? g.lineTo : g.moveTo).call(g, this.px(p.x), this.px(p.z)));
+        g.closePath(); g.stroke();
+      };
+      line(Math.max(1.5, S / 320), '#4a3f36', []);
+      line(Math.max(1, S / 640), '#e9e2d0', [S / 200, S / 200]);
+      g.setLineDash([]);
     }
     g.fillStyle = '#b9472f';
     for (const v of country.villages) { g.beginPath(); g.arc(this.px(v.x), this.px(v.z), Math.max(2, v.r * S / (2 * E) * 0.6), 0, 6.283); g.fill(); }
@@ -74,7 +87,14 @@ export class IslandMap {
 
   /** Dessine les repères (thermiques, montgolfières, feux…) ; f(x, z) -> [px, py] sur le canevas. */
   marks(g, f, extras, scale, rk) {
-    const { thermals = [], balloons = [], fires = [], fuel = false, load = false, mail = null } = extras;
+    const { thermals = [], balloons = [], fires = [], fuel = false, load = false, mail = null, pins = [] } = extras;
+    for (const p of pins) { // objectifs des missions (blessés, charges, zones de saut…)
+      const [x, y] = f(p.x, p.z), r = 6 * scale;
+      g.fillStyle = p.color; g.strokeStyle = '#1b1d21'; g.lineWidth = scale;
+      g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill(); g.stroke();
+      g.fillStyle = '#1b1d21'; g.font = `800 ${Math.round(r * 1.2)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(p.icon, x, y + r * 0.06);
+    }
     if (load && loadPad.rw) { // aire de chargement de l'épandeur
       const [x, y] = f(loadPad.x, loadPad.z), r = 5 * scale;
       g.fillStyle = '#3f9e4a'; g.strokeStyle = '#0d2b12'; g.lineWidth = scale;
@@ -89,7 +109,7 @@ export class IslandMap {
       g.fillStyle = '#2b2205'; g.font = `800 ${Math.round(r * 1.3)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText('✉', x, y + r * 0.06);
     }
-    const pumps = [fuelStation];
+    const pumps = [fuelStation, ...extraPumps];
     if (seaBase.active) { const w = {}; toWorld(seaBase, seaBase.fuel.lx, seaBase.fuel.lz, w); pumps.push(w); }
     if (fuel) for (const st of pumps) { // stations de carburant
       const [x, y] = f(st.x, st.z), r = 5 * scale;
@@ -177,6 +197,7 @@ export class IslandMap {
     g.font = `700 ${Math.round(W / 55)}px sans-serif`;
     label(this.carrier, 'Porte-avions', -14);
     if (seaBase.active) label(seaBase, 'Base nautique', -14);
+    if (hospital.active) label(hospital, 'Hôpital', -12);
     if (extras.fuel) label(fuelStation, 'Carburant', 22 * W / 1100 + 14);
     const [x, y] = f(plane.pos.x, plane.pos.z);
     this.planeIcon(g, x, y, heading, W / 300);

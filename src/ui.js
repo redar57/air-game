@@ -84,6 +84,9 @@ export class UI {
   tagsOf(p) {
     const t = [];
     if (p.id === 'helico' || p.id === 'canadair') t.push("Bombardier d'eau");
+    if (p.rescue) t.push('Treuil de secours');
+    if (p.sling) t.push('Élingue');
+    if (p.paras) t.push('Parachutistes');
     if (p.heli) t.push('Vol stationnaire');
     if (p.missiles) t.push('Missiles');
     if (p.guns) t.push('Mitrailleuses');
@@ -114,6 +117,9 @@ export class UI {
     if (p.missiles) rows.push([k('X'), 'Missile : vise ~1 s pour verrouiller']);
     if (p.guns) rows.push([k('X'), 'Mitrailleuses (maintenir)']);
     if (p.id === 'helico') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en stationnaire au ras de l'eau"]);
+    if (p.rescue) rows.push([k('X'), 'Treuil : maintenir pour descendre le câble, relâcher pour remonter']);
+    if (p.sling) rows.push([k('X'), "Accrocher / décrocher la charge (crochet près de l'anneau jaune)"]);
+    if (p.paras) rows.push([k('X'), 'Faire sauter 4 parachutistes (plus de 250 m de haut)']);
     if (p.id === 'canadair') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en rasant l'eau"]);
     rows.push(['🎮', p.heli ? 'Stick gauche · RT / LT gaz · LB / RB pivot' : 'Stick gauche · RT / LT gaz · LB / RB palonnier']);
     return rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');

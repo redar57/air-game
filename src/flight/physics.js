@@ -38,6 +38,7 @@ export class Plane {
     this.right = new THREE.Vector3(1, 0, 0);
     this.gNormal = new THREE.Vector3(0, 1, 0);
     this.ctrl = { pitch: 0, roll: 0, yaw: 0 };
+    this.extAcc = new THREE.Vector3(); // accélération imposée de l'extérieur (charge suspendue sous un hélicoptère)
     this.events = [];
     this.hitPts = [
       new THREE.Vector3(0, 0, -spec.len / 2),
@@ -422,6 +423,7 @@ export class Plane {
     const vh = Math.hypot(v.x, v.z), kd = 0.02 + 0.001 * vh;
     _acc.x -= v.x * kd; _acc.z -= v.z * kd;
     _acc.y -= v.y * 1.2;
+    _acc.add(this.extAcc);
     _acc.y += s.turb * 0.6 * wobble((this.time + this.seed) * 0.9, 1.3); // petites turbulences
     v.addScaledVector(_acc, dt);
     pos.addScaledVector(v, dt);

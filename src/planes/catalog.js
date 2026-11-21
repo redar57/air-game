@@ -92,10 +92,10 @@ export const PLANES = [
   },
   {
     id: 'cargo', name: 'Le Gros Porteur',
-    desc: "Quadrimoteur de 40 m d'envergure. Lourd et majestueux : anticipez tout, surtout l'atterrissage.",
+    desc: "Quadrimoteur de 40 m d'envergure, avec une section de 12 parachutistes : X les fait sauter par 4 au-dessus de la croix orange. On rembarque à l'arrêt sur l'aire verte de la base militaire.",
     maxSpeed: 118, stall: 40, accel: 3.6, pitchRate: 0.5, rollRate: 0.6, yawRate: 0.25, gLimit: 2.6,
     brake: 6, maxSink: 5.5, gearH: 3.55, bellyH: 2.35, span: 40, len: 30, wingY: 2,
-    retract: true, floats: false, jet: false,
+    retract: true, floats: false, jet: false, paras: true,
     cam: { dist: 62, height: 13 }, eye: [0, 1.2, -12.45],
     inertia: 0.42, stallBite: 0.6, flaps: true, turb: 0.3,
     engine: { kind: 'turboprop', count: 4, blades: 4, prop: 1020, spool: 1.1 },
@@ -105,8 +105,8 @@ export const PLANES = [
 ];
 
 PLANES.push({
-  id: 'helico', name: "L'Hélicoptère",
-  desc: "Bombardier d'eau rouge et blanc. Gaz à 50 % = vol stationnaire, plus pour monter. Manche pour avancer et tourner, Espace pour se stabiliser.",
+  id: 'helico', name: "L'Hélicoptère", family: 'helico', variant: "Bombardier d'eau",
+  desc: "Bombardier d'eau rouge et blanc. Existe aussi en version secours, avec treuil. Gaz à 50 % = vol stationnaire, plus pour monter. Manche pour avancer et tourner, Espace pour se stabiliser.",
   // maxSpeed : vitesse de pointe ; climb : vitesse verticale maxi (m/s) ; stall : seulement pour les arcs de l'anémomètre
   maxSpeed: 75, stall: 10, accel: 0, pitchRate: 1, rollRate: 1, yawRate: 1.6, gLimit: 3.5,
   tilt: 0.55, push: 3, turnRate: 1.1, // hélico : inclinaison maxi (rad), poussée arcade du manche, virage au manche
@@ -117,6 +117,20 @@ PLANES.push({
   engine: { kind: 'turboprop', count: 1, blades: 4, prop: 390, spool: 0.8, heli: true },
   paint: [0xd8352a, 0xf3f1ec], // couleurs principales (remplacées par les livrées)
     stats: [0.25, 0.6, 0.8],
+});
+
+PLANES.push({
+  id: 'secours', name: "L'Hélicoptère", family: 'helico', variant: 'Secours',
+  desc: "Version de secours, avec treuil au-dessus de la porte : maintiens X en stationnaire pour descendre le câble jusqu'aux naufragés et aux randonneurs, relâche pour les remonter, puis pose-toi sur l'hélisurface de l'hôpital.",
+  maxSpeed: 75, stall: 10, accel: 0, pitchRate: 1, rollRate: 1, yawRate: 1.6, gLimit: 3.5,
+  tilt: 0.55, push: 3, turnRate: 1.1,
+  brake: 6, maxSink: 4.5, gearH: 1.66, bellyH: 1.66, span: 12.4, len: 15, wingY: 2.2,
+  retract: false, floats: false, jet: false, heli: true, rescue: true,
+  cam: { dist: 22, height: 6 }, eye: [0, 0.55, -1.65],
+  inertia: 0.25, stallBite: 0, flaps: false, turb: 0.7,
+  engine: { kind: 'turboprop', count: 1, blades: 4, prop: 390, spool: 0.8, heli: true },
+  paint: [0xd8352a, 0xf3f1ec],
+  stats: [0.25, 0.6, 0.8],
 });
 
 PLANES.push({
@@ -134,11 +148,11 @@ PLANES.push({
 });
 PLANES.push({
   id: 'birotor', name: 'Le Bi-rotor',
-  desc: 'Gros hélicoptère de transport à deux rotors en tandem. Lent à réagir, mais stable comme un rocher.',
+  desc: "Gros hélicoptère de transport à deux rotors en tandem, avec une élingue sous le ventre : X près de l'anneau d'une charge pour l'accrocher, X pour la décrocher une fois posée dans le cercle vert. Plus de gaz pour porter une charge lourde.",
   maxSpeed: 80, stall: 12, accel: 0, pitchRate: 1, rollRate: 1, yawRate: 0.8, gLimit: 3,
   tilt: 0.38, push: 2, turnRate: 0.65,
   brake: 6, maxSink: 5, gearH: 2.2, bellyH: 2.2, span: 14, len: 30, wingY: 3,
-  retract: false, floats: false, jet: false, heli: true,
+  retract: false, floats: false, jet: false, heli: true, sling: true,
   cam: { dist: 42, height: 11 }, eye: [0, 0.75, -7.6],
   inertia: 0.5, stallBite: 0, flaps: false, turb: 0.35,
   engine: { kind: 'turboprop', count: 2, blades: 3, prop: 230, spool: 1, heli: true },
@@ -210,6 +224,7 @@ const LIVERY_SETS = {
   chasseur: [['Olive', [0x5f6f3f, 0xf4f1ea, 0xf2c230]], ['Désert', [0xc8a46a, 0x7a5634, 0xf4f1ea]], ['Argent', [0xbfc4c9, 0x2b2e33, 0xd8312b]], ['Requin', [0x8d969c, 0xf4f1ea, 0xd8312b]], ['Hiver', [0xeeeeea, 0x6b7480, 0x2f6fb5]]],
   jet: [['Nuit', [0x2a2e35, 0x1c1f24, 0xf2c230]], ['Désert', [0xd8b878, 0xa88a5a, 0x5a4630]], ['Bleu acier', [0x6f8fb0, 0x4a6585, 0x23303f]], ['Démonstration', [0xf2f2ee, 0xd8312b, 0x1f4f9c]], ['Tigre', [0xf2a22c, 0x2b2e33, 0x1b1d21]]],
   cargo: [['Fret', [0xf2f2ee, 0xf08a2c, 0x8d959d]], ['Vert', [0xf2f2ee, 0x2f8a5a, 0x8d959d]], ['Gris', [0x8d959d, 0x5f676f, 0x4a5057]], ['Rouge', [0xf2f2ee, 0xc8402f, 0x8d959d]], ['Nuit', [0x2a2e35, 0xf2c230, 0x5f676f]]],
+  secours: [['Montagne', [0xd8312b, 0xf2c230]], ['Gendarmerie', [0x1f3f6b, 0xf3f1ec]], ['Douanes', [0x2b2e33, 0xf2c230]], ['Marine', [0xf3f1ec, 0xf08a2c]], ['Sable', [0xc8a46a, 0xf3f1ec]]],
   helico: [['Montagne', [0xf2c230, 0x26292d]], ['Bleu', [0x2f6fb5, 0xf3f1ec]], ['Orange', [0xf08a2c, 0xf3f1ec]], ['Vert', [0x2f8a5a, 0xf3f1ec]], ['Noir', [0x26292d, 0xd8312b]]],
   libellule: [['Turquoise', [0x2ec4b6, 0x26292d]], ['Rouge', [0xd8312b, 0x26292d]], ['Blanc', [0xf3f1ec, 0x2f6fb5]], ['Violet', [0x8e5cc9, 0xf3f1ec]], ['Citron vert', [0x8cc63f, 0x26292d]]],
   birotor: [['Marine', [0x5d6e80, 0x3f4c5a, 0xe9e4d4]], ['Sable', [0xc8a46a, 0x9a7a4a, 0xe9e4d4]], ['Secours', [0xd8312b, 0xf3f1ec, 0x2b2e33]], ['Gris', [0x9aa3ab, 0x6b7480, 0xf3f1ec]], ['Jaune', [0xf2c230, 0x26292d, 0xf3f1ec]]],

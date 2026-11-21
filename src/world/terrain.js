@@ -37,7 +37,8 @@ export function setBig(big) {
   Object.assign(VOLCANO, { x: -8600, z: -3000, rimR: 360, baseR: 1750, h: 950, depth: 270 });
   ISLETS.splice(0, ISLETS.length,
     { x: -12300, z: 600, r: 450, a: 140 }, { x: 12800, z: -500, r: 380, a: 125 }, { x: -3200, z: -8600, r: 400, a: 130 },
-    { x: 12000, z: 5400, r: 320, a: 105 }, { x: 4600, z: 7800, r: 340, a: 115 }, { x: -9000, z: 6400, r: 300, a: 100 });
+    { x: 12000, z: 5400, r: 320, a: 105 }, { x: 4700, z: 8050, r: 820, a: 112 }, // îlot de la base militaire, près du porte-avions
+    { x: -9000, z: 6400, r: 300, a: 100 });
   mca = Math.cos(MTN.ang); msa = Math.sin(MTN.ang);
 }
 
@@ -141,12 +142,21 @@ export function flatInfo(x, z) {
   return { w, alt };
 }
 
+let corridor = null;
+/** Retouche du relief le long de la voie ferrée (déblais et remblais) : fn(x, z, h) -> h. */
+export function setCorridor(fn) { corridor = fn; }
+/** Zones aplanies, à connaître avant la construction quand on veut sonder le relief final (groundHeight). */
+export function setZones(z) { zones = z; }
+
 function finalHeight(x, z) {
   let h = rawBase(x, z);
   const f = flatInfo(x, z);
   if (f.w > 0) h = lerp(h, f.alt, f.w);
+  if (corridor) h = corridor(x, z, h);
   return h;
 }
+/** Relief final calculé directement (avant que la grille de hauteurs existe). */
+export const groundHeight = (x, z) => finalHeight(x, z);
 
 /** Hauteur du sol (interpolation identique au maillage affiché). */
 export function heightAt(x, z) {

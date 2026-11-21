@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { buildTerrain, heightAt, normalAt, flatInfo, setBig, BIG, HALF } from './world/terrain.js';
-import { defineAirfields, buildAirfields, buildCarrier, buildSeaBase, flatZones, seaBase, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, atLoadPad, DECK_AXIS_X } from './world/airfields.js';
+import { buildTerrain, heightAt, normalAt, flatInfo, setBig, setZones, BIG, HALF } from './world/terrain.js';
+import { defineAirfields, buildAirfields, buildCarrier, buildSeaBase, flatZones, seaBase, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, atLoadPad, atBoarding, milBase, helipads, spinners, DECK_AXIS_X } from './world/airfields.js';
 import { Sky } from './world/sky.js';
 import { buildScenery } from './world/scenery.js';
 import { hitObstacle } from './world/colliders.js';
@@ -10,7 +10,10 @@ import { Birds } from './world/birds.js';
 import { Boats } from './world/boats.js';
 import { PLANES, STARTS, liveriesOf } from './planes/catalog.js';
 import { createWaterBomber, createSprayer, createMail, canScoop } from './missions.js';
-import { country, treatedShare } from './world/country.js';
+import { createRescue, createSling } from './heli-missions.js';
+import { createParas } from './paras.js';
+import { buildHospital, hospital } from './world/sites.js';
+import { country, treatedShare, planRoutes } from './world/country.js';
 import { save } from './save.js';
 // la taille du monde se choisit avant toute construction (le bouton du menu recharge la page)
 // ?grande dans l'adresse : ouvre la grande carte sans changer le choix enregistré
@@ -183,6 +186,22 @@ function startFlight() {
     ui.mission(mission.hud());
     ui.hint(`Vole jusqu'au cercle jaune de ${mission.mailTarget ? mission.mailTarget.name : 'village'} et appuie sur <kbd>X</kbd> pour larguer un sac · <kbd>N</kbd> carte`);
   }
+  else if (spec.rescue) {
+    mission = createRescue({ scene, sound, ui, heightAt, normalAt, span: HALF * 1.8, plane: () => plane });
+    ui.mission(mission.hud());
+    ui.hint(`Repère les colonnes orange (<kbd>N</kbd> carte), stationnaire au-dessus · maintiens <kbd>X</kbd> pour descendre le treuil, relâche pour remonter · dépose à l'hôpital`);
+  } else if (spec.sling) {
+    mission = createSling({ scene, sound, ui, heightAt, villages: scenery.villages, trees: scenery.treeList, runways, seaBase, span: HALF * 1.8, plane: () => plane });
+    ui.mission(mission.hud());
+    ui.hint(`Stationnaire au-dessus de la charge (colonne bleue) · <kbd>X</kbd> pour accrocher l'anneau · pose-la dans le cercle vert puis <kbd>X</kbd> pour décrocher`);
+  } else if (spec.paras) {
+    const board = milBase.active ? milBase.board : runways[0];
+    const boardHint = milBase.active ? "Section vide : rembarque à l'arrêt sur l'aire verte de la base militaire" : "Section vide : rembarque à l'arrêt sur une piste";
+    mission = createParas({ scene, sound, ui, heightAt, villages: scenery.villages, trees: scenery.treeList, span: HALF * 1.8, board, boardHint,
+      canBoard: milBase.active ? atBoarding : (x, z) => !!runwayAt(x, z), plane: () => plane });
+    ui.mission(mission.hud());
+    ui.hint(`Vole vers la croix orange (<kbd>N</kbd> carte), au-dessus de 250 m · <kbd>X</kbd> fait sauter 4 parachutistes · ils se dirigent seuls vers la croix`);
+  }
   tele.gMax = 1; tele.prev = null;
   ui.menu(false); ui.hud(true);
   rig.set('chase'); rig.snap(plane);
@@ -332,7 +351,7 @@ function resume() {
 /** Mini-carte (toutes les 3 images) et grande carte si elle est ouverte. */
 function drawMaps() {
   if (!islandMap) return;
-  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null };
+  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : [] };
   if (frameNo % 3 === 0) islandMap.drawMini(document.getElementById('minimap'), plane, tele.hdg, extras, plane.spec.maxSpeed > 120 ? 3500 : 2200);
   if (ui.bigMapOpen && frameNo % 4 === 0) islandMap.drawFull(document.getElementById('bigmapc'), plane, tele.hdg, extras);
 }
@@ -461,6 +480,7 @@ function frame(now) {
     scenery.update(time, sky.night, dt, camera.position);
     birds.update(dt, time, plane);
     boats.update(dt, time);
+    for (const sp of spinners) sp.obj.rotation.y += sp.rate * dt;
   }
   if (!paused) {
     const hdg = Math.atan2(plane.fwd.x, -plane.fwd.z);
@@ -510,14 +530,17 @@ async function boot() {
   const labels = await keyLabels();
   document.getElementById('version').textContent = `Version ${VERSION}`;
   defineAirfields();
+  setZones(flatZones());
+  planRoutes(); // routes et voie ferrée de la grande île : tracées avant le relief, qu'elles retouchent
   scene.add(buildTerrain(flatZones()));
   buildAirfields(scene);
   buildSeaBase(scene);
   buildCarrier(scene);
   sky = new Sky(scene);
   scenery = buildScenery(scene);
+  buildHospital(scene, scenery.villages, scenery.treeList);
   defineThermals(heightAt, HALF * 1.82, BIG ? 30 : 14);
-  if (BIG) STARTS.splice(2, 0, { id: 'baie', name: 'La Baie' }, { id: 'prairie', name: 'La Prairie' }, { id: 'base', name: 'Base nautique' });
+  if (BIG) STARTS.splice(2, 0, { id: 'baie', name: 'La Baie' }, { id: 'prairie', name: 'La Prairie' }, { id: 'base', name: 'Base nautique' }, { id: 'militaire', name: 'Base militaire' });
   buildThermalClouds(scene);
   birds = new Birds(scene, heightAt, thermals, runways);
   boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 450 }]);
@@ -564,7 +587,7 @@ async function boot() {
   // petit accès pour le débogage depuis la console
   window.airgame = {
     get plane() { return plane; }, get state() { return state; },
-    world, rig, sky, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
+    world, rig, sky, hospital, milBase, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
     select(planeId, startId) {
       setPlane(PLANES.findIndex((p) => p.id === planeId));
       setStart(STARTS.findIndex((s) => s.id === startId));

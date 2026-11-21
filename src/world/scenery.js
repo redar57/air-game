@@ -4,6 +4,8 @@ import { makeNoise2D, fbm } from './noise.js';
 import { mulberry32, mergeColored, xform, toLocal, smoothstep } from '../util.js';
 import { addCylinder, addSphere, addCustom } from './colliders.js';
 import { buildLife } from './life.js';
+import { buildTraffic } from './traffic.js';
+import { buildFauna } from './fauna.js';
 import { planCountry, buildCountry, updateCountry, country, occupied } from './country.js';
 
 /** Arche rocheuse en mer (utilisée aussi par la détection des figures). */
@@ -200,6 +202,8 @@ export function buildScenery(scene) {
   buildCountry(scene);
   const { lamp, beam, beamMat } = buildLighthouse(scene);
   const life = buildLife(scene, villages, country.roads);
+  const traffic = buildTraffic(scene);
+  const fauna = buildFauna(scene, treeList, villages);
   buildRocks(scene);
   const balloons = buildBalloons(scene);
 
@@ -215,7 +219,7 @@ export function buildScenery(scene) {
   return {
     trees: treeList.length,
     /** Arbres (pour placer les feux de forêt) et villages (feux qui menacent les maisons). */
-    treeList, villages, life,
+    treeList, villages, life, traffic, fauna,
     /** Cibles : montgolfières encore en l'air. */
     balloons,
     /** Abat une montgolfière ; elle revient (en gonflant) au bout de 40 s. */
@@ -226,6 +230,8 @@ export function buildScenery(scene) {
     update(t, night, dt = 0, cam = null) {
       updateCountry(dt);
       life.update(dt, t, night, cam);
+      traffic.update(dt, cam);
+      fauna.update(dt, t, cam);
       for (const b of balloons) {
         b.mesh.position.y = b.by + Math.sin(t * 0.35 + b.ph) * 3;
         if (!b.alive && (b.back -= dt) <= 0) { b.alive = true; b.col.off = false; b.mesh.visible = true; b.grow = 0; }

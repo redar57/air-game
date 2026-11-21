@@ -14,6 +14,17 @@ export const loadPad = { rw: null, lx: 0, lz: 0, half: 16, x: 0, z: 0 };
  * pompe à carburant, et un plan d'eau balisé de bouées. Repère local : origine sur la rive, +Z vers le lac.
  */
 export const seaBase = { active: false, x: 0, z: 0, yaw: 0, alt: 4, zone: null, fuel: { lx: 48, lz: -70, half: 14 } };
+/**
+ * Base militaire (grande carte) : sur l'îlot voisin du porte-avions. Piste, hangars, tour, radar, casernes,
+ * hélisurfaces et aire d'embarquement des parachutistes (repère local de sa piste).
+ */
+export const milBase = { active: false, rw: null, board: { lx: 0, lz: 0, hw: 26, hd: 38, x: 0, z: 0 }, fuel: { lx: 0, lz: 0, half: 16 } };
+/** Hélisurfaces (base militaire, hôpital…) : { x, z, y, r, name }. */
+export const helipads = [];
+/** Pompes à carburant en plus de celle de l'aéroport : { x, z, yaw, half } (centre monde, demi-côté). */
+export const extraPumps = [];
+/** Objets qui tournent sur eux-mêmes (antennes radar) : mis à jour à chaque image. */
+export const spinners = [];
 /** Zones à aplanir : les pistes, plus l'esplanade de la base nautique. */
 export function flatZones() { return seaBase.zone ? [...runways, seaBase.zone] : runways; }
 /** Matériaux des balises lumineuses (leur opacité suit la tombée de la nuit). */
@@ -59,6 +70,26 @@ export function defineAirfields() {
   }
 
   if (BIG) {
+    // base militaire sur l'îlot au nord-est du porte-avions (au sud de l'île)
+    const rw = {
+      id: 'militaire', name: 'Base militaire', x: 4700, z: 8050, yaw: -Math.PI / 2 + 0.3, style: 'military',
+      length: 1100, width: 40, alt: 12, halfLen: 620, halfWid: 235, margin: 230, small: false,
+    };
+    runways.push(rw);
+    milBase.active = true; milBase.rw = rw;
+    const side = rw.width / 2;
+    Object.assign(milBase.board, { lx: side + 62, lz: 150 });
+    toWorld(rw, milBase.board.lx, milBase.board.lz, _w); milBase.board.x = _w.x; milBase.board.z = _w.z;
+    Object.assign(milBase.fuel, { lx: side + 55, lz: -330 });
+    toWorld(rw, milBase.fuel.lx, milBase.fuel.lz, _w);
+    extraPumps.push({ x: _w.x, z: _w.z, yaw: rw.yaw, half: milBase.fuel.half });
+    for (const [lx, lz] of [[side + 95, 300], [side + 95, 370]]) {
+      toWorld(rw, lx, lz, _w);
+      helipads.push({ x: _w.x, z: _w.z, y: rw.alt, r: 12, name: 'Base militaire', base: true });
+    }
+  }
+
+  if (BIG) {
     // base nautique sur la rive nord-ouest du lac : on part du centre du lac jusqu'à la terre ferme
     const dx = -0.55, dz = -0.83;
     let r = 200;
@@ -97,6 +128,10 @@ export function runwayAt(x, z) {
 
 /** Vrai si (x, z) est sur l'aire de la station de carburant. */
 export function atFuelStation(x, z) {
+  for (const p of extraPumps) {
+    toLocal(p, x, z, _l);
+    if (Math.abs(_l.x) <= p.half && Math.abs(_l.z) <= p.half) return true;
+  }
   if (seaBase.active) { // seconde pompe, à la base nautique
     toLocal(seaBase, x, z, _l);
     if (Math.abs(_l.x - seaBase.fuel.lx) <= seaBase.fuel.half && Math.abs(_l.z - seaBase.fuel.lz) <= seaBase.fuel.half) return true;
@@ -104,6 +139,14 @@ export function atFuelStation(x, z) {
   if (!fuelStation.rw) return false;
   toLocal(fuelStation.rw, x, z, _l);
   return Math.abs(_l.x - fuelStation.lx) <= fuelStation.half && Math.abs(_l.z - fuelStation.lz) <= fuelStation.half;
+}
+
+/** Vrai si (x, z) est sur l'aire d'embarquement des parachutistes de la base militaire. */
+export function atBoarding(x, z) {
+  if (!milBase.active) return false;
+  toLocal(milBase.rw, x, z, _l);
+  const b = milBase.board;
+  return Math.abs(_l.x - b.lx) <= b.hw && Math.abs(_l.z - b.lz) <= b.hd;
 }
 
 /** Vrai si (x, z) est sur l'aire de chargement de l'épandeur (à défaut, la station de carburant). */
@@ -155,6 +198,33 @@ function grassTexture() {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   return tex;
+}
+
+let _padTex = null;
+/** Texture d'hélisurface : disque sombre, cercle jaune et grand H (croix rouge si `cross`). */
+function padTexture() {
+  if (_padTex) return _padTex;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#3f4349'; g.beginPath(); g.arc(128, 128, 127, 0, 6.283); g.fill();
+  g.strokeStyle = '#f2c230'; g.lineWidth = 12; g.beginPath(); g.arc(128, 128, 104, 0, 6.283); g.stroke();
+  g.fillStyle = '#f4f4ee';
+  g.fillRect(78, 58, 26, 140); g.fillRect(152, 58, 26, 140); g.fillRect(104, 115, 48, 26);
+  _padTex = new THREE.CanvasTexture(cv); _padTex.colorSpace = THREE.SRGBColorSpace; _padTex.anisotropy = 8;
+  return _padTex;
+}
+/** Hélisurface posée en (x, y, z), de rayon r, avec quatre balises lumineuses pour la nuit. */
+export function helipadMesh(x, y, z, r) {
+  const g = new THREE.Group();
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 32).rotateX(-Math.PI / 2),
+    new THREE.MeshLambertMaterial({ map: padTexture(), transparent: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }));
+  disc.position.y = 0.2; disc.receiveShadow = true;
+  g.add(disc);
+  const pos = [];
+  for (let k = 0; k < 8; k++) pos.push(Math.cos(k * 0.785) * (r + 1), 0.6, Math.sin(k * 0.785) * (r + 1));
+  g.add(lightsPoints(pos, 0x9fe08a, 3.5));
+  g.position.set(x, y, z);
+  return g;
 }
 
 export function lightsPoints(positions, color, size) {
@@ -237,6 +307,74 @@ export function buildAirfields(scene) {
       for (let k = 0; k < 4; k++) C(6, 6, 2, k % 2 ? 0xf4f4f0 : 0xd8402f, wx, 17 + k * 2, wz, 12);
       parts.push({ geo: new THREE.ConeGeometry(6.4, 3, 12), color: 0xd8402f, matrix: xform(wx, 26.5, wz) });
       collide(wx, wz, 6, 6, 28);
+    } else if (rw.style === 'military') {
+      const OL = 0x5f6b45, OD = 0x46502f, SA = 0xcdbf98, CO = 0x8f9399;
+      // grand parking en béton le long de la piste, et bretelles
+      B(150, 0.3, 860, 0x6e7177, side + 85, 0.05, 0);
+      for (const z of [-300, 0, 300]) B(22, 0.3, 30, 0x6e7177, side + 4, 0.04, z);
+      // hangars voûtés camouflés, portes tournées vers la piste
+      for (const [z, col] of [[-210, OL], [-145, OD], [-80, OL]]) {
+        const x = side + 150, w = 46, h = 10, d = 40;
+        B(d, h, w, col, x, h / 2, z);
+        parts.push({ geo: new THREE.CylinderGeometry(w / 2, w / 2, d, 10, 1, false, -Math.PI / 2, Math.PI), color: col, matrix: xform(x, h, z, Math.PI / 2, 1, 1, 0.42, -Math.PI / 2) });
+        B(0.5, h * 0.85, w * 0.7, 0x3a3f36, x - d / 2 - 0.1, h * 0.42, z);
+        collide(x, z, d / 2, w / 2, h + w * 0.21);
+      }
+      // tour de contrôle carrée en béton, vigie vitrée
+      const tx = side + 125, tz = 60;
+      B(8, 18, 8, CO, tx, 9, tz); B(11, 4, 11, 0x29495f, tx, 20, tz); B(12, 0.8, 12, CO, tx, 22.4, tz);
+      C(0.12, 0.12, 6, 0x8a9199, tx + 3, 25.8, tz, 5);
+      collide(tx, tz, 6, 6, 23);
+      // bâtiment de commandement
+      B(36, 7, 16, SA, side + 135, 3.5, 110); B(37, 0.8, 17, OD, side + 135, 7.3, 110);
+      collide(side + 135, 110, 18, 8, 8);
+      // casernes
+      for (let k = 0; k < 4; k++) {
+        const z = 200 + k * 42;
+        B(16, 5, 34, SA, side + 190, 2.5, z);
+        const tri = new THREE.Shape([new THREE.Vector2(-8.6, 0), new THREE.Vector2(8.6, 0), new THREE.Vector2(0, 3.4)]);
+        parts.push({ geo: new THREE.ExtrudeGeometry(tri, { depth: 35, bevelEnabled: false }), color: OD, matrix: xform(side + 190, 5, z - 17.5) });
+        collide(side + 190, z, 8, 17, 8.4);
+      }
+      // mât et drapeau, terrain de rassemblement
+      B(40, 0.08, 40, 0xb9ab86, side + 135, 0.12, 165);
+      C(0.15, 0.2, 14, 0xd9dcdf, side + 135, 7, 165, 6);
+      B(0.05, 1.6, 0.85, 0x1f4f9c, side + 135, 13, 165 + 0.5); B(0.05, 1.6, 0.85, 0xf4f4ee, side + 135, 13, 165 + 1.35); B(0.05, 1.6, 0.85, 0xd8312b, side + 135, 13, 165 + 2.2);
+      // aire d'embarquement des parachutistes : cadre vert et pelotons alignés au bord
+      const bx = milBase.board.lx, bz = milBase.board.lz, hw = milBase.board.hw, hd = milBase.board.hd;
+      for (const [w, d, x, z] of [[hw * 2, 1, bx, bz - hd], [hw * 2, 1, bx, bz + hd], [1, hd * 2, bx - hw, bz], [1, hd * 2, bx + hw, bz]]) B(w, 0.06, d, 0x3fae4a, x, 0.33, z);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 6; j++) {
+        const x = bx + hw + 6 + i * 1.6, z = bz - 6 + j * 1.5;
+        B(0.55, 1.2, 0.4, OL, x, 0.9, z); B(0.42, 0.42, 0.42, 0xd9b48f, x, 1.7, z); B(0.5, 0.2, 0.5, OD, x, 1.98, z);
+        B(0.45, 0.6, 0.3, 0x4a4a3a, x + 0.3, 1.1, z);
+      }
+      // carburant : aire jaune, deux citernes
+      const fx = milBase.fuel.lx, fz = milBase.fuel.lz, hf = milBase.fuel.half;
+      for (const [w, d, x, z] of [[hf * 2, 0.9, fx, fz - hf], [hf * 2, 0.9, fx, fz + hf], [0.9, hf * 2, fx - hf, fz], [0.9, hf * 2, fx + hf, fz]]) B(w, 0.06, d, 0xf2c230, x, 0.33, z);
+      for (const dz of [-8, 8]) {
+        parts.push({ geo: new THREE.CylinderGeometry(3.2, 3.2, 12, 12).rotateX(Math.PI / 2), color: 0xd9dcdf, matrix: xform(fx + hf + 14, 3.6, fz + dz, Math.PI / 2) });
+        collide(fx + hf + 14, fz + dz, 6, 3.3, 7);
+      }
+      // véhicules garés : camions bâchés et jeeps
+      for (let k = 0; k < 5; k++) {
+        const x = side + 100, z = -20 + k * 9;
+        B(2.4, 1.2, 7, OD, x, 1.2, z); B(2.4, 1.6, 2.2, OL, x, 2.1, z - 2.6); B(2.5, 2.2, 4.6, OL, x, 2.8, z + 1.1);
+      }
+      for (let k = 0; k < 3; k++) { const x = side + 112, z = -14 + k * 8; B(1.8, 1, 3.6, OL, x, 0.9, z); B(1.6, 0.7, 1.2, 0x2b3027, x, 1.7, z + 0.4); }
+      // de l'autre côté de la piste : soutes à munitions couvertes de terre, manche à air
+      for (let k = 0; k < 3; k++) {
+        const z = -320 + k * 70;
+        parts.push({ geo: new THREE.SphereGeometry(14, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), color: 0x6f9a4a, matrix: xform(-side - 110, 0, z, 0, 1, 0.5, 1.4) });
+        B(7, 5, 1, CO, -side - 110, 2.5, z - 19.4);
+        collide(-side - 110, z, 13, 19, 7);
+      }
+      C(0.18, 0.22, 9, 0x9a9a9a, -side - 30, 4.5, -L / 2 + 120, 6);
+      parts.push({ geo: new THREE.CylinderGeometry(0.4, 1.0, 4, 8, 1, true).rotateZ(Math.PI / 2), color: 0xf07a1e, matrix: xform(-side - 28, 8.7, -L / 2 + 120) });
+      // radar : pylône (l'antenne tournante est ajoutée à part)
+      const rx = side + 175, rz = -380;
+      for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) B(0.4, 14, 0.4, 0x9aa0a6, rx + dx, 7, rz + dz);
+      B(5, 0.6, 5, CO, rx, 14.2, rz);
+      collide(rx, rz, 3, 3, 20);
     } else if (rw.small) {
       B(34, 0.3, 60, 0x595c62, side + 22, 0.05, L / 2 - 90);
       hangar(side + 26, L / 2 - 130, 16, 5.5, 16, 0xc8452f);
@@ -248,7 +386,11 @@ export function buildAirfields(scene) {
       hangar(side + 108, L / 2 - 230, 30, 9, 34, 0xc8452f);
       hangar(side + 108, L / 2 - 280, 30, 9, 34, 0xe8b23a);
       // station de carburant (aéroport principal seulement) : aire cerclée de jaune, pompes et panneau
-      if (rw === runways[0]) {
+      if (rw.style === 'military') {
+      const fx = milBase.fuel.lx, fz = milBase.fuel.lz, hf = milBase.fuel.half;
+      for (const [x, z] of [[-hf, -hf], [hf, -hf], [hf, hf], [-hf, hf]]) pos.push(fx + x, 0.7, fz + z);
+    }
+    if (rw === runways[0]) {
       const fx = fuelStation.lx, fz = fuelStation.lz, hf = fuelStation.half;
       for (const [w, d, x, z] of [[hf * 2, 0.9, fx, fz - hf], [hf * 2, 0.9, fx, fz + hf], [0.9, hf * 2, fx - hf, fz], [0.9, hf * 2, fx + hf, fz]]) B(w, 0.06, d, 0xf2c230, x, 0.33, z);
       B(10, 0.06, 1.4, 0xf2c230, fx, 0.33, fz); B(1.4, 0.06, 10, 0xf2c230, fx, 0.33, fz);
@@ -277,9 +419,24 @@ export function buildAirfields(scene) {
     decor.rotation.y = rw.yaw;
     decor.receiveShadow = true;
     scene.add(decor);
+    if (rw.style === 'military') {
+      const radar = new THREE.Mesh(mergeColored([
+        { geo: new THREE.BoxGeometry(9, 3.2, 0.4), color: 0xe8eaec, matrix: xform(0, 2, 0.6, 0, 1, 1, 1, -0.25) },
+        { geo: new THREE.BoxGeometry(0.6, 2, 0.6), color: 0x6b7178, matrix: xform(0, 0.5, 0) },
+      ]), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+      toWorld(rw, side + 175, -380, _w);
+      radar.position.set(_w.x, rw.alt + 14.5, _w.z);
+      scene.add(radar);
+      spinners.push({ obj: radar, rate: 1.1 });
+      for (const p of helipads) if (p.base) scene.add(helipadMesh(p.x, p.y, p.z, p.r));
+    }
 
     // balisage nocturne
     const pos = [];
+    if (rw.style === 'military') {
+      const fx = milBase.fuel.lx, fz = milBase.fuel.lz, hf = milBase.fuel.half;
+      for (const [x, z] of [[-hf, -hf], [hf, -hf], [hf, hf], [-hf, hf]]) pos.push(fx + x, 0.7, fz + z);
+    }
     if (rw === runways[0]) {
       const fx = fuelStation.lx, fz = fuelStation.lz, hf = fuelStation.half;
       for (const [x, z] of [[-hf, -hf], [hf, -hf], [hf, hf], [-hf, hf]]) pos.push(fx + x, 0.7, fz + z);

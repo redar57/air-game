@@ -532,6 +532,21 @@ function helico(spec) {
   return m;
 }
 
+// Hélicoptère de secours : même cellule, jaune et rouge, bras de treuil au-dessus de la porte droite
+function secours(spec) {
+  const own = !PAINT;
+  if (own) PAINT = new Map([[0xd8352a, 0xf2c230], [0xf3f1ec, 0xd8352a]]);
+  const m = helico(spec);
+  const { hull } = m;
+  hull.add(box(0.7, 0.18, 0.18, METAL, 1.75, 1.05, -0.6));          // bras de treuil
+  hull.add(box(0.3, 0.32, 0.4, 0x3a3f45, 2.05, 1.05, -0.6));         // tambour
+  hull.add(box(0.05, 1.1, 1.0, 0x2b2e33, 1.47, 0.3, -0.6));          // porte coulissante
+  hull.add(box(0.06, 0.18, 2.6, 0xf4f4ee, 1.5, -0.3, -0.4));         // bande réfléchissante
+  hull.add(box(0.06, 0.18, 2.6, 0xf4f4ee, -1.5, -0.3, -0.4));
+  if (own) PAINT = null;
+  return m;
+}
+
 // Petit hélicoptère à bulle (jaune et noir)
 function libellule(spec) {
   const m = base(), { hull, always } = m;
@@ -667,7 +682,7 @@ function planeur(spec) {
   return m;
 }
 
-const BUILDERS = { planeur, tourisme, postier, biplan, epandeur, hydravion, canadair, chasseur, jet, cargo, helico, libellule, birotor, racer };
+const BUILDERS = { planeur, tourisme, postier, biplan, epandeur, hydravion, canadair, chasseur, jet, cargo, helico, secours, libellule, birotor, racer };
 const cache = new Map();
 
 /** Construit (une seule fois par livrée) le modèle 3D d'un appareil. */
