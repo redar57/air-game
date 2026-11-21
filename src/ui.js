@@ -29,14 +29,19 @@ export class UI {
 
     // liste des appareils (vignettes ajoutées plus tard par setThumb)
     this.planes = planes; this.cat = 'all'; this.sel = 0;
+    // un appareil décliné en plusieurs versions n'apparaît qu'une fois dans la liste
+    this.lastVariant = {}; this.thumbs = [];
     this.items = planes.map((p, i) => {
       const b = document.createElement('button');
       b.className = 'item';
-      b.innerHTML = `<span class="ph"></span><span><b>${p.name}</b><small>${this.tagsOf(p).slice(0, 2).join(' · ') || (p.heli ? 'Hélicoptère' : 'Avion')}</small></span>`;
-      b.addEventListener('click', () => this.emit('plane-select', i));
+      const versions = p.family ? planes.filter((q) => q.family === p.family).length : 1;
+      const sub = versions > 1 ? `${versions} versions` : this.tagsOf(p).slice(0, 2).join(' · ') || (p.heli ? 'Hélicoptère' : 'Avion');
+      b.innerHTML = `<span class="ph"></span><span><b>${p.name}</b><small>${sub}</small></span>`;
+      b.addEventListener('click', () => this.emit('plane-select', p.family && this.lastVariant[p.family] !== undefined ? this.lastVariant[p.family] : i));
       $('list').appendChild(b);
       return b;
     });
+    this.items.forEach((b, n) => { if (this.head(n) !== n) b.hidden = true; });
     this.tabs = [...document.querySelectorAll('#tabs button')];
     this.tabs.forEach((t) => t.addEventListener('click', () => this.setCat(t.dataset.cat, true)));
     $('resume').addEventListener('click', () => this.emit('resume'));
@@ -117,7 +122,8 @@ export class UI {
   showPlane(spec, index = this.sel) {
     this.sel = index;
     $('pkind').textContent = spec.heli ? 'Hélicoptère' : 'Avion';
-    $('pname').textContent = spec.name;
+    $('pname').textContent = spec.variant ? `${spec.name} · ${spec.variant}` : spec.name;
+    this.showVariants(spec, index);
     $('pdesc').textContent = spec.desc;
     $('tags').innerHTML = this.tagsOf(spec).map((t) => `<span>${t}</span>`).join('');
     $('s-vit').style.width = `${spec.stats[0] * 100}%`;
@@ -126,15 +132,39 @@ export class UI {
     $('pctrl').innerHTML = this.controlsOf(spec);
     // l'appareil choisi doit être visible dans le filtre courant
     if (!this.inCat(spec)) this.setCat('all');
-    this.items.forEach((b, n) => b.classList.toggle('on', n === index));
-    this.items[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const h = this.head(index);
+    this.items.forEach((b, n) => b.classList.toggle('on', n === h));
+    if (this.thumbs[index]) this.putThumb(h, this.thumbs[index]);
+    this.items[h].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  /** Premier appareil de la famille (celui qui figure dans la liste). */
+  head(i) {
+    const f = this.planes[i].family;
+    return f ? this.planes.findIndex((p) => p.family === f) : i;
+  }
+  /** Boutons « Version » pour un appareil décliné (classique, postier, hydravion…). */
+  showVariants(spec, index) {
+    const box = $('variantbox'), row = $('variants');
+    box.hidden = !spec.family;
+    row.innerHTML = '';
+    if (!spec.family) return;
+    this.lastVariant[spec.family] = index;
+    this.planes.forEach((p, i) => {
+      if (p.family !== spec.family) return;
+      const b = document.createElement('button');
+      b.className = 'chip' + (i === index ? ' on' : '');
+      b.textContent = p.variant;
+      b.addEventListener('click', () => this.emit('plane-select', i));
+      row.appendChild(b);
+    });
   }
 
   inCat(p) { return this.cat === 'all' || (this.cat === 'helico') === !!p.heli; }
   setCat(cat, pick) {
     this.cat = cat;
     this.tabs.forEach((t) => t.classList.toggle('on', t.dataset.cat === cat));
-    this.items.forEach((b, n) => { b.hidden = !this.inCat(this.planes[n]); });
+    this.items.forEach((b, n) => { b.hidden = !this.inCat(this.planes[n]) || this.head(n) !== n; });
     if (pick && !this.inCat(this.planes[this.sel])) this.emit('plane-select', this.planes.findIndex((p) => this.inCat(p)));
   }
   /** Catégorie suivante / précédente (manette LB / RB). */
@@ -144,14 +174,23 @@ export class UI {
   }
   /** Appareil suivant / précédent dans le filtre courant. */
   step(d) {
-    const n = this.planes.length;
+    const n = this.planes.length, from = this.head(this.sel);
     for (let k = 1; k <= n; k++) {
-      const i = (this.sel + d * k + n * 4) % n;
-      if (this.inCat(this.planes[i])) return i;
+      const i = (from + d * k + n * 4) % n;
+      if (this.inCat(this.planes[i]) && this.head(i) === i) {
+        const f = this.planes[i].family;
+        return f && this.lastVariant[f] !== undefined ? this.lastVariant[f] : i;
+      }
     }
     return this.sel;
   }
   setThumb(i, url) {
+    this.thumbs[i] = url;
+    // la vignette d'une famille montre la version choisie
+    const h = this.head(i), f = this.planes[i].family;
+    if (h === i ? !(f && this.lastVariant[f] !== undefined && this.lastVariant[f] !== i) : this.lastVariant[f] === i) this.putThumb(h, url);
+  }
+  putThumb(i, url) {
     const ph = this.items[i].querySelector('.ph, img');
     const img = document.createElement('img');
     img.src = url; img.alt = '';

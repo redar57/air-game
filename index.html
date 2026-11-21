@@ -56,7 +56,7 @@
   .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s; }
   #pctrl { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: .82rem; align-items: center; }
   #pctrl span:nth-child(odd) { white-space: nowrap; }
-  #starts, #opts, #liveries { display: flex; gap: 6px; flex-wrap: wrap; }
+  #starts, #opts, #liveries, #variants { display: flex; gap: 6px; flex-wrap: wrap; }
   #firesdesc { font-size: .8rem !important; opacity: .8 !important; }
   .chip:disabled { opacity: .35; cursor: not-allowed; }
   .chip .sw { display: inline-flex; margin-right: 6px; vertical-align: -2px; }
@@ -191,6 +191,10 @@
       <h3>Bombardier d'eau</h3>
       <div><button id="firesbtn" class="chip">Incendies : non</button></div>
       <p id="firesdesc"></p>
+    </div>
+    <div id="variantbox" hidden>
+      <h3>Version</h3>
+      <div id="variants"></div>
     </div>
     <h3>Départ</h3>
     <div id="starts"></div>

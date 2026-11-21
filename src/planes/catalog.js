@@ -14,8 +14,8 @@
  */
 export const PLANES = [
   {
-    id: 'tourisme', name: 'Le Tourisme',
-    desc: 'Monomoteur à aile haute. Lent, stable, pardonne presque tout : parfait pour flâner.',
+    id: 'tourisme', name: 'Le Tourisme', family: 'tourisme', variant: 'Classique',
+    desc: 'Monomoteur à aile haute. Lent, stable, pardonne presque tout : parfait pour flâner. Existe aussi en version postier et hydravion.',
     maxSpeed: 62, stall: 23, accel: 4.6, pitchRate: 1.15, rollRate: 1.7, yawRate: 0.5, gLimit: 4.5,
     brake: 7, maxSink: 6.5, gearH: 1.36, bellyH: 1.36, span: 11, len: 8, wingY: 0.8,
     retract: false, floats: false, jet: false,
@@ -50,18 +50,7 @@ export const PLANES = [
     paint: [0xf2c230, 0xc93a2c, 0x33373c], // couleurs principales (remplacées par les livrées)
     stats: [0.3, 1, 0.75],
   },
-  {
-    id: 'hydravion', name: "L'Hydravion",
-    desc: "Amphibie : roues sorties (G) pour la piste, rentrées dans les flotteurs pour l'eau. Idéal pour les criques.",
-    maxSpeed: 58, stall: 24, accel: 4.4, pitchRate: 1.05, rollRate: 1.45, yawRate: 0.5, gLimit: 4,
-    brake: 6, maxSink: 6.5, gearH: 2.35, bellyH: 1.9, span: 12.6, len: 9, wingY: 0.9,
-    retract: true, floats: true, amphibian: true, jet: false,
-    cam: { dist: 19, height: 4.8 }, eye: [0, 0.46, -1.25],
-    inertia: 0.36, stallBite: 0.3, flaps: true, turb: 0.95,
-    engine: { kind: 'piston', cyl: 9, radial: true, idle: 600, max: 2200, blades: 3, gear: 1, exhaust: 85, rough: 0.45 },
-    paint: [0xf5f2ea, 0xf08a2c, 0xe2e8ec], // couleurs principales (remplacées par les livrées)
-    stats: [0.2, 0.42, 0.9],
-  },
+
   {
     id: 'canadair', name: "L'Écopeur",
     desc: "Bombardier d'eau amphibie bimoteur, façon Canadair : rase un lac ou la mer pour remplir sa soute, puis largue sur les flammes avec X. Roues sorties (G) seulement pour les pistes.",
@@ -169,7 +158,7 @@ PLANES.splice(PLANES.findIndex((p) => p.id === 'jet'), 0, {
     stats: [0.6, 1, 0.45],
 });
 
-PLANES.splice(PLANES.findIndex((p) => p.id === 'hydravion'), 0, {
+PLANES.splice(PLANES.findIndex((p) => p.id === 'canadair'), 0, {
   id: 'epandeur', name: "L'Épandeur",
   desc: "Avion agricole : trémie devant le cockpit, rampe sous l'aile. Maintiens X en rase-mottes au-dessus des champs pour épandre, puis recharge à la piste en herbe de la Prairie (grande carte).",
   maxSpeed: 68, stall: 25, accel: 6.2, pitchRate: 1.35, rollRate: 2.3, yawRate: 0.6, gLimit: 5.5,
@@ -183,17 +172,30 @@ PLANES.splice(PLANES.findIndex((p) => p.id === 'hydravion'), 0, {
 });
 
 PLANES.splice(PLANES.findIndex((p) => p.id === 'tourisme') + 1, 0, {
-  id: 'postier', name: 'Le Postier',
-  desc: "Petit avion postal à aile haute. Charge les sacs de courrier à l'arrêt sur n'importe quelle piste, puis largue-les (X) au-dessus du village indiqué : ils descendent en parachute.",
+  id: 'postier', name: 'Le Tourisme', family: 'tourisme', variant: 'Postier',
+  desc: "Version postale, avec une soute sous le ventre : charge les sacs à l'arrêt sur une piste, puis largue-les (X) au-dessus du village indiqué. Ils descendent en parachute.",
   maxSpeed: 64, stall: 22, accel: 5, pitchRate: 1.2, rollRate: 1.9, yawRate: 0.55, gLimit: 4.5,
-  brake: 7, maxSink: 6.5, gearH: 1.5, bellyH: 1.2, span: 11.6, len: 8.4, wingY: 0.9,
+  brake: 7, maxSink: 6.5, gearH: 1.36, bellyH: 1.0, span: 11.2, len: 8.2, wingY: 0.86,
   retract: false, floats: false, jet: false, mail: true,
-  cam: { dist: 17, height: 4.4 }, eye: [0, 0.45, -1.0],
+  cam: { dist: 17, height: 4.4 }, eye: [0, 0.4, -1.05],
   inertia: 0.3, stallBite: 0.25, flaps: true, turb: 1,
   engine: { kind: 'piston', cyl: 6, idle: 700, max: 2600, blades: 2, gear: 1, exhaust: 100, rough: 0.35 },
   paint: [0xf4ead6, 0xc8402f, 0x24324a], // crème, rouge, bleu nuit (remplacées par les livrées)
   stats: [0.24, 0.55, 0.95],
 });
+
+PLANES.splice(PLANES.findIndex((p) => p.id === 'postier') + 1, 0, {
+    id: 'hydravion', name: 'Le Tourisme', family: 'tourisme', variant: 'Hydravion',
+    desc: "Version sur flotteurs, amphibie : se pose sur l'eau, roues sorties (G) pour les pistes. Un peu plus lourd et plus lent. Idéal pour les criques.",
+    maxSpeed: 58, stall: 24, accel: 4.4, pitchRate: 1.05, rollRate: 1.45, yawRate: 0.5, gLimit: 4,
+    brake: 6, maxSink: 6.5, gearH: 2.35, bellyH: 1.9, span: 11.2, len: 8.2, wingY: 0.86,
+    retract: true, floats: true, amphibian: true, jet: false,
+    cam: { dist: 19, height: 4.8 }, eye: [0, 0.4, -1.05],
+    inertia: 0.36, stallBite: 0.3, flaps: true, turb: 0.95,
+    engine: { kind: 'piston', cyl: 9, radial: true, idle: 600, max: 2200, blades: 3, gear: 1, exhaust: 85, rough: 0.45 },
+    paint: [0xf5f2ea, 0xf08a2c, 0xe2e8ec], // couleurs principales (remplacées par les livrées)
+    stats: [0.2, 0.42, 0.9],
+  });
 
 for (const p of PLANES) p.takeoff = p.stall * 1.12;
 
