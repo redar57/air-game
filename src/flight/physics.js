@@ -465,8 +465,8 @@ export class Plane {
     let ok = up.y > 0.6 && sink < s.maxSink && bank < 0.42 && pitch > -0.2 && pitch < 0.55 && -this.agl < 1.3;
     if (g.type === 'water' && !s.floats) ok = false;
     if (g.type === 'land' && _n.y < 0.9) ok = false;
-    // amphibie : amerrir roues sorties, c'est capoter
-    if (g.type === 'water' && s.amphibian && this.gearDown) { this.crash('water', 'wheels'); return; }
+    // amphibie : amerrir roues sorties freine fort (voir le frottement au sol), mais ne fait pas capoter
+    if (g.type === 'water' && s.amphibian && this.gearDown && ok) this.events.push({ type: 'wheelsWater' });
     if (!ok) { this.crash(g.type === 'water' ? 'water' : 'ground'); return; }
 
     this.onGround = true;

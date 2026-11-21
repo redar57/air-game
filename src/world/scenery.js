@@ -3,6 +3,7 @@ import { heightAt, normalAt, flatInfo, coastPoint, VOLCANO, BIG, HALF } from './
 import { makeNoise2D, fbm } from './noise.js';
 import { mulberry32, mergeColored, xform, toLocal, smoothstep } from '../util.js';
 import { addCylinder, addSphere, addCustom } from './colliders.js';
+import { planCountry, buildCountry, updateCountry, country, occupied } from './country.js';
 
 /** Arche rocheuse en mer (utilisée aussi par la détection des figures). */
 export const arch = { x: 0, z: 0, yaw: 0, R: 95, tube: 24, y: -14 };
@@ -33,14 +34,15 @@ function buildTrees(scene) {
     { geo: new THREE.IcosahedronGeometry(2.9, 0), color: 0x6fb850, matrix: xform(0, 5.2, 0, 0, 1, 0.9, 1) },
   ]);
   const a = [], b = [];
-  const span = HALF * 1.78, max = BIG ? 17000 : 8200;
-  for (let n = 0; n < (BIG ? 300000 : 90000) && a.length + b.length < max; n++) {
+  const span = HALF * 1.78, max = BIG ? 26000 : 8200;
+  for (let n = 0; n < (BIG ? 450000 : 90000) && a.length + b.length < max; n++) {
     const x = (rnd() - 0.5) * span, z = (rnd() - 0.5) * span;
     const h = heightAt(x, z);
     if (h < 5 || h > 480) continue;
     if (normalAt(x, z, _n).y < 0.83) continue;
     if (flatInfo(x, z).w > 0.02) continue;
     if (Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < 850) continue;
+    if (BIG && (occupied(x, z) || country.villages.some((v) => Math.hypot(x - v.x, z - v.z) < v.r))) continue;
     const f = fbm(nF, x * 0.0015, z * 0.0015, 3);
     if (rnd() > smoothstep(-0.28, 0.3, f) * 0.92 + 0.035) continue;
     const s = 1 + rnd() * 1.1;
@@ -60,12 +62,12 @@ function buildTrees(scene) {
     im.frustumCulled = false;
     scene.add(im);
   }
-  return a.length + b.length;
+  return [...a, ...b];
 }
 
-function buildVillage(scene) {
-  const rnd = mulberry32(77), parts = [];
-  const c = coastPoint(0.75, -430);
+/** Village autour de c : une église puis des maisons, à moins de `radius` m. */
+function buildVillage(scene, c, count = 38, seed = 77, radius = 300) {
+  const rnd = mulberry32(seed), parts = [];
   const walls = [0xf6efe2, 0xfbf7ef, 0xf0d9b8, 0xe9e2d4], roofs = [0xc8553a, 0xb9472f, 0xd3704a, 0x4f6f8f];
   const placed = [];
   const house = (x, z, w, h, d, ry, wall, roof) => {
@@ -73,10 +75,11 @@ function buildVillage(scene) {
     parts.push({ geo: new THREE.BoxGeometry(w, h, d), color: wall, matrix: xform(x, y + h / 2, z, ry) });
     parts.push({ geo: new THREE.ConeGeometry(1, 1, 4), color: roof, matrix: xform(x, y + h + 1.9, z, ry + Math.PI / 4, w * 0.78, 3.8, d * 0.78) });
   };
-  for (let n = 0; n < 900 && placed.length < 38; n++) {
-    const ang = rnd() * 6.283, rad = Math.sqrt(rnd()) * 300;
+  for (let n = 0; n < 900 && placed.length < count; n++) {
+    const ang = rnd() * 6.283, rad = Math.sqrt(rnd()) * radius;
     const x = c.x + Math.cos(ang) * rad, z = c.z + Math.sin(ang) * rad;
     if (heightAt(x, z) < 4 || normalAt(x, z, _n).y < 0.94 || flatInfo(x, z).w > 0) continue;
+    if (BIG && occupied(x, z)) continue; // pas sur les chemins ni dans les champs
     if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < 24)) continue;
     placed.push({ x, z });
     if (placed.length === 1) {
@@ -142,12 +145,13 @@ function buildRocks(scene) {
 
 function buildBalloons(scene) {
   const spots = [[1700, 330, 1300], [-800, 400, 2300], [2700, 300, -2700], [-3400, 420, -500], [300, 560, -2900]];
-  if (BIG) spots.push([3200, 450, -1200], [6200, 350, 2000], [-3800, 380, -400], [-6500, 550, -4300], [700, 400, 2400]);
+  if (BIG) spots.push([4300, 450, -2000], [8500, 350, 2600], [-4800, 380, -600], [-8600, 600, -5600], [1400, 400, 900], [9800, 400, -3800]);
   const palettes = [[0xe84c3d, 0xfff1d6], [0x2f7fdc, 0xffd34d], [0x8e5cc9, 0xfff1d6], [0x2fae7a, 0xfff1d6], [0xf08a2c, 0x2f4a7a]];
   palettes.push(...palettes);
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const out = [];
-  spots.forEach(([x, y, z], i) => {
+  spots.forEach(([x, y, z], n) => {
+    const i = n % palettes.length;
     const parts = [];
     for (let k = 0; k < 8; k++) {
       parts.push({ geo: new THREE.SphereGeometry(12, 1, 6, (k * Math.PI) / 4, Math.PI / 4), color: palettes[i][k % 2], matrix: xform(0, 0, 0, 0, 1, 1.18, 1) });
@@ -165,8 +169,12 @@ function buildBalloons(scene) {
 }
 
 export function buildScenery(scene) {
-  const trees = buildTrees(scene);
-  buildVillage(scene);
+  planCountry();
+  const treeList = buildTrees(scene);
+  // villages : celui de la côte sur la petite carte ; ceux de la campagne (reliés par des chemins) sur la grande
+  const villages = BIG ? country.villages : [{ ...coastPoint(0.75, -430), name: 'le village', r: 300, count: 38, seed: 77 }];
+  for (const v of villages) buildVillage(scene, v, v.count, v.seed, v.r);
+  buildCountry(scene);
   const lamp = buildLighthouse(scene);
   buildRocks(scene);
   const balloons = buildBalloons(scene);
@@ -181,7 +189,9 @@ export function buildScenery(scene) {
   scene.add(glow);
 
   return {
-    trees,
+    trees: treeList.length,
+    /** Arbres (pour placer les feux de forêt) et villages (feux qui menacent les maisons). */
+    treeList, villages,
     /** Cibles : montgolfières encore en l'air. */
     balloons,
     /** Abat une montgolfière ; elle revient (en gonflant) au bout de 40 s. */
@@ -190,6 +200,7 @@ export function buildScenery(scene) {
       b.alive = false; b.back = this.respawn; b.col.off = true; b.mesh.visible = false; b.dmg = 0;
     },
     update(t, night, dt = 0) {
+      updateCountry(dt);
       for (const b of balloons) {
         b.mesh.position.y = b.by + Math.sin(t * 0.35 + b.ph) * 3;
         if (!b.alive && (b.back -= dt) <= 0) { b.alive = true; b.col.off = false; b.mesh.visible = true; b.grow = 0; }

@@ -7,18 +7,22 @@ export const runways = [];
 export const carrier = { x: 0, z: 0, yaw: -Math.PI / 2, deckY: 21, halfLen: 145, halfWid: 30 };
 /** Station de carburant (devant les hangars de l'aéroport) : centre en coordonnées monde, demi-côté. */
 export const fuelStation = { x: 0, z: 0, yaw: 0, lx: 0, lz: 0, half: 24 };
+/** Aire de chargement de l'épandeur (devant la grange de la piste en herbe), repère local de sa piste. */
+export const loadPad = { rw: null, lx: 0, lz: 0, half: 16, x: 0, z: 0 };
 /** Matériaux des balises lumineuses (leur opacité suit la tombée de la nuit). */
 export const nightLights = [];
 
 const RUNWAY_LIFT = 0.12;
+/** Grande carte : centres de l'aérodrome de la Baie et de la piste de la Prairie. */
+const BAIE = { x: -6300, z: 800 }, PRAIRIE = { x: 8000, z: 300 };
 const _l = { x: 0, z: 0 }, _w = { x: 0, z: 0 };
 
 /** Choisit l'emplacement des pistes et du porte-avions (avant la construction du relief). */
 export function defineAirfields() {
   // Aéroport principal : plaine côtière au sud (au sud-est sur la grande île).
-  const ax0 = BIG ? 2600 : 500;
+  const ax0 = BIG ? 4300 : 500;
   let zc = BIG ? 0 : 1500;
-  while (zc < 5200 && rawBase(ax0, zc) > 2) zc += 25;
+  while (zc < (BIG ? 8000 : 5200) && rawBase(ax0, zc) > 2) zc += 25;
   runways.push({
     id: 'aeroport', name: 'Aéroport', x: ax0, z: zc - 560, yaw: Math.atan2(-1, 0), style: 'main',
     length: 1500, width: 46, alt: BIG ? Math.round(clamp(rawBase(ax0, zc - 560), 11, 120)) : 11, halfLen: 870, halfWid: 150, margin: 260, small: false,
@@ -37,14 +41,20 @@ export function defineAirfields() {
   if (BIG) { // grande carte : deux terrains de styles bien distincts
     // aérodrome de la Baie : piste courte en bord de mer, aérogare, radar, château d'eau
     runways.push({
-      id: 'baie', name: 'Aérodrome de la Baie', x: -4300, z: 650, yaw: Math.atan2(-1, 0.25), style: 'coast',
-      length: 900, width: 34, alt: Math.round(clamp(rawBase(-4300, 650), 8, 60)), halfLen: 510, halfWid: 130, margin: 220, small: false,
+      id: 'baie', name: 'Aérodrome de la Baie', x: BAIE.x, z: BAIE.z, yaw: Math.atan2(-1, 0.25), style: 'coast',
+      length: 900, width: 34, alt: Math.round(clamp(rawBase(BAIE.x, BAIE.z), 8, 60)), halfLen: 510, halfWid: 130, margin: 220, small: false,
     });
     // piste en herbe de la Prairie : pas de goudron, une grange, une manche à air, des bottes de foin
     runways.push({
-      id: 'prairie', name: 'Piste de la Prairie', x: 6000, z: 700, yaw: Math.atan2(-0.55, 0.84), style: 'grass',
-      length: 700, width: 32, alt: Math.round(clamp(rawBase(6000, 700), 8, 160)), halfLen: 400, halfWid: 80, margin: 180, small: true,
+      id: 'prairie', name: 'Piste de la Prairie', x: PRAIRIE.x, z: PRAIRIE.z, yaw: Math.atan2(-0.55, 0.84), style: 'grass',
+      length: 700, width: 32, alt: Math.round(clamp(rawBase(PRAIRIE.x, PRAIRIE.z), 8, 160)), halfLen: 400, halfWid: 80, margin: 180, small: true,
     });
+  }
+
+  const grass = runways.find((r) => r.style === 'grass');
+  if (grass) {
+    loadPad.rw = grass; loadPad.lx = grass.width / 2 + 40; loadPad.lz = grass.length / 2 - 168;
+    toWorld(grass, loadPad.lx, loadPad.lz, _w); loadPad.x = _w.x; loadPad.z = _w.z;
   }
 
   const main = runways[0];
@@ -53,7 +63,7 @@ export function defineAirfields() {
   fuelStation.x = _w.x; fuelStation.z = _w.z; fuelStation.yaw = main.yaw; fuelStation.rw = main;
 
   carrier.x = BIG ? ax0 : -1900;
-  carrier.z = zc + (BIG ? 2600 : 2000);
+  carrier.z = zc + (BIG ? 3200 : 2000);
   return runways;
 }
 
@@ -70,6 +80,13 @@ export function atFuelStation(x, z) {
   if (!fuelStation.rw) return false;
   toLocal(fuelStation.rw, x, z, _l);
   return Math.abs(_l.x - fuelStation.lx) <= fuelStation.half && Math.abs(_l.z - fuelStation.lz) <= fuelStation.half;
+}
+
+/** Vrai si (x, z) est sur l'aire de chargement de l'épandeur (à défaut, la station de carburant). */
+export function atLoadPad(x, z) {
+  if (!loadPad.rw) return atFuelStation(x, z);
+  toLocal(loadPad.rw, x, z, _l);
+  return Math.abs(_l.x - loadPad.lx) <= loadPad.half && Math.abs(_l.z - loadPad.lz) <= loadPad.half;
 }
 
 export function onCarrierDeck(x, z) {
@@ -168,6 +185,14 @@ export function buildAirfields(scene) {
       for (let k = 0; k < 7; k++) {
         parts.push({ geo: new THREE.CylinderGeometry(1.2, 1.2, 1.6, 10).rotateZ(Math.PI / 2), color: 0xd9b45a, matrix: xform(side + 60 + (k % 3) * 3.4, 1.2, L / 2 - 200 - Math.floor(k / 3) * 5, k * 0.7) });
       }
+      // aire de chargement de l'épandeur : cadre vert, cuve de produit sur pieds et son tuyau
+      const px = loadPad.lx, pz = loadPad.lz, hp = loadPad.half;
+      for (const [w, d, x, z] of [[hp * 2, 0.9, px, pz - hp], [hp * 2, 0.9, px, pz + hp], [0.9, hp * 2, px - hp, pz], [0.9, hp * 2, px + hp, pz]]) B(w, 0.06, d, 0x3f9e4a, x, 0.08, z);
+      for (const [dx, dz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) B(0.25, 3, 0.25, 0x8a9199, px + hp + 6 + dx, 1.5, pz + dz);
+      parts.push({ geo: new THREE.CylinderGeometry(2.3, 2.3, 4.6, 12).rotateZ(Math.PI / 2), color: 0xf4f4f0, matrix: xform(px + hp + 6, 5.1, pz, Math.PI / 2) });
+      B(0.9, 0.9, 4.7, 0x3f9e4a, px + hp + 6, 5.1, pz);
+      B(hp - 2, 0.18, 0.18, 0x23272d, px + hp / 2 + 3, 0.3, pz);
+      collide(px + hp + 6, pz, 2.5, 2.5, 7.5);
       for (let z = -L / 2; z <= L / 2; z += 12) B(0.25, 1.3, 0.25, 0x7a5a3c, -side - 30, 0.65, z);
       B(0.12, 0.12, L, 0x7a5a3c, -side - 30, 1.1, 0);
     } else if (rw.style === 'coast') {

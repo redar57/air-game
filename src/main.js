@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildTerrain, heightAt, normalAt, setBig, BIG, HALF } from './world/terrain.js';
-import { defineAirfields, buildAirfields, buildCarrier, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, DECK_AXIS_X } from './world/airfields.js';
+import { defineAirfields, buildAirfields, buildCarrier, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, atLoadPad, DECK_AXIS_X } from './world/airfields.js';
 import { Sky } from './world/sky.js';
 import { buildScenery } from './world/scenery.js';
 import { hitObstacle } from './world/colliders.js';
@@ -9,10 +9,12 @@ import { IslandMap } from './world/map.js';
 import { Birds } from './world/birds.js';
 import { Boats } from './world/boats.js';
 import { PLANES, STARTS, LIVERIES } from './planes/catalog.js';
-import { createWaterBomber, canScoop } from './missions.js';
+import { createWaterBomber, createSprayer, canScoop } from './missions.js';
+import { country, treatedShare } from './world/country.js';
 import { save } from './save.js';
 // la taille du monde se choisit avant toute construction (le bouton du menu recharge la page)
-setBig(save.get('bigMap'));
+// ?grande dans l'adresse : ouvre la grande carte sans changer le choix enregistré
+setBig(new URLSearchParams(location.search).has('grande') || save.get('bigMap'));
 import { getModel, animateModel } from './planes/models.js';
 import { drawInstruments } from './planes/instruments.js';
 import { Plane, IDLE } from './flight/physics.js';
@@ -28,7 +30,7 @@ import { Effects } from './fx.js';
 import { toWorld, clamp } from './util.js';
 
 const STEP = 1 / 120;       // pas fixe de la physique
-const EDGE = BIG ? 10000 : 7600; // au-delà (en mètres du centre), on est ramené en douceur
+const EDGE = BIG ? 13600 : 7600; // au-delà (en mètres du centre), on est ramené en douceur
 const Y = new THREE.Vector3(0, 1, 0);
 const _q = new THREE.Quaternion(), _w = { x: 0, z: 0 };
 
@@ -166,6 +168,12 @@ function startFlight() {
     ui.hint(fires
       ? `${how}, puis maintiens <kbd>X</kbd> au-dessus des flammes · <kbd>N</kbd> carte des feux`
       : `${how}, puis maintiens <kbd>X</kbd> pour larguer`);
+  } else if (spec.sprayer) {
+    mission = createSprayer({ scene, sound, ui, fields: country.fields, atLoad: atLoadPad, treated: treatedShare, plane: () => plane });
+    ui.mission(mission.hud());
+    ui.hint(country.fields.length
+      ? "Maintiens <kbd>X</kbd> en rase-mottes au-dessus des champs jaunes · recharge sur l'aire verte devant la grange de la Prairie"
+      : "Maintiens <kbd>X</kbd> en rase-mottes pour épandre · les champs sont sur la grande carte");
   }
   tele.gMax = 1; tele.prev = null;
   ui.menu(false); ui.hud(true);
@@ -226,6 +234,7 @@ function handleEvents() {
     }
     else if (e.type === 'flaps') { sound.flaps(); if (e.blown) ui.toast('Volets rentrés : trop vite !', 1600); }
     else if (e.type === 'takeoff') ui.clearHint();
+    else if (e.type === 'wheelsWater') ui.toast("Roues sorties dans l'eau : ça freine ! (G pour les rentrer)", 2200);
   }
   plane.events.length = 0;
 }
@@ -292,7 +301,7 @@ function handleKeys() {
       else if (key === 'n') ui.bigMap(!ui.bigMapOpen);
       else if (key === 'x') {
         if (plane.spec.guns || mission) { /* tir / largage maintenus : gérés ailleurs */ }
-        else if (!plane.spec.missiles) ui.toast('Armes : missiles sur le jet, mitrailleuses sur le chasseur, eau sur l\'hélicoptère rouge et l\'écopeur', 1800);
+        else if (!plane.spec.missiles) ui.toast('Armes : missiles sur le jet, mitrailleuses sur le chasseur, eau sur l\'hélicoptère rouge et l\'écopeur, produit sur l\'épandeur', 1800);
         else if (missiles.fire(plane, scenery.balloons)) input.rumble(0.25, 0.35, 120);
       }
       else if (key === 't') { const n = sky.cycle(); ui.toast(n, 1500); ui.setDaytime(n); }
@@ -316,7 +325,7 @@ function resume() {
 /** Mini-carte (toutes les 3 images) et grande carte si elle est ouverte. */
 function drawMaps() {
   if (!islandMap) return;
-  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider };
+  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer };
   if (frameNo % 3 === 0) islandMap.drawMini(document.getElementById('minimap'), plane, tele.hdg, extras, plane.spec.maxSpeed > 120 ? 3500 : 2200);
   if (ui.bigMapOpen && frameNo % 4 === 0) islandMap.drawFull(document.getElementById('bigmapc'), plane, tele.hdg, extras);
 }

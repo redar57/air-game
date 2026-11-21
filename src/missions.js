@@ -7,7 +7,7 @@ import { HALF } from './world/terrain.js';
 // update(dt, plane, input), hud() -> panneau, fires (pour la carte), dispose().
 
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-const _v = new THREE.Vector3(), _p = new THREE.Vector3();
+const _v = new THREE.Vector3(), _p = new THREE.Vector3(), _d = new THREE.Vector3();
 
 // --------------------------------------------------------------------------- feux de forêt
 class Fires {
@@ -25,12 +25,24 @@ class Fires {
   spawn() {
     const { heightAt, normalAt, runways } = this.ctx, rnd = mulberry32((Math.random() * 1e9) | 0), n = new THREE.Vector3();
     this.fires = [];
-    for (let k = 0; k < 2000 && this.fires.length < this.count; k++) {
-      const x = (rnd() - 0.5) * HALF * 1.64, z = (rnd() - 0.5) * HALF * 1.64, h = heightAt(x, z);
-      if (h < 20 || h > 380 || normalAt(x, z, n).y < 0.85) continue;
-      if (runways.some((r) => Math.hypot(r.x - x, r.z - z) < 1200)) continue;
+    // les feux partent là où il y a de quoi brûler : en forêt (au pied d'un arbre pris au hasard,
+    // donc surtout là où les arbres sont serrés) et, une fois sur quatre, aux abords d'un village
+    const trees = this.ctx.scenery.treeList || [], villages = this.ctx.scenery.villages || [];
+    for (let k = 0; k < 3000 && this.fires.length < this.count; k++) {
+      let x, z, village = null;
+      if (villages.length && rnd() < 0.25) {
+        village = villages[Math.floor(rnd() * villages.length)];
+        const a = rnd() * 6.283, d = village.r * 0.8 + rnd() * 160;
+        x = village.x + Math.cos(a) * d; z = village.z + Math.sin(a) * d;
+      } else if (trees.length) {
+        const t = trees[Math.floor(rnd() * trees.length)];
+        x = t.x; z = t.z;
+      } else { x = (rnd() - 0.5) * HALF * 1.64; z = (rnd() - 0.5) * HALF * 1.64; }
+      const h = heightAt(x, z);
+      if (h < 5 || h > 480 || normalAt(x, z, n).y < 0.8) continue;
+      if (runways.some((r) => Math.hypot(r.x - x, r.z - z) < 900)) continue;
       if (this.fires.some((f) => Math.hypot(f.x - x, f.z - z) < 900)) continue;
-      this.fires.push({ x, z, y: h, power: 0.8 + rnd() * 0.3, out: false, smoke: 0 });
+      this.fires.push({ x, z, y: h, power: 0.8 + rnd() * 0.3, out: false, smoke: 0, village: village && village.name });
     }
     this.wave++; this.waveT = 0;
   }
@@ -116,14 +128,14 @@ class Fires {
       const how = this.ctx.plane().spec.heli ? "écope en stationnaire au ras de l'eau" : "rase l'eau, roues rentrées, pour écoper";
       return { title: this.title, big: `${tank} %`, unit: 'réservoir', lines: [this.scooping ? 'écopage…' : this.dropping ? 'largage !' : tank ? 'X : larguer' : how], bar: this.water };
     }
-    let near = Infinity;
+    let near = Infinity, nearF = null;
     // (distance au feu le plus proche, utile quand on ne le voit pas encore)
     const p = this.ctx.plane();
-    for (const f of left) near = Math.min(near, Math.hypot(f.x - p.pos.x, f.z - p.pos.z));
+    for (const f of left) { const d = Math.hypot(f.x - p.pos.x, f.z - p.pos.z); if (d < near) { near = d; nearF = f; } }
     return {
       title: this.title, big: `${this.fires.length - left.length}/${this.fires.length}`, unit: 'éteints',
       lines: [left.length ? `⏱ ${fmt(this.waveT)}` : 'prochains feux bientôt…', tankLine,
-        left.length ? `feu le plus proche : ${(near / 1000).toFixed(1).replace('.', ',')} km` : ''],
+        left.length ? `feu le plus proche : ${(near / 1000).toFixed(1).replace('.', ',')} km${nearF.village ? ` (près de ${nearF.village})` : ''}` : ''],
       bar: this.water,
     };
   }
@@ -135,6 +147,67 @@ class Fires {
     this.ctx.sound.fireAmbience([], null, false, false);
   }
 }
+
+// --------------------------------------------------------------------------- épandage
+/** Épandeur : produit dans la trémie, épandu (X maintenue) en rase-mottes ; les cases de champ survolées verdissent. */
+class Sprayer {
+  constructor(ctx) {
+    this.ctx = ctx; this.id = 'epandage'; this.title = 'Épandage';
+    this.product = 1; this.spraying = false; this.loadT = 0; this.highWarned = false; this.emptyWarned = false;
+    this.fx = new Effects(ctx.scene, { max: 500, opacity: 0.22, drag: 1.4 });
+  }
+  update(dt, plane, input) {
+    const { fields, atLoad, ui, sound } = this.ctx;
+    // rechargement : arrêté sur l'aire verte devant la grange de la Prairie
+    if (plane.onGround && plane.groundSpeed < 1 && atLoad(plane.pos.x, plane.pos.z) && this.product < 1) {
+      if (this.loadT === 0) ui.toast('Chargement du produit…', 1800);
+      this.loadT += dt;
+      this.product = Math.min(1, this.product + dt / 5);
+      if (this.product >= 1) { ui.toast('Trémie pleine : en route pour les champs !', 2200); sound.chime(1); }
+    } else this.loadT = 0;
+    if (this.product > 0) this.emptyWarned = false;
+    this.spraying = input.fireHeld() && this.product > 0 && !plane.onGround;
+    if (input.fireHeld() && this.product <= 0 && !this.emptyWarned) {
+      this.emptyWarned = true;
+      ui.toast(fields.length ? "Trémie vide : recharge sur l'aire verte de la Prairie" : 'Trémie vide : recharge à la station jaune devant les hangars', 2600);
+    }
+    if (this.spraying) {
+      this.product = Math.max(0, this.product - dt / 45);
+      // brume qui sort de la rampe, sur toute l'envergure
+      for (let k = 0; k < 5; k++) {
+        const t = (Math.random() - 0.5) * 12.4;
+        _p.copy(plane.pos).addScaledVector(plane.right, t).addScaledVector(plane.up, -0.7).addScaledVector(plane.fwd, -0.4);
+        _v.copy(plane.vel).multiplyScalar(0.55).add(_d.set((Math.random() - 0.5) * 2, -2.5 - Math.random() * 2, (Math.random() - 0.5) * 2));
+        this.fx.emit(_p, _v, 1.4 + Math.random() * 0.6, 0.35 + Math.random() * 0.35, Math.random() < 0.5 ? 0xeef5e2 : 0xd9ead0, 0.9, 1.5);
+      }
+      // le produit ne tombe sur le champ qu'en volant bas
+      const agl = plane.agl + plane.standH;
+      if (agl < 25) {
+        const x = plane.pos.x + plane.vel.x * 0.5, z = plane.pos.z + plane.vel.z * 0.5;
+        for (const f of fields) f.spray(x, z, 7.5 + agl * 0.12);
+      } else if (!this.highWarned) {
+        this.highWarned = true;
+        ui.toast('Trop haut : descends sous 25 m pour que le produit tombe sur le champ', 2600);
+      }
+    }
+    this.fx.update(dt);
+    return null;
+  }
+  hud() {
+    const { fields } = this.ctx, pct = Math.round(this.product * 100);
+    const state = this.loadT > 0 ? 'chargement…' : this.spraying ? 'épandage…' : pct ? 'X : épandre au ras des champs' : 'trémie vide';
+    return {
+      title: this.title, big: `${pct} %`, unit: 'produit',
+      lines: [state, fields.length ? `🌾 champs traités : ${Math.round(this.ctx.treated() * 100)} %` : 'champs à la Prairie (grande carte)'],
+      bar: this.product,
+    };
+  }
+  dispose() {
+    this.ctx.scene.remove(this.fx.mesh);
+    for (const t of this.fx.trails) this.ctx.scene.remove(t);
+  }
+}
+export function createSprayer(ctx) { return new Sprayer(ctx); }
 
 /** Appareils qui emportent un réservoir d'eau : l'hélicoptère rouge et l'écopeur. */
 export const canScoop = (spec) => spec.id === 'helico' || spec.id === 'canadair';

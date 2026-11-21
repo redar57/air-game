@@ -15,26 +15,29 @@ const ISLETS = [
   { x: 3500, z: 4300, r: 260, a: 110 },
   { x: -1200, z: -4900, r: 240, a: 105 },
 ];
-/** Grande île : réunion de lobes elliptiques, avec une grande baie creusée au sud-ouest. */
+/** Grande île : réunion « douce » de lobes elliptiques, une grande baie au sud-ouest et un lac au centre. */
 const LOBES = [
-  { x: -5000, z: -1800, rx: 3400, rz: 3000 },
-  { x: 0, z: 0, rx: 4800, rz: 4000 },
-  { x: 5200, z: 1300, rx: 3400, rz: 3000 },
-  { x: 1500, z: -4200, rx: 3000, rz: 2000 },
-  { x: -1300, z: 3700, rx: 3000, rz: 2100 },
+  { x: 0, z: 0, rx: 6000, rz: 4800 },         // plaine centrale
+  { x: -7600, z: -2400, rx: 3800, rz: 3300 }, // presqu'île du volcan
+  { x: 7400, z: 1200, rx: 4200, rz: 3600 },   // campagne de l'est
+  { x: 2000, z: -5600, rx: 4400, rz: 2600 },  // montagnes du nord
+  { x: -1200, z: 5000, rx: 3800, rz: 2600 },  // côte sud
+  { x: 9000, z: -3000, rx: 3000, rz: 1300 },  // cap du nord-est
 ];
-const BAY = { x: -4500, z: 2500, rx: 1900, rz: 1500 };
+const BAY = { x: -6200, z: 3400, rx: 2600, rz: 1900 };
+/** Lac intérieur (fond sous le niveau de la mer : on peut y écoper). */
+export const LAKE = { x: 1400, z: 900, rx: 1150, rz: 800 };
 let mca = Math.cos(MTN.ang), msa = Math.sin(MTN.ang);
 
 export function setBig(big) {
   BIG = !!big;
-  SIZE = BIG ? 22000 : 11000; SEG = BIG ? 600 : 352; CELL = SIZE / SEG; HALF = SIZE / 2;
+  SIZE = BIG ? 30000 : 11000; SEG = BIG ? 800 : 352; CELL = SIZE / SEG; HALF = SIZE / 2;
   if (!BIG) return;
-  Object.assign(MTN, { x: 1900, z: -2700, ang: -0.32, len: 3900, wid: 1500, amp: 1300 });
-  Object.assign(VOLCANO, { x: -6300, z: -2900, rimR: 340, baseR: 1600, h: 900, depth: 260 });
+  Object.assign(MTN, { x: 2300, z: -5200, ang: -0.22, len: 5000, wid: 1800, amp: 1350 });
+  Object.assign(VOLCANO, { x: -8600, z: -3000, rimR: 360, baseR: 1750, h: 950, depth: 270 });
   ISLETS.splice(0, ISLETS.length,
-    { x: -9000, z: 900, r: 420, a: 140 }, { x: 9300, z: -1600, r: 360, a: 125 },
-    { x: -800, z: -5900, r: 380, a: 130 }, { x: 9400, z: 3700, r: 300, a: 105 }, { x: 4200, z: 5100, r: 320, a: 115 });
+    { x: -12300, z: 600, r: 450, a: 140 }, { x: 12800, z: -500, r: 380, a: 125 }, { x: -3200, z: -8600, r: 400, a: 130 },
+    { x: 12000, z: 5400, r: 320, a: 105 }, { x: 4600, z: 7800, r: 340, a: 115 }, { x: -9000, z: 6400, r: 300, a: 100 });
   mca = Math.cos(MTN.ang); msa = Math.sin(MTN.ang);
 }
 
@@ -50,11 +53,11 @@ export function canyonDist(x, z) {
 }
 
 function bigMask(x, z) {
-  const wx = x + 650 * nB(x * 0.0003, z * 0.0003), wz = z + 650 * nB(x * 0.0003 + 40, z * 0.0003 + 17);
+  const wx = x + 850 * nB(x * 0.00022, z * 0.00022), wz = z + 850 * nB(x * 0.00022 + 40, z * 0.00022 + 17);
   let e = 0; // union « douce » des lobes : ils se fondent sans pincement entre eux
-  for (const l of LOBES) e += Math.exp(-Math.hypot((wx - l.x) / l.rx, (wz - l.z) / l.rz) / 0.12);
-  let c = -0.12 * Math.log(e + 1e-9);
-  c += 0.14 * fbm(nA, x * 0.0004 + 5, z * 0.0004 - 3, 3);
+  for (const l of LOBES) e += Math.exp(-Math.hypot((wx - l.x) / l.rx, (wz - l.z) / l.rz) / 0.2);
+  let c = -0.2 * Math.log(e + 1e-9) - 0.08;
+  c += 0.14 * fbm(nA, x * 0.0003 + 5, z * 0.0003 - 3, 3);
   const bay = Math.hypot((wx - BAY.x) / BAY.rx, (wz - BAY.z) / BAY.rz);
   return (1 - smoothstep(0.6, 1.02, c)) * smoothstep(0.7, 1.1, bay);
 }
@@ -73,6 +76,13 @@ export function rawBase(x, z) {
   const hills = fbm(nA, x * 0.0012, z * 0.0012, 4) * 0.5 + 0.5;
   let h = lerp(-60, 16, Math.pow(m, 0.75)) + m * hills * amp;
   h += m * fbm(nC, x * 0.004, z * 0.004, 2) * 7;
+  if (BIG) { // lac : cuvette aux berges douces
+    const dl = Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz) + 0.12 * nB(x * 0.002, z * 0.002);
+    if (dl < 1.6) {
+      h = lerp(h, Math.min(h, 4 + (dl - 1) * 60), smoothstep(1.6, 1.0, dl)); // berges en pente douce
+      if (dl < 1) h = lerp(h, -14, smoothstep(1, 0.55, dl));
+    }
+  }
 
   // montagnes
   const dx = x - MTN.x, dz = z - MTN.z;

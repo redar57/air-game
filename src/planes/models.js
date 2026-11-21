@@ -595,6 +595,40 @@ function racer(spec) {
   return m;
 }
 
+// Épandeur : avion agricole à aile basse, grosse trémie devant un cockpit perché, rampe d'épandage
+function epandeur(spec) {
+  const m = base(), { hull, always } = m;
+  const Y = 0xf2c230, G = 0x2f7a3a, W = 0xf4f1ea;
+  hull.add(tube(0.05, 0.26, -4.25, -3.95, W));                       // cône d'hélice
+  hull.add(tube(0.56, 0.64, -3.95, -2.95, G, { seg: 9 }));           // capot du moteur en étoile
+  hull.add(tube(0.64, 0.62, -2.95, -0.4, Y, { sy: 1.1 }));
+  hull.add(tube(0.62, 0.13, -0.4, 4.6, Y, { y: 0.16 }));
+  hull.add(box(1.25, 0.95, 1.7, Y, 0, 0.62, -1.85));                 // trémie
+  hull.add(box(0.85, 0.08, 1.05, G, 0, 1.12, -1.9));                 // trappe de remplissage
+  hull.add(box(1.02, 0.72, 1.35, GLASS, 0, 1.0, -0.15));             // verrière perchée
+  hull.add(box(1.08, 0.09, 1.42, Y, 0, 1.4, -0.15));
+  hull.add(box(1.3, 0.14, 5.2, G, 0, -0.05, 0.9));                   // bande verte
+  bar(hull, [0, 1.42, -0.85], [0, 0.75, -2.75], 0.05, DARK);          // coupe-câble
+  wingS(m, hull, [2.1, 1.0, 0.7, 0.08, 0.2], Y, 0.08, 0.38, 4.25, [{ kind: 'elevator', t0: 0, t1: 1 }], 0.4);
+  finS(m, hull, [1.7, 1.45, 0.7, 0.09, 0.7], G, 0, 0.38, 4.05, 0, 0.4);
+  for (const s of [-1, 1]) {                                          // train classique fixe
+    bar(hull, [s * 0.45, -0.5, -1.55], [s * 1.35, -1.25, -1.7], 0.1, W);
+    wheel(hull, 0.3, 0.17, s * 1.42, -1.25, -1.7);
+  }
+  bar(hull, [0, -0.05, 4.2], [0, -1.4, 4.4], 0.06, DARK);
+  wheel(hull, 0.15, 0.08, 0, -1.4, 4.4);
+  wingS(m, always, [6.3, 1.8, 1.35, 0.19, 0.05, 0.38], Y, 0.5, -0.35, -0.75,
+    [{ kind: 'flap', t0: 0.02, t1: 0.5 }, { kind: 'aileron', t0: 0.53, t1: 0.97 }], 0.26);
+  always.add(box(1.1, 0.19, 1.8, Y, 0, -0.35, -0.75));
+  for (const s of [-1, 1]) always.add(box(0.3, 0.1, 1.3, G, s * 6.7, 0.03, -0.7));
+  always.add(box(12.6, 0.07, 0.07, METAL, 0, -0.62, 0.35));          // rampe d'épandage et ses buses
+  for (let x = -6; x <= 6; x += 1) always.add(box(0.06, 0.14, 0.06, DARK, x, -0.7, 0.35));
+  m.props.push(makeProp(always, 1.2, 3, 0, 0, -4.15));
+  m.cockpit = makeCockpit(spec.eye, { w: 1.0, frame: true, nose: { w: 1.25, len: 2.6, color: Y, drop: -0.1 } });
+  m.tips = [[6.8, 0.03, -0.6], [-6.8, 0.03, -0.6]];
+  return m;
+}
+
 // Planeur (blanc, saumons rouges, empennage en T)
 function planeur(spec) {
   const m = base(), { hull, always } = m;
@@ -614,7 +648,7 @@ function planeur(spec) {
   return m;
 }
 
-const BUILDERS = { planeur, tourisme, biplan, hydravion, canadair, chasseur, jet, cargo, helico, libellule, birotor, racer };
+const BUILDERS = { planeur, tourisme, biplan, epandeur, hydravion, canadair, chasseur, jet, cargo, helico, libellule, birotor, racer };
 const cache = new Map();
 
 /** Construit (une seule fois par livrée) le modèle 3D d'un appareil. */

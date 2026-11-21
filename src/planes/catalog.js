@@ -169,6 +169,19 @@ PLANES.splice(PLANES.findIndex((p) => p.id === 'jet'), 0, {
     stats: [0.6, 1, 0.45],
 });
 
+PLANES.splice(PLANES.findIndex((p) => p.id === 'hydravion'), 0, {
+  id: 'epandeur', name: "L'Épandeur",
+  desc: "Avion agricole : trémie devant le cockpit, rampe sous l'aile. Maintiens X en rase-mottes au-dessus des champs pour épandre, puis recharge à la piste en herbe de la Prairie (grande carte).",
+  maxSpeed: 68, stall: 25, accel: 6.2, pitchRate: 1.35, rollRate: 2.3, yawRate: 0.6, gLimit: 5.5,
+  brake: 7, maxSink: 7, gearH: 1.55, bellyH: 1.2, span: 13.4, len: 9, wingY: -0.35,
+  retract: false, floats: false, jet: false, sprayer: true,
+  cam: { dist: 19, height: 4.6 }, eye: [0, 1.0, 0.0],
+  inertia: 0.2, stallBite: 0.3, flaps: true, turb: 0.9,
+  engine: { kind: 'piston', cyl: 9, radial: true, idle: 600, max: 2300, blades: 3, gear: 1, exhaust: 110, rough: 0.45 },
+  paint: [0xf2c230, 0x2f7a3a, 0xf4f1ea], // jaune, vert, blanc (remplacées par les livrées)
+  stats: [0.25, 0.6, 0.85],
+});
+
 for (const p of PLANES) p.takeoff = p.stall * 1.12;
 
 /** Livrées : remplacent dans l'ordre les couleurs « paint » de chaque appareil (null = d'origine). */
