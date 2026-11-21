@@ -78,13 +78,13 @@ export const PLANES = [
     id: 'chasseur', name: 'Le Chasseur à hélice',
     desc: "Long nez, gros moteur, mitrailleuses dans les ailes (X maintenue). Rapide et nerveux.",
     maxSpeed: 150, stall: 36, accel: 9.5, pitchRate: 1.55, rollRate: 2.7, yawRate: 0.6, gLimit: 8,
-    brake: 8, maxSink: 7, gearH: 1.7, bellyH: 0.72, span: 11.2, len: 9.4, wingY: -0.1,
+    brake: 8, maxSink: 7, gearH: 1.7, bellyH: 1.3, span: 12.5, len: 10.6, wingY: -0.3,
     retract: true, floats: false, jet: false,
-    cam: { dist: 19, height: 4.4 }, eye: [0, 0.66, -0.45],
+    cam: { dist: 20, height: 4.6 }, eye: [0, 0.72, 0.1],
     inertia: 0.2, stallBite: 1, flaps: true, turb: 0.6,
     engine: { kind: 'piston', cyl: 12, idle: 900, max: 3000, blades: 3, gear: 0.48, exhaust: 150, rough: 0.3 },
-    guns: [[-2.7, -0.3, -2.3], [2.7, -0.3, -2.3]], // canons dans le bord d'attaque (gauche, droite)
-    paint: [0x5f6f3f, 0xf4f1ea, 0xf2c230], // couleurs principales (remplacées par les livrées)
+    guns: [[-3.4, -0.9, -2.2], [3.4, -0.9, -2.2]], // canons dans le bord d'attaque (gauche, droite)
+    paint: [0x22395a, 0xf4f1ea, 0xf2c230], // couleurs principales (remplacées par les livrées)
     stats: [0.58, 0.78, 0.55],
   },
   {
@@ -182,17 +182,43 @@ PLANES.splice(PLANES.findIndex((p) => p.id === 'hydravion'), 0, {
   stats: [0.25, 0.6, 0.85],
 });
 
+PLANES.splice(PLANES.findIndex((p) => p.id === 'tourisme') + 1, 0, {
+  id: 'postier', name: 'Le Postier',
+  desc: "Petit avion postal à aile haute. Charge les sacs de courrier à l'arrêt sur n'importe quelle piste, puis largue-les (X) au-dessus du village indiqué : ils descendent en parachute.",
+  maxSpeed: 64, stall: 22, accel: 5, pitchRate: 1.2, rollRate: 1.9, yawRate: 0.55, gLimit: 4.5,
+  brake: 7, maxSink: 6.5, gearH: 1.5, bellyH: 1.2, span: 11.6, len: 8.4, wingY: 0.9,
+  retract: false, floats: false, jet: false, mail: true,
+  cam: { dist: 17, height: 4.4 }, eye: [0, 0.45, -1.0],
+  inertia: 0.3, stallBite: 0.25, flaps: true, turb: 1,
+  engine: { kind: 'piston', cyl: 6, idle: 700, max: 2600, blades: 2, gear: 1, exhaust: 100, rough: 0.35 },
+  paint: [0xf4ead6, 0xc8402f, 0x24324a], // crème, rouge, bleu nuit (remplacées par les livrées)
+  stats: [0.24, 0.55, 0.95],
+});
+
 for (const p of PLANES) p.takeoff = p.stall * 1.12;
 
-/** Livrées : remplacent dans l'ordre les couleurs « paint » de chaque appareil (null = d'origine). */
-export const LIVERIES = [
-  { name: "D'origine", colors: null },
-  { name: 'Patrouille', colors: [0x1f4f9c, 0xf4f4f4, 0xd8312b] },
-  { name: 'Nuit', colors: [0x2a2e35, 0x6b7480, 0xf2c230] },
-  { name: 'Désert', colors: [0xd8b878, 0x8a5a33, 0x6b7448] },
-  { name: 'Corail', colors: [0xf27059, 0x2ec4b6, 0xfff1d6] },
-  { name: 'Arctique', colors: [0xf2f5f7, 0xe8462e, 0x2b3440] },
-];
+/** Livrées propres à chaque appareil : remplacent dans l'ordre ses couleurs « paint ». */
+const LIVERY_SETS = {
+  tourisme: [['Ciel', [0xe9f1f7, 0x2f6fb5]], ['Sable', [0xefe3c8, 0x8a5a33]], ['Menthe', [0xf2f5ef, 0x2fae7a]], ['Club', [0x24467a, 0xf2c230]], ['Cerise', [0xf6efe6, 0x8e1f3a]]],
+  postier: [['Bleu', [0x2f5fa8, 0xf2c230, 0xf4f1ea]], ['Vert', [0x2f6b47, 0xf4e9c9, 0x2b2e33]], ['Rétro', [0xe7dcc0, 0x8a5a33, 0x2b3440]], ['Gris', [0xbfc4c9, 0xd8312b, 0x2b3440]], ['Jaune', [0xf2c230, 0x2b3440, 0xf4f1ea]]],
+  planeur: [['Arctique', [0xf6f6f2, 0x2f7fdc]], ['Fluo', [0xf6f6f2, 0xff7a1f]], ['Compétition', [0xf2f2ee, 0x1d2a44]], ['Lime', [0xf4f6ec, 0x8cc63f]], ['Rose', [0xfbf3f4, 0xe0457b]]],
+  biplan: [['Cirque', [0xd8312b, 0xf4f1ea, 0x2b2e33]], ['Rétro', [0xe7dcc0, 0x2f5fa8, 0x4a3a2a]], ['Corsaire', [0x2a3f5f, 0xf2c230, 0x1b1d21]], ['Vert bouteille', [0x2f6b47, 0xf4e9c9, 0x2b2e33]], ['Arlequin', [0x8e5cc9, 0xf2c230, 0x2b2e33]]],
+  hydravion: [['Lagon', [0xf5f2ea, 0x2ec4b6, 0xdfe8ea]], ['Garde-côte', [0xf4f4f0, 0xd8312b, 0xd8dde2]], ['Bois verni', [0xb9824a, 0x6b3f1f, 0xe9e1d2]], ['Marine', [0x1f3f6b, 0xf4f1ea, 0xc9d0d6]], ['Citron', [0xf6ea7a, 0x2f7fdc, 0xeeeeea]]],
+  canadair: [['Pompier', [0xd8312b, 0xf2c230, 0xf4f1ea]], ['Forestier', [0x3f6b3a, 0xf2c230, 0xf4f1ea]], ['Nordique', [0xf4f1ea, 0xd8312b, 0x2b3440]], ['Orange', [0xf08a2c, 0x2b3440, 0xf4f1ea]], ['Ciel', [0xdfe9f2, 0x2f6fb5, 0xf4f1ea]]],
+  chasseur: [['Olive', [0x5f6f3f, 0xf4f1ea, 0xf2c230]], ['Désert', [0xc8a46a, 0x7a5634, 0xf4f1ea]], ['Argent', [0xbfc4c9, 0x2b2e33, 0xd8312b]], ['Requin', [0x8d969c, 0xf4f1ea, 0xd8312b]], ['Hiver', [0xeeeeea, 0x6b7480, 0x2f6fb5]]],
+  jet: [['Nuit', [0x2a2e35, 0x1c1f24, 0xf2c230]], ['Désert', [0xd8b878, 0xa88a5a, 0x5a4630]], ['Bleu acier', [0x6f8fb0, 0x4a6585, 0x23303f]], ['Démonstration', [0xf2f2ee, 0xd8312b, 0x1f4f9c]], ['Tigre', [0xf2a22c, 0x2b2e33, 0x1b1d21]]],
+  cargo: [['Fret', [0xf2f2ee, 0xf08a2c, 0x8d959d]], ['Vert', [0xf2f2ee, 0x2f8a5a, 0x8d959d]], ['Gris', [0x8d959d, 0x5f676f, 0x4a5057]], ['Rouge', [0xf2f2ee, 0xc8402f, 0x8d959d]], ['Nuit', [0x2a2e35, 0xf2c230, 0x5f676f]]],
+  helico: [['Montagne', [0xf2c230, 0x26292d]], ['Bleu', [0x2f6fb5, 0xf3f1ec]], ['Orange', [0xf08a2c, 0xf3f1ec]], ['Vert', [0x2f8a5a, 0xf3f1ec]], ['Noir', [0x26292d, 0xd8312b]]],
+  libellule: [['Turquoise', [0x2ec4b6, 0x26292d]], ['Rouge', [0xd8312b, 0x26292d]], ['Blanc', [0xf3f1ec, 0x2f6fb5]], ['Violet', [0x8e5cc9, 0xf3f1ec]], ['Citron vert', [0x8cc63f, 0x26292d]]],
+  birotor: [['Marine', [0x5d6e80, 0x3f4c5a, 0xe9e4d4]], ['Sable', [0xc8a46a, 0x9a7a4a, 0xe9e4d4]], ['Secours', [0xd8312b, 0xf3f1ec, 0x2b2e33]], ['Gris', [0x9aa3ab, 0x6b7480, 0xf3f1ec]], ['Jaune', [0xf2c230, 0x26292d, 0xf3f1ec]]],
+  racer: [['Or', [0xd9a92b, 0x26292d]], ['Bleu course', [0x1f4f9c, 0xf5f3ee]], ['Vert anglais', [0x1f5a3a, 0xf2e7c9]], ['Noir et or', [0x1b1d21, 0xd9a92b]], ['Orange', [0xf27a1f, 0x1b1d21]]],
+  epandeur: [['Rouge ferme', [0xc8402f, 0xf4f1ea, 0x2b2e33]], ['Bleu', [0x2f6fb5, 0xf2c230, 0xf4f1ea]], ['Vert pomme', [0x8cc63f, 0x2f5a2a, 0xf4f1ea]], ['Orange', [0xf08a2c, 0x2b2e33, 0xf4f1ea]], ['Argent', [0xbfc4c9, 0xc8402f, 0x2b2e33]]],
+};
+const ORIGINAL = { name: "D'origine", colors: null };
+/** Livrées proposées pour un appareil (la première est toujours celle d'origine). */
+export function liveriesOf(spec) {
+  return [ORIGINAL, ...(LIVERY_SETS[spec.id] || []).map(([name, colors]) => ({ name, colors }))];
+}
 
 /** Points de départ proposés au menu. */
 export const STARTS = [

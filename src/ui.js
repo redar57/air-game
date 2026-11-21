@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 
 /** Menu, affichage minimal en vol, messages furtifs et écran de pause. */
 export class UI {
-  constructor(starts, labels, planes, liveries) {
+  constructor(starts, labels, planes) {
     this.handlers = {};
     this.toastT = 0; this.hintT = 0;
     this.hudCache = ['', '', '', '', ''];
@@ -24,15 +24,8 @@ export class UI {
     $('mapbtn').addEventListener('click', () => this.emit('bigmap'));
     $('r-again').addEventListener('click', () => this.emit('again'));
     $('r-menu').addEventListener('click', () => this.emit('menu'));
-    this.liveries = liveries;
     $('firesbtn').addEventListener('click', () => this.emit('fires'));
-    this.liveryChips = liveries.map((l, i) => {
-      const b = document.createElement('button');
-      b.className = 'chip';
-      b.addEventListener('click', () => this.emit('livery-select', i));
-      $('liveries').appendChild(b);
-      return b;
-    });
+    this.liveryChips = [];
 
     // liste des appareils (vignettes ajoutées plus tard par setThumb)
     this.planes = planes; this.cat = 'all'; this.sel = 0;
@@ -174,11 +167,22 @@ export class UI {
       : "Pas d'incendie : tu peux quand même écoper au ras de l'eau et larguer où tu veux avec X.";
   }
   /** Livrées, avec une pastille de leurs couleurs (sur l'appareil choisi). */
-  showLiveries(spec, sel) {
+  showLiveries(spec, liveries, sel) {
     const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+    // chaque appareil a ses propres livrées : on recrée les pastilles quand il en faut d'autres
+    while (this.liveryChips.length < liveries.length) {
+      const b = document.createElement('button'), i = this.liveryChips.length;
+      b.className = 'chip';
+      b.addEventListener('click', () => this.emit('livery-select', i));
+      $('liveries').appendChild(b);
+      this.liveryChips.push(b);
+    }
     this.liveryChips.forEach((b, i) => {
-      const cols = (this.liveries[i].colors || spec.paint || []).slice(0, (spec.paint || []).length || 2);
-      b.innerHTML = `<span class="sw">${cols.map((c) => `<i style="background:${hex(c)}"></i>`).join('')}</span>${this.liveries[i].name}`;
+      const l = liveries[i];
+      b.hidden = !l;
+      if (!l) return;
+      const cols = (l.colors || spec.paint || []).slice(0, (spec.paint || []).length || 2);
+      b.innerHTML = `<span class="sw">${cols.map((c) => `<i style="background:${hex(c)}"></i>`).join('')}</span>${l.name}`;
       b.classList.toggle('on', i === sel);
     });
   }

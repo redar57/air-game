@@ -3,6 +3,7 @@ import { heightAt, normalAt, flatInfo, coastPoint, VOLCANO, BIG, HALF } from './
 import { makeNoise2D, fbm } from './noise.js';
 import { mulberry32, mergeColored, xform, toLocal, smoothstep } from '../util.js';
 import { addCylinder, addSphere, addCustom } from './colliders.js';
+import { buildLife } from './life.js';
 import { planCountry, buildCountry, updateCountry, country, occupied } from './country.js';
 
 /** Arche rocheuse en mer (utilisée aussi par la détection des figures). */
@@ -69,11 +70,19 @@ function buildTrees(scene) {
 function buildVillage(scene, c, count = 38, seed = 77, radius = 300) {
   const rnd = mulberry32(seed), parts = [];
   const walls = [0xf6efe2, 0xfbf7ef, 0xf0d9b8, 0xe9e2d4], roofs = [0xc8553a, 0xb9472f, 0xd3704a, 0x4f6f8f];
-  const placed = [];
-  const house = (x, z, w, h, d, ry, wall, roof) => {
+  const placed = [], houses = [];
+  const house = (x, z, w, h, d, ry, wall, roof, chimney = false) => {
     const y = heightAt(x, z) - 0.6;
     parts.push({ geo: new THREE.BoxGeometry(w, h, d), color: wall, matrix: xform(x, y + h / 2, z, ry) });
     parts.push({ geo: new THREE.ConeGeometry(1, 1, 4), color: roof, matrix: xform(x, y + h + 1.9, z, ry + Math.PI / 4, w * 0.78, 3.8, d * 0.78) });
+    const hs = { x, z, y, w, h, d, ry, chimney: null };
+    if (chimney) {
+      // cheminée sur le pan du toit, à un quart de la longueur
+      const cx = x + Math.sin(ry) * d * 0.25 + Math.cos(ry) * w * 0.18, cz = z + Math.cos(ry) * d * 0.25 - Math.sin(ry) * w * 0.18;
+      parts.push({ geo: new THREE.BoxGeometry(1.1, 3.2, 1.1), color: 0x9a6a50, matrix: xform(cx, y + h + 2.6, cz, ry) });
+      hs.chimney = { x: cx, y: y + h + 4.3, z: cz };
+    }
+    houses.push(hs);
   };
   for (let n = 0; n < 900 && placed.length < count; n++) {
     const ang = rnd() * 6.283, rad = Math.sqrt(rnd()) * radius;
@@ -89,12 +98,13 @@ function buildVillage(scene, c, count = 38, seed = 77, radius = 300) {
       parts.push({ geo: new THREE.BoxGeometry(5.5, 19, 5.5), color: 0xfbf7ef, matrix: xform(x + 2.8, y + 9.5, z - 9, 0.3) });
       parts.push({ geo: new THREE.ConeGeometry(4.4, 9, 4), color: 0x4f6f8f, matrix: xform(x + 2.8, y + 23.5, z - 9, 0.3 + Math.PI / 4) });
     } else {
-      house(x, z, 8 + rnd() * 5, 4.5 + rnd() * 2.5, 7 + rnd() * 4, rnd() * 3.14, walls[Math.floor(rnd() * 4)], roofs[Math.floor(rnd() * 4)]);
+      house(x, z, 8 + rnd() * 5, 4.5 + rnd() * 2.5, 7 + rnd() * 4, rnd() * 3.14, walls[Math.floor(rnd() * 4)], roofs[Math.floor(rnd() * 4)], rnd() < 0.4);
     }
   }
-  if (!parts.length) return;
+  if (!parts.length) return houses;
   const mesh = new THREE.Mesh(mergeColored(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   scene.add(mesh);
+  return houses;
 }
 
 function buildLighthouse(scene) {
@@ -112,9 +122,22 @@ function buildLighthouse(scene) {
   const lamp = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 3.8, 8), new THREE.MeshBasicMaterial({ color: 0xfff0a0 }));
   lamp.position.y = 36.4;
   mesh.add(lamp);
+  // faisceau tournant : deux cônes opposés, visibles seulement à la tombée du jour
+  const beam = new THREE.Group();
+  beam.position.y = 36.4;
+  const beamMat = new THREE.MeshBasicMaterial({ color: 0xfff2c0, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+  for (const s of [1, -1]) {
+    const geo = new THREE.ConeGeometry(34, 560, 16, 6, true).translate(0, -280, 0), pp = geo.attributes.position, col = [];
+    for (let i = 0; i < pp.count; i++) { const k = Math.pow(1 + pp.getY(i) / 560, 1.6); col.push(k, k, k); } // s'éteint vers le bout
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    const cone = new THREE.Mesh(geo, beamMat);
+    cone.rotation.z = s * Math.PI / 2 - s * 0.03; // légèrement plongeant
+    beam.add(cone);
+  }
+  mesh.add(beam);
   scene.add(mesh);
   addCylinder(c.x, c.z, 5.5, y - 2, y + 42);
-  return lamp;
+  return { lamp, beam, beamMat };
 }
 
 function buildRocks(scene) {
@@ -172,10 +195,11 @@ export function buildScenery(scene) {
   planCountry();
   const treeList = buildTrees(scene);
   // villages : celui de la côte sur la petite carte ; ceux de la campagne (reliés par des chemins) sur la grande
-  const villages = BIG ? country.villages : [{ ...coastPoint(0.75, -430), name: 'le village', r: 300, count: 38, seed: 77 }];
-  for (const v of villages) buildVillage(scene, v, v.count, v.seed, v.r);
+  const villages = BIG ? country.villages : [{ ...coastPoint(0.75, -430), name: 'Village du Cap', r: 300, count: 38, seed: 77 }];
+  for (const v of villages) v.houses = buildVillage(scene, v, v.count, v.seed, v.r);
   buildCountry(scene);
-  const lamp = buildLighthouse(scene);
+  const { lamp, beam, beamMat } = buildLighthouse(scene);
+  const life = buildLife(scene, villages, country.roads);
   buildRocks(scene);
   const balloons = buildBalloons(scene);
 
@@ -191,7 +215,7 @@ export function buildScenery(scene) {
   return {
     trees: treeList.length,
     /** Arbres (pour placer les feux de forêt) et villages (feux qui menacent les maisons). */
-    treeList, villages,
+    treeList, villages, life,
     /** Cibles : montgolfières encore en l'air. */
     balloons,
     /** Abat une montgolfière ; elle revient (en gonflant) au bout de 40 s. */
@@ -199,8 +223,9 @@ export function buildScenery(scene) {
     pop(b) {
       b.alive = false; b.back = this.respawn; b.col.off = true; b.mesh.visible = false; b.dmg = 0;
     },
-    update(t, night, dt = 0) {
+    update(t, night, dt = 0, cam = null) {
       updateCountry(dt);
+      life.update(dt, t, night, cam);
       for (const b of balloons) {
         b.mesh.position.y = b.by + Math.sin(t * 0.35 + b.ph) * 3;
         if (!b.alive && (b.back -= dt) <= 0) { b.alive = true; b.col.off = false; b.mesh.visible = true; b.grow = 0; }
@@ -210,7 +235,10 @@ export function buildScenery(scene) {
           if (b.grow >= 1) b.grow = undefined;
         }
       }
-      lamp.material.color.setHex(night > 0.2 && Math.sin(t * 2.2) > 0.2 ? 0xffffff : 0xfff0a0);
+      lamp.material.color.setHex(night > 0.2 ? 0xffffff : 0xfff0a0);
+      beam.rotation.y = t * 0.9;
+      beamMat.opacity = 0.22 * smoothstep(0.15, 0.7, night);
+      beam.visible = beamMat.opacity > 0.005;
       lava.material.color.setRGB(1, 0.42 + 0.1 * Math.sin(t * 1.7), 0.1);
       glow.intensity = 1600 * (0.3 + night) * (0.85 + 0.15 * Math.sin(t * 1.7));
     },

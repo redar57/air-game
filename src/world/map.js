@@ -74,13 +74,20 @@ export class IslandMap {
 
   /** Dessine les repères (thermiques, montgolfières, feux…) ; f(x, z) -> [px, py] sur le canevas. */
   marks(g, f, extras, scale, rk) {
-    const { thermals = [], balloons = [], fires = [], fuel = false, load = false } = extras;
+    const { thermals = [], balloons = [], fires = [], fuel = false, load = false, mail = null } = extras;
     if (load && loadPad.rw) { // aire de chargement de l'épandeur
       const [x, y] = f(loadPad.x, loadPad.z), r = 5 * scale;
       g.fillStyle = '#3f9e4a'; g.strokeStyle = '#0d2b12'; g.lineWidth = scale;
       g.beginPath(); g.roundRect(x - r, y - r, 2 * r, 2 * r, r * 0.35); g.fill(); g.stroke();
       g.font = `800 ${Math.round(r * 1.4)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText('🌾', x, y + r * 0.08);
+    }
+    if (mail) { // village où livrer le courrier
+      const [x, y] = f(mail.x, mail.z), r = 6 * scale;
+      g.fillStyle = '#ffd34d'; g.strokeStyle = '#2b2205'; g.lineWidth = scale;
+      g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill(); g.stroke();
+      g.fillStyle = '#2b2205'; g.font = `800 ${Math.round(r * 1.3)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('✉', x, y + r * 0.06);
     }
     const pumps = [fuelStation];
     if (seaBase.active) { const w = {}; toWorld(seaBase, seaBase.fuel.lx, seaBase.fuel.lz, w); pumps.push(w); }

@@ -157,7 +157,7 @@ function grassTexture() {
   return tex;
 }
 
-function lightsPoints(positions, color, size) {
+export function lightsPoints(positions, color, size) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   const mat = new THREE.PointsMaterial({ color, size, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false });

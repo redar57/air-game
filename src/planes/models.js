@@ -358,31 +358,45 @@ function canadair(spec) {
 }
 
 function chasseur(spec) {
+  // façon chasseur embarqué à aile en W inversé : énorme moteur en étoile, long capot, cockpit reculé
   const m = base(), { hull, always } = m;
-  const G = 0x5f6f3f, Y = 0xf2c230, W = 0xf4f1ea;
-  hull.add(tube(0.05, 0.34, -4.7, -4.05, Y));
-  hull.add(tube(0.5, 0.64, -4.05, -1.6, G, { sy: 1.04 }));
-  hull.add(tube(0.64, 0.62, -1.6, 0.7, G, { sy: 1.1 }));
-  hull.add(tube(0.62, 0.14, 0.7, 4.6, G, { y: 0.1 }));
-  hull.add(box(1.34, 0.1, 1.0, DARK, 0, 0.1, -3.0));
-  hull.add(blob(0.5, GLASS, 0, 0.66, -0.35, 0.86, 0.82, 2.3));
-  hull.add(tube(0.52, 0.475, 1.7, 2.05, W, { y: 0.1 }));
-  wingS(m, hull, [1.95, 1.05, 0.6, 0.08, 0.28], G, 0.08, 0.25, 4.0, [{ kind: 'elevator', t0: 0, t1: 1 }], 0.4);
-  finS(m, hull, [1.6, 1.4, 0.6, 0.09, 0.7], G, 0, 0.3, 3.7, 0, 0.4);
+  const B = 0x22395a, W = 0xf4f1ea, Y = 0xf2c230;
+  hull.add(tube(0.05, 0.32, -5.4, -4.98, DARK));                               // cône d'hélice
+  hull.add(tube(0.8, 0.8, -4.98, -4.9, DARK, { seg: 14 }));                    // face du moteur
+  hull.add(tube(0.82, 0.8, -4.9, -4.2, B, { seg: 14 }));                       // capot rond
+  hull.add(tube(0.8, 0.74, -4.2, -0.9, B, { seg: 12 }));                       // long nez
+  hull.add(tube(0.74, 0.66, -0.9, 1.3, B, { seg: 12, sy: 1.05 }));
+  hull.add(tube(0.66, 0.13, 1.3, 5.3, B, { y: 0.14 }));
+  for (const s of [-1, 1]) for (let k = 0; k < 3; k++) hull.add(box(0.12, 0.12, 0.45, DARK, s * 0.72, -0.15 - k * 0.2, -3.95)); // échappements
+  hull.add(blob(0.5, GLASS, 0, 0.66, 0.15, 0.84, 0.82, 2.1));                  // verrière
+  bar(hull, [0, 1.06, -0.4], [0, 1.06, 0.75], 0.05, B);
+  hull.add(box(0.9, 0.1, 0.5, B, 0, 0.62, 1.25));                              // dos derrière la verrière
+  hull.add(tube(0.6, 0.55, 2.4, 2.75, W, { y: 0.1, seg: 12 }));                // bande claire
+  wingS(m, hull, [2.3, 1.2, 0.72, 0.08, 0.25], B, 0.08, 0.3, 4.5, [{ kind: 'elevator', t0: 0, t1: 1 }], 0.4);
+  finS(m, hull, [1.8, 1.65, 0.8, 0.09, 0.62], B, 0, 0.35, 4.25, 0, 0.4);
+  // train : jambes courtes au coude de l'aile, roulette de queue
   const gear = new THREE.Group();
-  bar2(gear, [1.5, -0.35, -1.35], [1.5, -1.33, -1.45], 0.1, METAL);
-  wheel(gear, 0.36, 0.2, 1.5, -1.34, -1.45); wheel(gear, 0.36, 0.2, -1.5, -1.34, -1.45);
-  bar(gear, [0, -0.2, 4.0], [0, -0.5, 4.08], 0.06, METAL);
-  wheel(gear, 0.15, 0.1, 0, -0.52, 4.08);
+  for (const s of [-1, 1]) {
+    bar(gear, [s * 2.75, -1.05, -1.25], [s * 2.75, -1.32, -1.45], 0.12, METAL);
+    gear.add(box(0.06, 0.55, 0.75, B, s * 2.62, -1.25, -1.4));                  // trappe
+    wheel(gear, 0.4, 0.2, s * 2.85, -1.3, -1.45);
+  }
+  bar(gear, [0, -0.15, 4.6], [0, -0.55, 4.75], 0.06, METAL);
+  wheel(gear, 0.16, 0.1, 0, -0.57, 4.75);
   hull.add(gear); m.gear = gear;
 
-  wingS(m, always, [5.35, 2.3, 1.1, 0.22, 0.3, 0.55, 0.4], G, 0.25, -0.32, -1.15,
-    [{ kind: 'flap', t0: 0.03, t1: 0.5 }, { kind: 'aileron', t0: 0.53, t1: 0.93 }], 0.24);
-  always.add(box(0.6, 0.22, 2.3, G, 0, -0.32, -1.15));
-  always.add(box(0.22, 0.1, 1.1, Y, 5.55, 0.24, -0.85), box(0.22, 0.1, 1.1, Y, -5.55, 0.24, -0.85));
-  m.props.push(makeProp(always, 1.5, 3, 0, 0, -4.4));
-  m.cockpit = makeCockpit(spec.eye, { w: 0.8, frame: true, nose: { w: 0.95, len: 3.3, color: G } });
-  m.tips = [[5.65, 0.24, -0.6], [-5.65, 0.24, -0.6]];
+  // aile en W inversé : tronçon intérieur qui plonge, tronçon extérieur qui remonte
+  wingS(m, always, [2.3, 2.5, 2.25, 0.3, 0.06, -0.85, 0.9], B, 0.55, -0.3, -1.0, [{ kind: 'flap', t0: 0.05, t1: 0.95 }], 0.24);
+  wingS(m, always, [3.4, 2.25, 1.05, 0.26, 0.42, 0.85, 0.45], B, 2.85, -1.15, -0.94,
+    [{ kind: 'flap', t0: 0.02, t1: 0.35 }, { kind: 'aileron', t0: 0.4, t1: 0.95 }], 0.24);
+  always.add(box(1.2, 0.3, 2.5, B, 0, -0.3, -1.0));
+  for (const s of [-1, 1]) {
+    always.add(box(1.3, 0.14, 0.18, DARK, s * 1.55, -0.68, -2.2));             // entrées d'air au bord d'attaque
+    always.add(box(0.26, 0.12, 1.0, Y, s * 6.15, -0.3, -0.62));                // saumons
+  }
+  m.props.push(makeProp(always, 1.6, 3, 0, 0, -5.1));
+  m.cockpit = makeCockpit(spec.eye, { w: 0.8, frame: true, nose: { w: 1.2, len: 4.6, color: B } });
+  m.tips = [[6.25, -0.3, -0.5], [-6.25, -0.3, -0.5]];
   return m;
 }
 
@@ -629,6 +643,38 @@ function epandeur(spec) {
   return m;
 }
 
+// Postier : aile haute, train classique, soute à courrier sous le ventre
+function postier(spec) {
+  const m = base(), { hull, always } = m;
+  const C = 0xf4ead6, R = 0xc8402f, N = 0x24324a;
+  hull.add(tube(0.05, 0.24, -3.85, -3.5, N));                        // cône d'hélice
+  hull.add(tube(0.48, 0.62, -3.5, -2.45, N, { sy: 0.96 }));          // capot
+  hull.add(tube(0.62, 0.66, -2.45, 0.4, C, { sy: 1.12 }));
+  hull.add(tube(0.66, 0.15, 0.4, 4.5, C, { y: 0.14 }));
+  hull.add(box(1.12, 0.5, 1.8, GLASS, 0, 0.52, -1.2));
+  hull.add(box(1.34, 0.16, 6.4, R, 0, 0.0, 0.6));                    // bande rouge
+  hull.add(box(1.0, 0.62, 2.6, R, 0, -0.78, -0.5));                  // soute à courrier
+  hull.add(box(0.8, 0.05, 1.1, N, 0, -1.1, 0.0));                    // trappe de largage
+  hull.add(box(1.36, 0.5, 0.6, C, 0, 0.1, 1.4));                     // porte de la soute
+  wingS(m, hull, [1.8, 1.0, 0.64, 0.08, 0.22], C, 0.08, 0.32, 4.05, [{ kind: 'elevator', t0: 0, t1: 1 }], 0.4);
+  finS(m, hull, [1.6, 1.4, 0.62, 0.09, 0.75], R, 0, 0.32, 3.8, 0, 0.4);
+  for (const s of [-1, 1]) {                                          // train classique fixe
+    bar(hull, [s * 0.45, -0.5, -1.75], [s * 1.25, -1.2, -1.85], 0.09, N);
+    wheel(hull, 0.3, 0.16, s * 1.32, -1.2, -1.85);
+  }
+  bar(hull, [0, -0.05, 4.1], [0, -1.05, 4.3], 0.06, DARK);
+  wheel(hull, 0.14, 0.08, 0, -1.05, 4.3);
+  wingS(m, always, [5.6, 1.6, 1.2, 0.17, 0.05, 0.12], C, 0.25, 0.9, -1.1,
+    [{ kind: 'flap', t0: 0.02, t1: 0.5 }, { kind: 'aileron', t0: 0.53, t1: 0.97 }], 0.26);
+  always.add(box(0.6, 0.17, 1.6, C, 0, 0.9, -1.1));
+  for (const s of [-1, 1]) always.add(box(0.26, 0.1, 1.25, R, s * 5.8, 1.02, -1.05));
+  bar2(always, [0.6, -0.3, -1.0], [2.6, 0.84, -1.05], 0.07, N);
+  m.props.push(makeProp(always, 1.0, 2, 0, 0, -3.65));
+  m.cockpit = makeCockpit(spec.eye, { w: 1.0, frame: true, nose: { w: 1.0, len: 1.9, color: N } });
+  m.tips = [[5.9, 1.0, -0.85], [-5.9, 1.0, -0.85]];
+  return m;
+}
+
 // Planeur (blanc, saumons rouges, empennage en T)
 function planeur(spec) {
   const m = base(), { hull, always } = m;
@@ -648,7 +694,7 @@ function planeur(spec) {
   return m;
 }
 
-const BUILDERS = { planeur, tourisme, biplan, epandeur, hydravion, canadair, chasseur, jet, cargo, helico, libellule, birotor, racer };
+const BUILDERS = { planeur, tourisme, postier, biplan, epandeur, hydravion, canadair, chasseur, jet, cargo, helico, libellule, birotor, racer };
 const cache = new Map();
 
 /** Construit (une seule fois par livrée) le modèle 3D d'un appareil. */

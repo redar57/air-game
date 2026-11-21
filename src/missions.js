@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Effects } from './fx.js';
-import { mulberry32, clamp } from './util.js';
+import { mulberry32, clamp, mergeColored, xform } from './util.js';
 import { HALF } from './world/terrain.js';
 
 // Bombardier d'eau (hélicoptère rouge) : écopage, largage, et feux de forêt si l'option est activée.
@@ -208,6 +208,171 @@ class Sprayer {
   }
 }
 export function createSprayer(ctx) { return new Sprayer(ctx); }
+
+// --------------------------------------------------------------------------- courrier
+const BAGS = 6;
+const LOW = 25; // en dessous, le parachute n'a pas le temps de s'ouvrir
+
+function parcelMesh() {
+  const g = new THREE.Group();
+  const sack = new THREE.Mesh(mergeColored([
+    { geo: new THREE.BoxGeometry(0.75, 0.95, 0.55), color: 0xc9a46a, matrix: xform(0, 0, 0) },
+    { geo: new THREE.BoxGeometry(0.8, 0.12, 0.6), color: 0x6b4a2a, matrix: xform(0, 0.2, 0) },
+    { geo: new THREE.BoxGeometry(0.3, 0.25, 0.3), color: 0xc9a46a, matrix: xform(0, 0.58, 0) },
+  ]), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  g.add(sack);
+  const parts = [];
+  for (let k = 0; k < 8; k++) {
+    parts.push({ geo: new THREE.SphereGeometry(2.6, 2, 4, (k * Math.PI) / 4, Math.PI / 4, 0, Math.PI / 2), color: k % 2 ? 0xf4f1ea : 0xd8432f, matrix: xform(0, 0, 0, 0, 1, 0.7, 1) });
+  }
+  for (const [x, z] of [[1.8, 1.8], [-1.8, 1.8], [1.8, -1.8], [-1.8, -1.8]]) {
+    const len = Math.hypot(x, z, 4.6);
+    const m = new THREE.Matrix4().lookAt(new THREE.Vector3(0, 0, 0), new THREE.Vector3(x, 4.6, z), new THREE.Vector3(0, 1, 0));
+    m.multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)).setPosition(x / 2, -4.6 / 2, z / 2);
+    parts.push({ geo: new THREE.CylinderGeometry(0.025, 0.025, len, 3), color: 0x333333, matrix: m });
+  }
+  const chute = new THREE.Mesh(mergeColored(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
+  const holder = new THREE.Group();
+  chute.position.y = 4.6 + 0.5;
+  holder.add(chute);
+  holder.scale.setScalar(0.01);
+  g.add(holder);
+  return { g, holder };
+}
+
+/** Postier : sacs chargés à l'arrêt sur une piste, largués (X) au-dessus du village indiqué. */
+class Mail {
+  constructor(ctx) {
+    this.ctx = ctx; this.id = 'courrier'; this.title = 'Courrier';
+    this.bags = BAGS; this.loadAcc = 0; this.loading = false; this.prevFire = false;
+    this.delivered = 0; this.perfect = 0; this.best = Infinity; this.parcels = [];
+    this.villages = ctx.villages.filter((v) => v.houses && v.houses.length);
+    this.target = null;
+    // repère au-dessus du village à livrer : un cercle au sol et une colonne lumineuse
+    this.marker = new THREE.Group();
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide });
+    this.marker.add(new THREE.Mesh(new THREE.RingGeometry(30, 36, 40).rotateX(-Math.PI / 2), ringMat));
+    this.marker.add(new THREE.Mesh(new THREE.RingGeometry(4, 8, 24).rotateX(-Math.PI / 2), ringMat));
+    this.beamMat = new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 320, 10, 1, true).translate(0, 160, 0), this.beamMat);
+    this.marker.add(beam);
+    ctx.scene.add(this.marker);
+    this.pick();
+  }
+  /** Prochain village à livrer (un autre que le précédent quand c'est possible). */
+  pick() {
+    const others = this.villages.filter((v) => v !== this.target);
+    const list = others.length ? others : this.villages;
+    this.target = list[Math.floor(Math.random() * list.length)] || null;
+    if (!this.target) { this.marker.visible = false; return; }
+    const { x, z } = this.target;
+    let top = -Infinity;
+    for (let a = 0; a < 6.28; a += 0.5) top = Math.max(top, this.ctx.heightAt(x + Math.cos(a) * 33, z + Math.sin(a) * 33));
+    this.marker.position.set(x, Math.max(top, this.ctx.heightAt(x, z)) + 0.6, z);
+    this.marker.visible = true;
+  }
+  get mailTarget() { return this.target; }
+  drop(plane) {
+    const { g, holder } = parcelMesh();
+    _p.copy(plane.pos).addScaledVector(plane.up, -1.4);
+    g.position.copy(_p);
+    this.ctx.scene.add(g);
+    this.parcels.push({ g, holder, vel: plane.vel.clone().multiplyScalar(0.95), t: 0, low: plane.agl + plane.standH < LOW, target: this.target, landed: 0 });
+    this.bags--;
+    this.ctx.sound.click(true);
+    if (!this.bags) this.ctx.ui.toast('Dernier sac largué : pose-toi sur une piste pour recharger', 2600);
+  }
+  land(pc) {
+    const { ui, sound, heightAt } = this.ctx, p = pc.g.position, tv = pc.target;
+    if (heightAt(p.x, p.z) < 0) { ui.toast("Plouf ! Le sac est tombé à l'eau", 2200); return; }
+    const d = tv ? Math.hypot(p.x - tv.x, p.z - tv.z) : Infinity, dm = Math.round(d);
+    const bump = pc.low ? ' (largué trop bas : sac cabossé)' : '';
+    const other = this.villages.find((v) => v !== tv && Math.hypot(p.x - v.x, p.z - v.z) < v.r);
+    if (tv && d < tv.r) {
+      this.delivered++;
+      this.best = Math.min(this.best, d);
+      if (d < 40) { this.perfect++; ui.toast(`🎯 En plein sur la place de ${tv.name} ! (${dm} m)${bump}`, 2800); sound.chime(3); }
+      else { ui.toast(`✉ Courrier livré à ${tv.name}, à ${dm} m de la place${bump}`, 2600); sound.chime(2); }
+      if (tv === this.target) {
+        this.pick();
+        if (this.target && this.target !== tv) setTimeout(() => this.ctx.ui.toast(`Prochaine livraison : ${this.target.name} (N : carte)`, 2400), 2700);
+      }
+    } else if (other) ui.toast(`Mauvais village : ce sac est arrivé à ${other.name}, il était pour ${tv.name}`, 2800);
+    else ui.toast(`Raté : le sac est tombé à ${dm} m de la place de ${tv ? tv.name : 'destination'}`, 2400);
+  }
+  update(dt, plane, input) {
+    const { ui, sound, heightAt, canLoad } = this.ctx;
+    // chargement : à l'arrêt sur une piste (ou l'esplanade de la base nautique)
+    this.loading = plane.onGround && plane.groundSpeed < 1 && canLoad(plane.pos.x, plane.pos.z) && this.bags < BAGS;
+    if (this.loading) {
+      if (this.loadAcc === 0) ui.toast('Chargement du courrier…', 1500);
+      this.loadAcc += dt;
+      if (this.loadAcc > 1.2) {
+        this.loadAcc = 0.001; this.bags++;
+        sound.click(false);
+        if (this.bags === BAGS) { ui.toast(`Soute pleine : ${BAGS} sacs pour ${this.target ? this.target.name : 'le village'} !`, 2400); sound.chime(1); }
+      }
+    } else this.loadAcc = 0;
+    // largage : un sac à chaque appui sur X
+    const fire = input.fireHeld();
+    if (fire && !this.prevFire) {
+      if (plane.onGround) ui.toast('Décolle d\'abord : on largue le courrier en vol', 1600);
+      else if (this.bags > 0) this.drop(plane);
+      else ui.toast('Plus de sac : recharge à l\'arrêt sur une piste', 1800);
+    }
+    this.prevFire = fire;
+    // sacs en l'air : chute libre, puis le parachute s'ouvre et freine
+    for (const pc of this.parcels) {
+      const p = pc.g.position;
+      if (pc.landed) {
+        pc.landed += dt;
+        pc.holder.scale.y = Math.max(0.05, pc.holder.scale.y - dt * 0.8);  // la voile s'affaisse
+        pc.holder.rotation.z = Math.min(1.3, pc.holder.rotation.z + dt * 0.9);
+        continue;
+      }
+      pc.t += dt;
+      const open = pc.t < 0.7 ? 0 : Math.min(1, (pc.t - 0.7) / 0.6);
+      pc.holder.scale.setScalar(Math.max(0.01, open));
+      pc.vel.y -= 9.8 * dt;
+      if (open > 0) {
+        const k = Math.min(1, dt * 2.2 * open);
+        pc.vel.y += (-1 - pc.vel.y) * k; // avec la pesanteur : descente stabilisée vers 5,5 m/s
+        pc.vel.x += (1.5 - pc.vel.x) * k * 0.45; // le vent fait un peu dériver
+        pc.vel.z += (0 - pc.vel.z) * k * 0.45;
+      } else pc.vel.multiplyScalar(1 - Math.min(1, dt * 0.08));
+      p.addScaledVector(pc.vel, dt);
+      pc.g.rotation.z = Math.sin(pc.t * 1.6) * 0.08 * open;   // léger balancement
+      const gy = Math.max(heightAt(p.x, p.z), 0);
+      if (p.y <= gy + 0.45) { p.y = gy + 0.45; pc.landed = 0.001; this.land(pc); }
+    }
+    // on retire les sacs posés depuis longtemps
+    this.parcels = this.parcels.filter((pc) => {
+      if (pc.landed > 25) { this.ctx.scene.remove(pc.g); return false; }
+      return true;
+    });
+    if (this.target) {
+      const d = Math.hypot(plane.pos.x - this.target.x, plane.pos.z - this.target.z);
+      this.beamMat.opacity = 0.32 * clamp((d - 150) / 900, 0.15, 1);
+    }
+    return null;
+  }
+  hud() {
+    const p = this.ctx.plane(), t = this.target;
+    const d = t ? Math.hypot(p.pos.x - t.x, p.pos.z - t.z) : 0;
+    return {
+      title: this.title, big: `${this.delivered}`, unit: 'livrés',
+      lines: [`✉ sacs : ${this.bags}/${BAGS}${this.loading ? ' · chargement…' : ''}`,
+        t ? `destination : ${t.name} · ${(d / 1000).toFixed(1).replace('.', ',')} km` : '',
+        this.bags ? (this.perfect ? `🎯 en plein sur la place : ${this.perfect}` : 'X : larguer un sac au-dessus du cercle jaune') : "à l'arrêt sur une piste pour recharger"],
+      bar: this.bags / BAGS,
+    };
+  }
+  dispose() {
+    this.ctx.scene.remove(this.marker);
+    for (const pc of this.parcels) this.ctx.scene.remove(pc.g);
+  }
+}
+export function createMail(ctx) { return new Mail(ctx); }
 
 /** Appareils qui emportent un réservoir d'eau : l'hélicoptère rouge et l'écopeur. */
 export const canScoop = (spec) => spec.id === 'helico' || spec.id === 'canadair';

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildTerrain, heightAt, normalAt, setBig, BIG, HALF } from './world/terrain.js';
+import { buildTerrain, heightAt, normalAt, flatInfo, setBig, BIG, HALF } from './world/terrain.js';
 import { defineAirfields, buildAirfields, buildCarrier, buildSeaBase, flatZones, seaBase, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, atLoadPad, DECK_AXIS_X } from './world/airfields.js';
 import { Sky } from './world/sky.js';
 import { buildScenery } from './world/scenery.js';
@@ -8,8 +8,8 @@ import { defineThermals, updraft, buildThermalClouds, thermals } from './world/t
 import { IslandMap } from './world/map.js';
 import { Birds } from './world/birds.js';
 import { Boats } from './world/boats.js';
-import { PLANES, STARTS, LIVERIES } from './planes/catalog.js';
-import { createWaterBomber, createSprayer, canScoop } from './missions.js';
+import { PLANES, STARTS, liveriesOf } from './planes/catalog.js';
+import { createWaterBomber, createSprayer, createMail, canScoop } from './missions.js';
 import { country, treatedShare } from './world/country.js';
 import { save } from './save.js';
 // la taille du monde se choisit avant toute construction (le bouton du menu recharge la page)
@@ -83,12 +83,12 @@ function setPlane(i) {
   if (model) scene.remove(model.root);
   plane = new Plane(spec);
   plane.fuelOn = !!save.get('fuel');
-  model = getModel(spec, LIVERIES[save.livery(spec.id)]);
+  model = getModel(spec, liveriesOf(spec)[save.livery(spec.id)] || null);
   scene.add(model.root);
   sky.setShadowSpan(Math.max(45, spec.span * 1.7));
   sound.setPlane(spec);
   ui.showPlane(spec, selPlane);
-  ui.showLiveries(spec, save.livery(spec.id));
+  ui.showLiveries(spec, liveriesOf(spec), save.livery(spec.id));
   ui.showFires(canScoop(spec), !!save.get('fires'));
   if (state === 'menu') save.set('plane', selPlane);
   if (state === 'menu') plane.placeInAir(show.x, show.y, show.z, show.yaw, 0);
@@ -178,6 +178,10 @@ function startFlight() {
     ui.hint(country.fields.length
       ? "Maintiens <kbd>X</kbd> en rase-mottes au-dessus des champs jaunes · recharge sur l'aire verte devant la grange de la Prairie"
       : "Maintiens <kbd>X</kbd> en rase-mottes pour épandre · les champs sont sur la grande carte");
+  } else if (spec.mail) {
+    mission = createMail({ scene, sound, ui, heightAt, villages: scenery.villages, canLoad: (x, z) => flatInfo(x, z).w > 0.6, plane: () => plane });
+    ui.mission(mission.hud());
+    ui.hint(`Vole jusqu'au cercle jaune de ${mission.mailTarget ? mission.mailTarget.name : 'village'} et appuie sur <kbd>X</kbd> pour larguer un sac · <kbd>N</kbd> carte`);
   }
   tele.gMax = 1; tele.prev = null;
   ui.menu(false); ui.hud(true);
@@ -328,7 +332,7 @@ function resume() {
 /** Mini-carte (toutes les 3 images) et grande carte si elle est ouverte. */
 function drawMaps() {
   if (!islandMap) return;
-  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer };
+  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null };
   if (frameNo % 3 === 0) islandMap.drawMini(document.getElementById('minimap'), plane, tele.hdg, extras, plane.spec.maxSpeed > 120 ? 3500 : 2200);
   if (ui.bigMapOpen && frameNo % 4 === 0) islandMap.drawFull(document.getElementById('bigmapc'), plane, tele.hdg, extras);
 }
@@ -378,7 +382,7 @@ function thumb(i) {
     const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(-4, 6, -3); thumbScene.add(sun);
     thumbCam = new THREE.PerspectiveCamera(28, W / H, 0.1, 1000);
   }
-  const spec = PLANES[i], m = getModel(spec, LIVERIES[save.livery(spec.id)]);
+  const spec = PLANES[i], m = getModel(spec, liveriesOf(spec)[save.livery(spec.id)] || null);
   const keep = [m.cockpit.visible, m.hull.visible, ...m.props.map((p) => [p.blades.visible, p.disc.visible])];
   m.cockpit.visible = false; m.hull.visible = true;
   for (const p of m.props) { p.blades.visible = true; p.disc.visible = false; }
@@ -454,7 +458,7 @@ function frame(now) {
     rig.padLook(input.look.x, input.look.y, dt);
     if (state !== 'crash') rig.update(dt, plane, world, state === 'menu');
     if (state === 'fly' && plane.buffet > 0.3 && frameNo % 12 === 0) input.rumble(0.25 * plane.buffet, 0.4 * plane.buffet, 180);
-    scenery.update(time, sky.night, dt);
+    scenery.update(time, sky.night, dt, camera.position);
     birds.update(dt, time, plane);
     boats.update(dt, time);
   }
@@ -521,7 +525,7 @@ async function boot() {
   missiles = new Missiles(scene, fx, sound);
   guns = new Guns(scene, fx, sound);
   rig = new CameraRig(camera, canvas);
-  ui = new UI(STARTS, labels, PLANES, LIVERIES);
+  ui = new UI(STARTS, labels, PLANES);
 
   const rw = runways[0];
   show = { x: rw.x - 500, y: rw.alt + 250, z: rw.z + 1250, yaw: rw.yaw + 0.5 };
