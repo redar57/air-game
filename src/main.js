@@ -500,7 +500,7 @@ async function boot() {
   defineThermals(heightAt, HALF * 1.82, BIG ? 30 : 14);
   if (BIG) STARTS.splice(2, 0, { id: 'nord', name: 'Aéroport Nord' }, { id: 'est', name: "Piste de l'Est" });
   buildThermalClouds(scene);
-  birds = new Birds(scene, heightAt, thermals);
+  birds = new Birds(scene, heightAt, thermals, runways);
   fx = new Effects(scene);
   missiles = new Missiles(scene, fx, sound);
   guns = new Guns(scene, fx, sound);

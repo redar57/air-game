@@ -11,8 +11,8 @@ const _s = new THREE.Vector3(), _t = new THREE.Vector3(), _d = new THREE.Vector3
 const MIRROR = new THREE.Matrix4().makeScale(-1, 1, 1);
 const KINDS = {
   //          envergure, couleur du corps, des ailes, battements/s, part du temps à battre des ailes
-  gull: { size: 1.25, body: 0xf4f4f0, wing: 0xd9dde1, tip: 0x3a3d42, rate: 4.2, flapShare: 0.45 },
-  raptor: { size: 1.8, body: 0x5e4129, wing: 0x6f4d30, tip: 0x2e2218, rate: 2.6, flapShare: 0.08 },
+  gull: { size: 2.3, body: 0xf4f4f0, wing: 0xd9dde1, tip: 0x3a3d42, rate: 4.2, flapShare: 0.45 },
+  raptor: { size: 3.2, body: 0x5e4129, wing: 0x6f4d30, tip: 0x2e2218, rate: 2.6, flapShare: 0.08 },
 };
 
 function wingGeometry() {
@@ -25,27 +25,29 @@ function wingGeometry() {
 }
 
 export class Birds {
-  constructor(scene, heightAt, thermals) {
+  constructor(scene, heightAt, thermals, runways = []) {
     this.heightAt = heightAt;
     const rnd = mulberry32(4242);
     this.flocks = [];
     this.birds = [];
-    // mouettes : volées le long des côtes
-    const want = BIG ? 16 : 8;
-    for (let n = 0; n < 4000 && this.flocks.length < want; n++) {
-      const x = (rnd() - 0.5) * HALF * 1.7, z = (rnd() - 0.5) * HALF * 1.7, h = heightAt(x, z);
-      if (h < -25 || h > 25) continue;
-      if (this.flocks.some((f) => Math.hypot(f.x - x, f.z - z) < 1400)) continue;
-      const f = { kind: 'gull', x, z, tx: x, tz: z, alt: 45 + rnd() * 140, r: 70 + rnd() * 90, w: (rnd() < 0.5 ? -1 : 1) * (0.1 + rnd() * 0.06), th: rnd() * 6.3 };
+    // mouettes : d'abord une volée près de chaque piste (on les voit dès le décollage), puis partout le long des côtes
+    const spots = runways.map((r) => [r.x + 350, r.z - 300]);
+    const want = BIG ? 40 : 20;
+    for (let n = 0; n < 8000 && this.flocks.length < want; n++) {
+      const home = spots.length > 0; // volée qui reste autour de sa piste
+      const [x, z] = home ? spots.shift() : [(rnd() - 0.5) * HALF * 1.7, (rnd() - 0.5) * HALF * 1.7];
+      const h = heightAt(x, z);
+      if (!home && (h < -40 || h > 120 || this.flocks.some((f) => Math.hypot(f.x - x, f.z - z) < 800))) continue;
+      const f = { kind: 'gull', fixed: home, x, z, tx: x, tz: z, alt: Math.max(h, 0) + 60 + rnd() * 140, r: 70 + rnd() * 90, w: (rnd() < 0.5 ? -1 : 1) * (0.1 + rnd() * 0.06), th: rnd() * 6.3 };
       this.flocks.push(f);
-      const count = 7 + Math.floor(rnd() * 8);
+      const count = 12 + Math.floor(rnd() * 12);
       for (let k = 0; k < count; k++) this.addBird(f, rnd);
     }
     // rapaces : un ou deux par thermique, haut et lents
-    for (const t of thermals.slice(0, BIG ? 14 : 7)) {
+    for (const t of thermals) {
       const f = { kind: 'raptor', x: t.x, z: t.z, fixed: true, alt: t.base + 250 + rnd() * 350, r: 55 + rnd() * 40, w: (rnd() < 0.5 ? -1 : 1) * 0.24, th: rnd() * 6.3 };
       this.flocks.push(f);
-      for (let k = 0; k < 1 + Math.floor(rnd() * 2); k++) this.addBird(f, rnd);
+      for (let k = 0; k < 2 + Math.floor(rnd() * 3); k++) this.addBird(f, rnd);
     }
 
     const n = this.birds.length;
@@ -90,7 +92,7 @@ export class Birds {
       if (d < 20) {
         const a = Math.random() * 6.283, r = 400 + Math.random() * 900;
         const nx = f.x + Math.cos(a) * r, nz = f.z + Math.sin(a) * r, h = this.heightAt(nx, nz);
-        if (h > -25 && h < 40 && Math.hypot(nx, nz) < HALF * 0.9) { f.tx = nx; f.tz = nz; }
+        if (h > -40 && h < 120 && Math.hypot(nx, nz) < HALF * 0.9) { f.tx = nx; f.tz = nz; }
       } else { f.x += (dx / d) * 5 * dt; f.z += (dz / d) * 5 * dt; }
     }
     const pp = plane.pos, pv = plane.vel;
