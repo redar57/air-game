@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildTerrain, heightAt, normalAt, setBig, BIG, HALF } from './world/terrain.js';
-import { defineAirfields, buildAirfields, buildCarrier, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, atLoadPad, DECK_AXIS_X } from './world/airfields.js';
+import { defineAirfields, buildAirfields, buildCarrier, buildSeaBase, flatZones, seaBase, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, atLoadPad, DECK_AXIS_X } from './world/airfields.js';
 import { Sky } from './world/sky.js';
 import { buildScenery } from './world/scenery.js';
 import { hitObstacle } from './world/colliders.js';
@@ -135,7 +135,7 @@ function startFlight() {
   const id = STARTS[selStart].id, spec = plane.spec;
   if (spec.glider && id !== 'vol') {
     // planeur : pas de moteur, on part en altitude au-dessus du terrain choisi
-    const site = id === 'porte-avions' ? carrier : runways.find((r) => r.id === id);
+    const site = id === 'porte-avions' ? carrier : id === 'base' ? seaBase.site : runways.find((r) => r.id === id);
     const y = (id === 'porte-avions' ? carrier.deckY : site.alt) + 380;
     toWorld(site, 0, id === 'porte-avions' ? 600 : site.length / 2 + 900, _w);
     plane.placeInAir(_w.x, y, _w.z, site.yaw, 30);
@@ -148,6 +148,10 @@ function startFlight() {
     if (id === 'porte-avions') {
       toWorld(carrier, DECK_AXIS_X, 112, _w);
       plane.placeOnGround(_w.x, _w.z, carrier.yaw, world);
+    } else if (id === 'base') {
+      // base nautique : sur l'eau à côté du ponton pour un appareil qui flotte, sinon sur l'esplanade
+      if (spec.floats) toWorld(seaBase, 5, 150, _w); else toWorld(seaBase, 0, -100, _w);
+      plane.placeOnGround(_w.x, _w.z, seaBase.yaw + Math.PI, world);
     } else {
       const rw = runways.find((r) => r.id === id);
       toWorld(rw, 0, rw.length / 2 - 40 - spec.len, _w);
@@ -164,7 +168,7 @@ function startFlight() {
     const fires = !!save.get('fires');
     mission = createWaterBomber({ scene, sound, ui, scenery, save, heightAt, normalAt, runways, fires, plane: () => plane });
     ui.mission(mission.hud());
-    const how = spec.heli ? "Écope en stationnaire au ras de l'eau (mer ou lac)" : "Écope en rasant l'eau (mer ou lac), roues rentrées <kbd>G</kbd>";
+    const how = spec.heli ? "Écope en stationnaire au ras de l'eau (mer ou lac)" : "Écope en rasant l'eau (mer ou lac)";
     ui.hint(fires
       ? `${how}, puis maintiens <kbd>X</kbd> au-dessus des flammes · <kbd>N</kbd> carte des feux`
       : `${how}, puis maintiens <kbd>X</kbd> pour larguer`);
@@ -234,7 +238,6 @@ function handleEvents() {
     }
     else if (e.type === 'flaps') { sound.flaps(); if (e.blown) ui.toast('Volets rentrés : trop vite !', 1600); }
     else if (e.type === 'takeoff') ui.clearHint();
-    else if (e.type === 'wheelsWater') ui.toast("Roues sorties dans l'eau : ça freine ! (G pour les rentrer)", 2200);
   }
   plane.events.length = 0;
 }
@@ -405,7 +408,7 @@ function cockpitData() {
     power: p.power, throttle: p.throttle, burner: p.burner,
     retract: s.retract, floats: s.floats, gear: p.gearAnim, flaps: p.flapAnim, stallWarn: !!p.stallWarn, brake: p.braking,
     gearWarn: s.retract && !p.onGround && p.agl < 80 && tele.vs < -0.5 && p.speed < s.stall * 1.6
-      && (s.amphibian ? p.gearDown === (p.surface === 'water') : !p.gearDown),
+      && (s.amphibian ? p.surface !== 'water' && !p.gearDown : !p.gearDown),
     lowAlt: !p.onGround && p.agl < 60 && tele.vs < -6,
     fuel: p.fuelOn && !s.glider ? p.fuel : null, failure: p.fuelOn ? p.failure : null,
   };
@@ -479,7 +482,7 @@ function frame(now) {
     if (plane.fuelOn && plane.refuelT > 0) flags.push('PLEIN EN COURS…');
     if (plane.flaps) flags.push(`VOLETS ${plane.flaps}`);
     if (!plane.onGround && plane.gLoad > 3) flags.push(`${plane.gLoad.toFixed(1)} G`);
-    if (plane.spec.amphibian && !plane.onGround) flags.push(plane.gearDown ? (plane.surface === 'water' ? "ROUES SORTIES AU-DESSUS DE L'EAU" : 'ROUES SORTIES') : (plane.surface === 'water' ? '' : 'ROUES RENTRÉES'));
+    if (plane.spec.amphibian && !plane.onGround) flags.push(plane.surface === 'water' ? '' : plane.gearDown ? 'ROUES SORTIES' : 'ROUES RENTRÉES');
     else if (plane.spec.retract && plane.gearDown && !plane.onGround) flags.push('TRAIN SORTI');
     if (plane.onGround && plane.onBelly) flags.push(plane.spec.floats ? 'SUR LES FLOTTEURS' : 'SUR LE VENTRE');
     if (plane.braking) flags.push(plane.onGround ? 'FREINS' : 'AÉROFREINS');
@@ -503,13 +506,14 @@ async function boot() {
   const labels = await keyLabels();
   document.getElementById('version').textContent = `Version ${VERSION}`;
   defineAirfields();
-  scene.add(buildTerrain(runways));
+  scene.add(buildTerrain(flatZones()));
   buildAirfields(scene);
+  buildSeaBase(scene);
   buildCarrier(scene);
   sky = new Sky(scene);
   scenery = buildScenery(scene);
   defineThermals(heightAt, HALF * 1.82, BIG ? 30 : 14);
-  if (BIG) STARTS.splice(2, 0, { id: 'baie', name: 'La Baie' }, { id: 'prairie', name: 'La Prairie' });
+  if (BIG) STARTS.splice(2, 0, { id: 'baie', name: 'La Baie' }, { id: 'prairie', name: 'La Prairie' }, { id: 'base', name: 'Base nautique' });
   buildThermalClouds(scene);
   birds = new Birds(scene, heightAt, thermals, runways);
   boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 450 }]);

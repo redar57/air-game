@@ -116,7 +116,7 @@ export class UI {
     if (p.missiles) rows.push([k('X'), 'Missile : vise ~1 s pour verrouiller']);
     if (p.guns) rows.push([k('X'), 'Mitrailleuses (maintenir)']);
     if (p.id === 'helico') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en stationnaire au ras de l'eau"]);
-    if (p.id === 'canadair') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en rasant l'eau, roues rentrées"]);
+    if (p.id === 'canadair') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en rasant l'eau"]);
     rows.push(['🎮', p.heli ? 'Stick gauche · RT / LT gaz · LB / RB pivot' : 'Stick gauche · RT / LT gaz · LB / RB palonnier']);
     return rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
   }

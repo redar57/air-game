@@ -64,7 +64,7 @@ export const PLANES = [
   },
   {
     id: 'canadair', name: "L'Écopeur",
-    desc: "Bombardier d'eau amphibie bimoteur, façon Canadair : rase un lac ou la mer pour remplir sa soute, puis largue sur les flammes avec X. Roues rentrées (G) pour l'eau.",
+    desc: "Bombardier d'eau amphibie bimoteur, façon Canadair : rase un lac ou la mer pour remplir sa soute, puis largue sur les flammes avec X. Roues sorties (G) seulement pour les pistes.",
     maxSpeed: 100, stall: 30, accel: 5, pitchRate: 0.8, rollRate: 1.05, yawRate: 0.35, gLimit: 3.5,
     brake: 6, maxSink: 6.5, gearH: 3.25, bellyH: 1.75, span: 28.6, len: 19.8, wingY: 1.9,
     retract: true, floats: true, amphibian: true, jet: false,

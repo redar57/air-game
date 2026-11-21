@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { heightAt, normalAt, HALF, BIG } from './terrain.js';
-import { runways } from './airfields.js';
+import { runways, seaBase } from './airfields.js';
 import { toLocal, toWorld } from '../util.js';
 
 // Campagne de la grande île : quelques villages reliés par des chemins de terre, et les champs de la Prairie
@@ -178,7 +178,9 @@ export function planCountry() {
   country.villages.push(lac, sud, port, col, pre);
   const ap = rw('aeroport'), pr = rw('prairie'), bz = rw('baie');
   const end = (r, f) => { const w = {}; toWorld(r, r.width / 2 + 60, f * r.length / 2, w); return w; };
-  for (const [a, b] of [[end(ap, -0.6), lac], [lac, pre], [pre, end(pr, 0.55)], [lac, sud], [sud, port], [port, end(bz, 0.4)], [lac, col]]) {
+  const links = [[end(ap, -0.6), lac], [lac, pre], [pre, end(pr, 0.55)], [lac, sud], [sud, port], [port, end(bz, 0.4)], [lac, col]];
+  if (seaBase.active) links.push([lac, toWorld(seaBase, 70, -125, {})]);
+  for (const [a, b] of links) {
     const path = findPath(a, b);
     if (path) { country.roads.push(path); for (const p of path) mark(p.x, p.z, 6, 1); }
   }

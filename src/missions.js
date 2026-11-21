@@ -53,7 +53,7 @@ class Fires {
     const overWater = plane.surface === 'water';
     // hélico : stationnaire au ras de l'eau ; écopeur : coque qui rase l'eau en gardant de la vitesse
     const scoopOk = s.heli ? !plane.onGround && overWater && plane.agl < 8 && plane.speed < 20
-      : overWater && plane.speed > 15 && (plane.onGround || plane.agl < 1.5) && !plane.gearDown;
+      : overWater && plane.speed > 15 && (plane.onGround || plane.agl < 1.5);
     this.scooping = scoopOk && this.water < 1;
     if (this.scooping) {
       this.water = Math.min(1, this.water + dt / (s.heli ? 4 : 5));
@@ -125,7 +125,7 @@ class Fires {
     const left = this.fires.filter((f) => !f.out), tank = Math.round(this.water * 100);
     const tankLine = `💧 ${tank} %${this.scooping ? ' · écopage…' : this.dropping ? ' · largage !' : ''}`;
     if (!this.withFires) {
-      const how = this.ctx.plane().spec.heli ? "écope en stationnaire au ras de l'eau" : "rase l'eau, roues rentrées, pour écoper";
+      const how = this.ctx.plane().spec.heli ? "écope en stationnaire au ras de l'eau" : "rase l'eau pour écoper";
       return { title: this.title, big: `${tank} %`, unit: 'réservoir', lines: [this.scooping ? 'écopage…' : this.dropping ? 'largage !' : tank ? 'X : larguer' : how], bar: this.water };
     }
     let near = Infinity, nearF = null;

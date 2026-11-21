@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MTN, rawBase, BIG } from './terrain.js';
+import { MTN, rawBase, BIG, LAKE, heightAt } from './terrain.js';
 import { mergeColored, xform, toLocal, toWorld, clamp, smoothstep, lerp } from '../util.js';
 import { addBox } from './colliders.js';
 
@@ -9,6 +9,13 @@ export const carrier = { x: 0, z: 0, yaw: -Math.PI / 2, deckY: 21, halfLen: 145,
 export const fuelStation = { x: 0, z: 0, yaw: 0, lx: 0, lz: 0, half: 24 };
 /** Aire de chargement de l'épandeur (devant la grange de la piste en herbe), repère local de sa piste. */
 export const loadPad = { rw: null, lx: 0, lz: 0, half: 16, x: 0, z: 0 };
+/**
+ * Base nautique du lac (grande carte), faite pour l'écopeur : rampe de mise à l'eau, ponton, hangar,
+ * pompe à carburant, et un plan d'eau balisé de bouées. Repère local : origine sur la rive, +Z vers le lac.
+ */
+export const seaBase = { active: false, x: 0, z: 0, yaw: 0, alt: 4, zone: null, fuel: { lx: 48, lz: -70, half: 14 } };
+/** Zones à aplanir : les pistes, plus l'esplanade de la base nautique. */
+export function flatZones() { return seaBase.zone ? [...runways, seaBase.zone] : runways; }
 /** Matériaux des balises lumineuses (leur opacité suit la tombée de la nuit). */
 export const nightLights = [];
 
@@ -51,6 +58,19 @@ export function defineAirfields() {
     });
   }
 
+  if (BIG) {
+    // base nautique sur la rive nord-ouest du lac : on part du centre du lac jusqu'à la terre ferme
+    const dx = -0.55, dz = -0.83;
+    let r = 200;
+    while (r < 3000 && rawBase(LAKE.x + dx * r, LAKE.z + dz * r) < 0.5) r += 10;
+    Object.assign(seaBase, { active: true, x: LAKE.x + dx * r, z: LAKE.z + dz * r, yaw: Math.atan2(-dx, -dz) });
+    toWorld(seaBase, 0, -40, _w);
+    seaBase.alt = Math.round(clamp(rawBase(_w.x, _w.z), 4, 10)); // esplanade basse : la rampe reste douce
+    toWorld(seaBase, 0, -110, _w);
+    seaBase.zone = { x: _w.x, z: _w.z, yaw: seaBase.yaw, halfLen: 60, halfWid: 90, margin: 60, alt: seaBase.alt };
+    seaBase.site = { x: seaBase.x, z: seaBase.z, yaw: seaBase.yaw + Math.PI, alt: seaBase.alt, length: 200 };
+  }
+
   const grass = runways.find((r) => r.style === 'grass');
   if (grass) {
     loadPad.rw = grass; loadPad.lx = grass.width / 2 + 40; loadPad.lz = grass.length / 2 - 168;
@@ -77,6 +97,10 @@ export function runwayAt(x, z) {
 
 /** Vrai si (x, z) est sur l'aire de la station de carburant. */
 export function atFuelStation(x, z) {
+  if (seaBase.active) { // seconde pompe, à la base nautique
+    toLocal(seaBase, x, z, _l);
+    if (Math.abs(_l.x - seaBase.fuel.lx) <= seaBase.fuel.half && Math.abs(_l.z - seaBase.fuel.lz) <= seaBase.fuel.half) return true;
+  }
   if (!fuelStation.rw) return false;
   toLocal(fuelStation.rw, x, z, _l);
   return Math.abs(_l.x - fuelStation.lx) <= fuelStation.half && Math.abs(_l.z - fuelStation.lz) <= fuelStation.half;
@@ -267,6 +291,90 @@ export function buildAirfields(scene) {
     lights.rotation.y = rw.yaw;
     scene.add(lights);
   }
+}
+
+// ---------------------------------------------------------------------------
+/** Construit la base nautique (si elle existe). */
+export function buildSeaBase(scene) {
+  if (!seaBase.active) return;
+  const S = seaBase, parts = [], y0 = S.alt;
+  const B = (w, h, d, color, x, y, z, ry = 0) => parts.push({ geo: new THREE.BoxGeometry(w, h, d), color, matrix: xform(x, y, z, ry) });
+  const C = (rt, rb, h, color, x, y, z, seg = 10) => parts.push({ geo: new THREE.CylinderGeometry(rt, rb, h, seg), color, matrix: xform(x, y, z) });
+  const collide = (x, z, hw, hd, h) => { toWorld(S, x, z, _w); addBox(_w.x, _w.z, S.yaw, hw, hd, y0, y0 + h); };
+  // esplanade
+  B(170, 0.3, 120, 0x8c9096, 0, y0 + 0.05, -110);
+  // hangar des écopeurs : grande porte tournée vers le lac, toit rouge en arc
+  const hx = -45, hz = -135;
+  B(46, 13, 40, 0xeef0f2, hx, y0 + 6.5, hz);
+  parts.push({ geo: new THREE.CylinderGeometry(23, 23, 40, 10, 1, false, -Math.PI / 2, Math.PI), color: 0xc8402f, matrix: xform(hx, y0 + 13, hz, 0, 1, 1, 0.42, -Math.PI / 2) });
+  B(32, 11, 0.5, 0x4a5058, hx, y0 + 5.5, hz + 20.1);
+  B(46.4, 1.4, 40.4, 0xf2c230, hx, y0 + 11.6, hz);
+  collide(hx, hz, 23, 20, 20);
+  // bâtiment des opérations avec sa vigie
+  const ox = 45, oz = -145;
+  B(26, 8, 16, 0xf6f3ec, ox, y0 + 4, oz);
+  B(26.3, 1.2, 16.3, 0xc8402f, ox, y0 + 6.2, oz);
+  B(9, 4, 9, 0x2a4a62, ox + 6, y0 + 10, oz);
+  B(10, 0.6, 10, 0xf6f3ec, ox + 6, y0 + 12.3, oz);
+  C(0.15, 0.15, 9, 0x8a9199, ox - 8, y0 + 12.5, oz, 5);
+  collide(ox, oz, 13, 8, 13);
+  // pompe à carburant (aire jaune)
+  const { lx: fx, lz: fz, half: hf } = S.fuel;
+  for (const [w, d, x, z] of [[hf * 2, 0.9, fx, fz - hf], [hf * 2, 0.9, fx, fz + hf], [0.9, hf * 2, fx - hf, fz], [0.9, hf * 2, fx + hf, fz]]) B(w, 0.06, d, 0xf2c230, x, y0 + 0.24, z);
+  B(1.4, 2.2, 1, 0xd8402f, fx + hf + 3, y0 + 1.2, fz);
+  B(3.4, 0.3, 4, 0xf2c230, fx + hf + 3, y0 + 4.2, fz);
+  for (const dz of [-1.6, 1.6]) B(0.25, 4, 0.25, 0xb9bec4, fx + hf + 3, y0 + 2.1, fz + dz);
+  // manche à air
+  C(0.18, 0.22, 9, 0x9a9a9a, -85, y0 + 4.5, -60, 6);
+  parts.push({ geo: new THREE.CylinderGeometry(0.4, 1.0, 4, 8, 1, true).rotateZ(Math.PI / 2), color: 0xf07a1e, matrix: xform(-83, y0 + 8.7, -60) });
+  const decor = new THREE.Mesh(mergeColored(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  decor.position.set(S.x, 0, S.z); decor.rotation.y = S.yaw; decor.receiveShadow = true;
+  scene.add(decor);
+
+  // rampe de mise à l'eau (suit la berge, puis plonge sous l'eau) et ponton en bois
+  const ramp = [], dock = [], W = 15;
+  const P = (lx, lz) => { toWorld(S, lx, lz, _w); return [_w.x, _w.z]; };
+  for (let lz = -55; lz < 60; lz += 5) {
+    const row = [];
+    for (const lx of [-W, W]) for (const z of [lz, lz + 5]) {
+      const [x, wz] = P(lx, z);
+      row.push([x, Math.max(heightAt(x, wz) + 0.25, -1.8), wz]);
+    }
+    const [a, b, c, d] = [row[0], row[1], row[2], row[3]]; // (-W,lz) (-W,lz+5) (W,lz) (W,lz+5)
+    ramp.push(...a, ...b, ...c, ...c, ...b, ...d);
+  }
+  const rg = new THREE.BufferGeometry();
+  rg.setAttribute('position', new THREE.Float32BufferAttribute(ramp, 3));
+  rg.computeVertexNormals();
+  const rmesh = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ color: 0xa3a7ab, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+  rmesh.receiveShadow = true;
+  scene.add(rmesh);
+  for (let lz = -10; lz <= 110; lz += 6) {
+    dock.push({ geo: new THREE.BoxGeometry(4, 0.3, 6.1), color: 0x9a7650, matrix: xform(40, 0.7, lz) });
+    for (const s of [-1, 1]) dock.push({ geo: new THREE.CylinderGeometry(0.22, 0.22, 4, 6), color: 0x6b5036, matrix: xform(40 + s * 1.8, -1, lz) });
+  }
+  dock.push({ geo: new THREE.BoxGeometry(24, 0.3, 6), color: 0x9a7650, matrix: xform(40, 0.7, 114) });
+  const dmesh = new THREE.Mesh(mergeColored(dock), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  dmesh.position.set(S.x, 0, S.z); dmesh.rotation.y = S.yaw;
+  scene.add(dmesh);
+
+  // bouées jaunes : deux lignes qui balisent le plan d'eau d'écopage, le long du grand axe du lac
+  const buoy = mergeColored([
+    { geo: new THREE.CylinderGeometry(0.9, 1.1, 1.4, 8), color: 0xf2c230, matrix: xform(0, 0.3, 0) },
+    { geo: new THREE.ConeGeometry(0.7, 1.4, 8), color: 0xf2c230, matrix: xform(0, 1.7, 0) },
+  ]);
+  const spots = [];
+  for (let x = -LAKE.rx * 0.75; x <= LAKE.rx * 0.75; x += 150) for (const dz of [-70, 70]) {
+    const bx = LAKE.x + x, bz = LAKE.z + dz;
+    if (heightAt(bx, bz) < -2) spots.push([bx, bz]);
+  }
+  const im = new THREE.InstancedMesh(buoy, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), spots.length);
+  const m4 = new THREE.Matrix4();
+  spots.forEach(([x, z], i) => im.setMatrixAt(i, m4.makeTranslation(x, 0, z)));
+  scene.add(im);
+  const lp = [];
+  spots.forEach(([x, z]) => lp.push(x, 2.8, z));
+  scene.add(lightsPoints(lp, 0xffd34d, 4));
 }
 
 // ---------------------------------------------------------------------------

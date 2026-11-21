@@ -1,5 +1,5 @@
 import { toWorld } from '../util.js';
-import { fuelStation, loadPad } from './airfields.js';
+import { fuelStation, loadPad, seaBase } from './airfields.js';
 import { country } from './country.js';
 import { BIG } from './terrain.js';
 
@@ -82,8 +82,10 @@ export class IslandMap {
       g.font = `800 ${Math.round(r * 1.4)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText('🌾', x, y + r * 0.08);
     }
-    if (fuel) { // station de carburant
-      const [x, y] = f(fuelStation.x, fuelStation.z), r = 5 * scale;
+    const pumps = [fuelStation];
+    if (seaBase.active) { const w = {}; toWorld(seaBase, seaBase.fuel.lx, seaBase.fuel.lz, w); pumps.push(w); }
+    if (fuel) for (const st of pumps) { // stations de carburant
+      const [x, y] = f(st.x, st.z), r = 5 * scale;
       g.fillStyle = '#f2c230'; g.strokeStyle = '#2b2205'; g.lineWidth = scale;
       g.beginPath(); g.roundRect(x - r, y - r, 2 * r, 2 * r, r * 0.35); g.fill(); g.stroke();
       g.fillStyle = '#2b2205'; g.font = `800 ${Math.round(r * 1.5)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -167,6 +169,7 @@ export class IslandMap {
     for (const v of country.villages) label(v, v.name, -8);
     g.font = `700 ${Math.round(W / 55)}px sans-serif`;
     label(this.carrier, 'Porte-avions', -14);
+    if (seaBase.active) label(seaBase, 'Base nautique', -14);
     if (extras.fuel) label(fuelStation, 'Carburant', 22 * W / 1100 + 14);
     const [x, y] = f(plane.pos.x, plane.pos.z);
     this.planeIcon(g, x, y, heading, W / 300);

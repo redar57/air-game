@@ -65,7 +65,8 @@ export class Plane {
   }
 
   get retractUp() { return this.spec.retract && !this.gearDown; }
-  get standH() { return this.retractUp ? this.spec.bellyH : this.spec.gearH; }
+  // amphibie sur l'eau : il flotte sur sa coque, roues sorties ou non
+  get standH() { return this.retractUp || (this.spec.amphibian && this.surface === 'water') ? this.spec.bellyH : this.spec.gearH; }
   get burner() {
     return this.spec.afterburner ? clamp((this.throttle - 0.9) * 10, 0, 1) * clamp((this.rpm - 0.88) * 12, 0, 1) : 0;
   }
@@ -122,7 +123,8 @@ export class Plane {
   placeOnGround(x, z, yaw, world) {
     this.reset();
     const g = world.groundAt(x, z, 1e4);
-    this.pos.set(x, g.h + this.spec.gearH, z);
+    this.surface = g.type;
+    this.pos.set(x, g.h + this.standH, z);
     this.yawG = yaw;
     this.quat.setFromAxisAngle(Y, yaw);
     this.vel.set(0, 0, 0);
@@ -465,8 +467,6 @@ export class Plane {
     let ok = up.y > 0.6 && sink < s.maxSink && bank < 0.42 && pitch > -0.2 && pitch < 0.55 && -this.agl < 1.3;
     if (g.type === 'water' && !s.floats) ok = false;
     if (g.type === 'land' && _n.y < 0.9) ok = false;
-    // amphibie : amerrir roues sorties freine fort (voir le frottement au sol), mais ne fait pas capoter
-    if (g.type === 'water' && s.amphibian && this.gearDown && ok) this.events.push({ type: 'wheelsWater' });
     if (!ok) { this.crash(g.type === 'water' ? 'water' : 'ground'); return; }
 
     this.onGround = true;
@@ -499,7 +499,6 @@ export class Plane {
     let fr = hard ? 0.35 : g.type === 'water' ? 1.5 : 2.2;
     if (belly) fr += 14;
     if (input.brake) fr += g.type === 'water' ? 3 : s.brake;
-    if (g.type === 'water' && s.amphibian && this.gearDown) fr += 2; // roues dans l'eau
     if (g.type === 'carrier') {
       if (this.arrest) {
         // brins d'arrêt
