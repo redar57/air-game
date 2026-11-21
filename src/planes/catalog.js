@@ -91,15 +91,15 @@ export const PLANES = [
     stats: [1, 0.85, 0.4],
   },
   {
-    id: 'cargo', name: 'Le Gros Porteur',
-    desc: "Quadrimoteur de 40 m d'envergure, avec une section de 12 parachutistes : X les fait sauter par 4 au-dessus de la croix orange. On rembarque à l'arrêt sur l'aire verte de la base militaire.",
-    maxSpeed: 118, stall: 40, accel: 3.6, pitchRate: 0.5, rollRate: 0.6, yawRate: 0.25, gLimit: 2.6,
-    brake: 6, maxSink: 5.5, gearH: 3.55, bellyH: 2.35, span: 40, len: 30, wingY: 2,
-    retract: true, floats: false, jet: false, paras: true,
-    cam: { dist: 62, height: 13 }, eye: [0, 1.2, -12.45],
+    id: 'cargo', name: 'Le C-17',
+    desc: "Quadriréacteur de transport militaire, aile haute et empennage en T, avec une section de 12 parachutistes : X les fait sauter par 4 par la rampe arrière au-dessus de la croix orange. On rembarque à l'arrêt sur l'aire verte de la base militaire.",
+    maxSpeed: 140, stall: 38, accel: 4.4, pitchRate: 0.55, rollRate: 0.65, yawRate: 0.27, gLimit: 2.8,
+    brake: 6.5, maxSink: 5.5, gearH: 3.55, bellyH: 2.6, span: 42, len: 33, wingY: 2.6,
+    retract: true, floats: false, jet: true, paras: true,
+    cam: { dist: 66, height: 14 }, eye: [0, 1.2, -13.9],
     inertia: 0.42, stallBite: 0.6, flaps: true, turb: 0.3,
-    engine: { kind: 'turboprop', count: 4, blades: 4, prop: 1020, spool: 1.1 },
-    paint: [0xf2f2ee, 0x2f5fa8, 0x8d959d], // couleurs principales (remplacées par les livrées)
+    engine: { kind: 'jet', spool: 1.6 },
+    paint: [0x7a838b, 0x5a6168, 0x3d4248], // couleurs principales (remplacées par les livrées)
     stats: [0.45, 0.12, 0.3],
   },
 ];
@@ -223,7 +223,7 @@ const LIVERY_SETS = {
   canadair: [['Pompier', [0xd8312b, 0xf2c230, 0xf4f1ea]], ['Forestier', [0x3f6b3a, 0xf2c230, 0xf4f1ea]], ['Nordique', [0xf4f1ea, 0xd8312b, 0x2b3440]], ['Orange', [0xf08a2c, 0x2b3440, 0xf4f1ea]], ['Ciel', [0xdfe9f2, 0x2f6fb5, 0xf4f1ea]]],
   chasseur: [['Olive', [0x5f6f3f, 0xf4f1ea, 0xf2c230]], ['Désert', [0xc8a46a, 0x7a5634, 0xf4f1ea]], ['Argent', [0xbfc4c9, 0x2b2e33, 0xd8312b]], ['Requin', [0x8d969c, 0xf4f1ea, 0xd8312b]], ['Hiver', [0xeeeeea, 0x6b7480, 0x2f6fb5]]],
   jet: [['Nuit', [0x2a2e35, 0x1c1f24, 0xf2c230]], ['Désert', [0xd8b878, 0xa88a5a, 0x5a4630]], ['Bleu acier', [0x6f8fb0, 0x4a6585, 0x23303f]], ['Démonstration', [0xf2f2ee, 0xd8312b, 0x1f4f9c]], ['Tigre', [0xf2a22c, 0x2b2e33, 0x1b1d21]]],
-  cargo: [['Fret', [0xf2f2ee, 0xf08a2c, 0x8d959d]], ['Vert', [0xf2f2ee, 0x2f8a5a, 0x8d959d]], ['Gris', [0x8d959d, 0x5f676f, 0x4a5057]], ['Rouge', [0xf2f2ee, 0xc8402f, 0x8d959d]], ['Nuit', [0x2a2e35, 0xf2c230, 0x5f676f]]],
+  cargo: [['Désert', [0xc8a46a, 0x9a7a4a, 0x5a4a35]], ['Forêt', [0x56603f, 0x3f4a2f, 0x2b3024]], ['Marine', [0x3f5068, 0x2b3a4f, 0x1f2833]], ['Nuit', [0x2e3237, 0x22262a, 0x18191c]], ['Humanitaire', [0xf2f2ee, 0x2f6fb5, 0x8d959d]]],
   secours: [['Montagne', [0xd8312b, 0xf2c230]], ['Gendarmerie', [0x1f3f6b, 0xf3f1ec]], ['Douanes', [0x2b2e33, 0xf2c230]], ['Marine', [0xf3f1ec, 0xf08a2c]], ['Sable', [0xc8a46a, 0xf3f1ec]]],
   helico: [['Montagne', [0xf2c230, 0x26292d]], ['Bleu', [0x2f6fb5, 0xf3f1ec]], ['Orange', [0xf08a2c, 0xf3f1ec]], ['Vert', [0x2f8a5a, 0xf3f1ec]], ['Noir', [0x26292d, 0xd8312b]]],
   libellule: [['Turquoise', [0x2ec4b6, 0x26292d]], ['Rouge', [0xd8312b, 0x26292d]], ['Blanc', [0xf3f1ec, 0x2f6fb5]], ['Violet', [0x8e5cc9, 0xf3f1ec]], ['Citron vert', [0x8cc63f, 0x26292d]]],

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeColored, xform, clamp, mulberry32 } from './util.js';
 import { randomClearSpot } from './world/sites.js';
 
-// Parachutistes (Gros Porteur) : on embarque une section à l'arrêt sur l'aire verte de la base militaire
+// Parachutistes (C-17) : on embarque une section à l'arrêt sur l'aire verte de la base militaire
 // (sur la petite carte : sur une piste), puis on les largue (X) au-dessus de la zone de saut.
 // Chaque parachutiste tombe quelques secondes, ouvre sa voile puis se dirige vers la croix ; il ne
 // peut rattraper qu'une partie de l'écart (finesse ~2), il faut donc larguer au bon endroit, assez haut.

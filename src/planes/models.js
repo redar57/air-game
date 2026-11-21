@@ -442,36 +442,41 @@ function jet(spec) {
 }
 
 function cargo(spec) {
+  // transporteur militaire façon C-17 : aile haute en flèche, quatre réacteurs en nacelle, empennage en T, rampe arrière
   const m = base(), { hull, always } = m;
-  const W = 0xf2f2ee, B = 0x2f5fa8, G = 0x8d959d;
-  hull.add(tube(0.75, 2.1, -15, -11.6, W, { y: -0.25, sy: 0.95 }));
-  hull.add(tube(2.1, 2.1, -11.6, 6, W));
-  hull.add(tube(2.1, 0.55, 6, 15, W, { y: 0.85 }));
-  hull.add(box(2.9, 0.75, 1.5, GLASS, 0, 1.1, -12.3));
-  hull.add(box(3.96, 0.4, 17.6, B, 0, 0.25, -2.8));
-  finS(m, hull, [6.6, 5.6, 3.0, 0.45, 3.3], B, 0, 1.9, 10.4, 0, 0.32, 0.05, 0.9);
-  wingS(m, hull, [6.6, 3.3, 1.8, 0.26, 1.3], W, 0, 8.45, 13.9, [{ kind: 'elevator', t0: 0.04, t1: 1 }], 0.38);
-  hull.add(box(1.3, 1.3, 6.5, G, 2.25, -1.75, 0.6), box(1.3, 1.3, 6.5, G, -2.25, -1.75, 0.6));
+  const G = 0x7a838b, D = 0x5a6168, N = 0x3d4248;
+  hull.add(tube(0.9, 2.6, -16.6, -12, G, { y: -0.3, sy: 0.92 }));
+  hull.add(tube(2.6, 2.6, -12, 5, G));
+  hull.add(tube(2.6, 1.9, 5, 10, G, { y: 0.5 }));
+  hull.add(tube(1.9, 0.7, 10, 16.4, G, { y: 1.4 }));
+  hull.add(box(3.0, 0.7, 1.5, GLASS, 0, 1.0, -13.4));
+  const ramp = box(3.5, 0.12, 8.3, N, 0, -1.2, 9); ramp.rotation.x = -0.245; hull.add(ramp);
+  hull.add(box(1.7, 1.9, 9.5, G, 2.45, -1.65, 0.6), box(1.7, 1.9, 9.5, G, -2.45, -1.65, 0.6)); // carénages de train
+  hull.add(box(0.06, 1.2, 1.0, D, 2.62, -0.3, -10.5), box(0.06, 1.2, 1.0, D, -2.62, -0.3, -10.5)); // portes avant
+  finS(m, hull, [8.6, 7.2, 4.2, 0.5, 4.6], G, 0, 2.1, 11.2, 0, 0.32, 0.05, 0.9);
+  wingS(m, hull, [8.2, 4.2, 2.0, 0.35, 2.4], G, 0.2, 10.65, 15.8, [{ kind: 'elevator', t0: 0.04, t1: 1 }], 0.38);
   const gear = new THREE.Group();
   for (const s of [-1, 1]) {
-    wheel(gear, 0.62, 0.5, s * 2.45, -2.93, -0.4); wheel(gear, 0.62, 0.5, s * 2.45, -2.93, 1.6);
-    bar(gear, [s * 2.45, -1.9, 0.6], [s * 2.45, -2.9, 0.6], 0.25, METAL);
-    wheel(gear, 0.52, 0.3, s * 0.32, -3.03, -10.9);
+    for (const z of [-0.9, 1.1, 3.1]) wheel(gear, 0.62, 0.5, s * 2.45, -2.93, z);
+    bar(gear, [s * 2.45, -1.9, 1.1], [s * 2.45, -2.9, 1.1], 0.25, METAL);
+    wheel(gear, 0.52, 0.3, s * 0.34, -3.03, -12.2);
   }
-  bar(gear, [0, -1.5, -10.8], [0, -3.0, -10.9], 0.2, METAL);
+  bar(gear, [0, -1.6, -12.1], [0, -3.0, -12.2], 0.2, METAL);
   hull.add(gear); m.gear = gear;
 
-  wingS(m, always, [19.2, 5.4, 2.4, 0.6, 1.3, -0.9, 0.45], W, 0.8, 2.35, -1.6,
-    [{ kind: 'flap', t0: 0.02, t1: 0.6 }, { kind: 'aileron', t0: 0.63, t1: 0.96 }], 0.22);
-  always.add(box(1.7, 0.6, 5.4, W, 0, 2.35, -1.6));
-  for (const x of [-12.4, -6.2, 6.2, 12.4]) {
-    const t = (Math.abs(x) - 0.8) / 19.2, y = 2.35 - 0.9 * t - 0.5, zc = -1.6 + 1.3 * t;
-    always.add(tube(0.5, 0.8, zc - 4.6, zc - 0.2, G, { x, y }));
-    always.add(tube(0.05, 0.3, zc - 5.1, zc - 4.6, DARK, { x, y }));
-    m.props.push(makeProp(always, 2.05, 4, x, y, zc - 4.85));
+  const wp = [19, 7.6, 2.6, 0.75, 7, -1.3, 0.4], wx = 1.2, wy = 2.6, wz = -2.6;
+  wingS(m, always, wp, G, wx, wy, wz, [{ kind: 'flap', t0: 0.02, t1: 0.62 }, { kind: 'aileron', t0: 0.65, t1: 0.96 }], 0.22);
+  always.add(box(3.2, 0.9, 8.5, G, 0, 2.55, -2.6));
+  for (const s of [-1, 1]) fin(always, wingGeo(2.3, 2.4, 1.0, 0.18, 1.3), D, s * (wx + 19), wy - 1.3, wz + 7, s * -0.15);
+  for (const x of [-12.6, -6.4, 6.4, 12.6]) {
+    const t = (Math.abs(x) - wx) / 19, y = wy - 1.3 * t, zc = wz + 7 * t;
+    always.add(box(0.3, 1.3, 4.2, D, x, y - 0.85, zc - 1.6));                 // mât
+    always.add(tube(1.05, 0.9, zc - 6.2, zc - 1.6, G, { x, y: y - 1.85, seg: 10 }));
+    always.add(tube(0.86, 0.86, zc - 6.3, zc - 6.2, DARK, { x, y: y - 1.85, seg: 10 })); // entrée d'air
+    always.add(tube(0.62, 0.28, zc - 1.6, zc - 0.7, DARK, { x, y: y - 1.85 }));          // tuyère
   }
-  m.cockpit = makeCockpit(spec.eye, { w: 2.3, frame: true, nose: { w: 2.3, len: 1.9, color: W, drop: 0.1 } });
-  m.tips = [[20, 1.45, -0.2], [-20, 1.45, -0.2]];
+  m.cockpit = makeCockpit(spec.eye, { w: 2.4, frame: true, nose: { w: 2.4, len: 2.2, color: G, drop: 0.12 } });
+  m.tips = [[20.6, 2.1, 5.2], [-20.6, 2.1, 5.2]];
   return m;
 }
 
