@@ -49,10 +49,20 @@ export class Plane {
     if (spec.airship) { // l'enveloppe est au-dessus du centre : points d'impact à son niveau
       this.hitPts = [[0, 6.6, -spec.len / 2], [0, 6.6, spec.len / 2], [6.5, 6.6, 0], [-6.5, 6.6, 0], [0, 13, 0]].map((p) => new THREE.Vector3(...p));
     }
+    if (spec.balloon) this.hitPts = [[0, 8, 0], [9, 17, 0], [-9, 17, 0], [0, 17, 9], [0, 17, -9], [0, 27, 0]].map((p) => new THREE.Vector3(...p));
+    // décollage vertical : tuyères vers le bas, il se pilote comme un hélicoptère (avec ces réglages-là)
+    this.hoverSpec = spec.hover ? Object.assign(Object.create(spec), spec.hover) : spec;
     this.reset();
   }
 
+  /** Vol vertical (hélicoptère, ou avion à décollage vertical tuyères vers le bas). */
+  get hovering() { return this.spec.heli || this.vtol; }
+
   reset() {
+    this.levelT = 0;
+    this.vtol = !!this.spec.hover; this.vtolAnim = this.vtol ? 1 : 0;
+    this.deck = null; this.reverse = 0; this.drogue = 0; this.drogueUsed = false;
+    this.chute = 0; this.chuteOpen = false; this.flare = 0; this.flame = 0; this.wind = null;
     this.throttle = 0; this.onGround = false; this.crashed = false;
     this.gearDown = true; this.gearAnim = 1;
     this.ctrl.pitch = this.ctrl.roll = this.ctrl.yaw = 0;
@@ -133,7 +143,14 @@ export class Plane {
     this.quat.setFromAxisAngle(Y, yaw);
     this.vel.set(0, 0, 0);
     this.onGround = true;
-    this.surface = g.type;
+    this.surface = g.type; this.deck = g.deck || null;
+    if (this.spec.foot || this.spec.balloon) this.throttle = 0;
+    this.axes();
+  }
+  /** Tourne sur place avec le pont qui le porte. */
+  turnWith(dy) {
+    this.yawG += dy;
+    this.quat.premultiply(_q.setFromAxisAngle(Y, dy));
     this.axes();
   }
 
@@ -144,7 +161,8 @@ export class Plane {
     this.axes();
     this.vel.copy(this.fwd).multiplyScalar(speed);
     this.speed = speed;
-    this.throttle = this.spec.heli ? 0.5 : 0.7; // hélico : pile le stationnaire
+    this.vtol = false; this.vtolAnim = 0;
+    this.throttle = this.spec.heli || this.spec.balloon ? 0.5 : this.spec.foot ? 0 : 0.7; // hélico : pile le stationnaire
     this.rpm = IDLE + (1 - IDLE) * this.throttle;
     this.gearDown = !this.spec.retract;
     this.gearAnim = this.gearDown ? 1 : 0;
@@ -168,12 +186,31 @@ export class Plane {
 
   /** Cran de volets suivant (0 -> 1 -> 2 -> 0). Renvoie un message. */
   cycleFlaps() {
+    if (this.spec.hover) return this.toggleNozzles();
     if (!this.spec.flaps) return 'Pas de volets sur cet avion';
     const next = (this.flaps + 1) % FLAPS.length;
     if (next > 0 && !this.onGround && this.speed > this.flapLimit) return 'Trop vite pour sortir les volets';
     this.flaps = next;
     this.events.push({ type: 'flaps', level: next });
     return FLAPS[next].name;
+  }
+  /** Avion à décollage vertical : oriente les tuyères vers le bas (vol stationnaire) ou vers l'arrière (vol normal). */
+  toggleNozzles() {
+    const s = this.spec;
+    if (this.vtol) {
+      const fwd = this.vel.x * this.fwd.x + this.vel.z * this.fwd.z;
+      if (!this.onGround && fwd < s.stall * 1.02) return `Prends d'abord de la vitesse : ${Math.round(s.stall * 1.02 * 3.6)} km/h`;
+      this.vtol = false; this.yawG = Math.atan2(-this.fwd.x, -this.fwd.z); this.groundSpeed = 0;
+      if (!this.onGround) { this.levelT = 2.5; this.throttle = Math.max(this.throttle, 0.85); this.rpm = Math.max(this.rpm, 0.8); this.gearDown = false; this.events.push({ type: 'gear', down: false }); }
+    } else {
+      if (this.onGround && this.groundSpeed > 3) return 'Arrête-toi pour orienter les tuyères';
+      if (!this.onGround && this.speed > 120) return "Trop vite : ralentis sous 430 km/h";
+      this.vtol = true; this.throttle = this.onGround ? 0.2 : 0.5;
+      this.hPitch = this.pitch; this.hBank = 0;
+      if (!this.gearDown) { this.gearDown = true; this.events.push({ type: 'gear', down: true }); }
+    }
+    this.events.push({ type: 'flaps', level: this.vtol ? 1 : 0 });
+    return this.vtol ? 'Tuyères vers le bas : vol vertical' : "Tuyères vers l'arrière : vol normal";
   }
   get flapLimit() { return this.spec.maxSpeed * 0.68; }
 
@@ -201,13 +238,17 @@ export class Plane {
     // (hélicoptère : le rotor tourne à régime constant, c'est le pas collectif qui varie)
     this.stepFuel(dt, world);
     const ef = this.engineFactor;
-    const target = ef === 0 ? 0 : s.heli ? 1 : IDLE + (1 - IDLE) * this.throttle * ef, e = s.engine || {};
+    const target = ef === 0 ? 0 : s.heli ? 1 : this.vtol ? IDLE + (1 - IDLE) * (this.onGround ? this.throttle : 0.55 + 0.45 * this.throttle) : IDLE + (1 - IDLE) * this.throttle * ef, e = s.engine || {};
     const spool = e.spool ? (0.3 + 1.7 * this.rpm * this.rpm) / e.spool : 5;
     this.rpm += (target - this.rpm) * (1 - Math.exp(-spool * dt));
     this.flapAnim = damp(this.flapAnim, this.flaps, 1.4, dt);
     this.gearAnim = damp(this.gearAnim, this.gearDown ? 1 : 0, 5, dt);
     this.braking = input.brake;
-    if (s.heli) this.stepHeli(dt, input, world);
+    this.vtolAnim = damp(this.vtolAnim, this.vtol ? 1 : 0, 2.5, dt);
+    if (!this.onGround) this.reverse = damp(this.reverse, 0, 4, dt);
+    if (this.hovering) this.stepHeli(dt, input, world);
+    else if (s.balloon) this.stepBalloon(dt, input, world);
+    else if (s.jumper) this.stepJump(dt, input, world);
     else if (s.airship) this.stepShip(dt, input, world);
     else if (this.onGround) this.stepGround(dt, input, world);
     else this.stepAir(dt, input, world);
@@ -219,6 +260,7 @@ export class Plane {
     const s = this.spec, q = this.quat, v = this.vel, c = this.ctrl, pos = this.pos;
     const { fwd, up, right } = this;
     this.airTime += dt;
+    if (s.foot) this.throttle = 0;
     let V = v.length();
     // effet de sol : à moins d'une demi-envergure du sol, l'aile porte mieux (on « flotte » à l'arrondi)
     this.ground = clamp(1 - this.agl / (0.6 * s.span), 0, 1) ** 2;
@@ -254,6 +296,13 @@ export class Plane {
     const tf = 1 + this.buffet * 5, tt = this.time * tf + this.seed;
     pr += tb * tf * wobbleD(tt, 0.3);
     rr += tb * tf * 1.6 * 1.13 * wobbleD(tt * 1.13, 2.1);
+
+    // vol libre : le pilote pend sous l'aile, qui revient d'elle-même à son allure de plané
+    if (s.foot) {
+      pr += clamp((-0.1 - 0.35 * clamp(1.45 - vr, 0, 0.6) - Math.asin(clamp(fwd.y, -1, 1))) * 1.3, -0.4, 0.6) * (1 - Math.min(1, Math.abs(c.pitch)));
+      rr = clamp(((c.roll + c.yaw * 0.3) * 0.8 - this.roll) * 2, -s.rollRate, s.rollRate) * auth;
+    }
+    if (this.levelT > 0) { this.levelT -= dt; pr += clamp((0.06 - Math.asin(clamp(fwd.y, -1, 1))) * 2.2, -0.6, 0.6) * (1 - Math.min(1, Math.abs(c.pitch))); } // tuyères rabattues : le nez se relève
 
     // inertie : la vitesse de rotation rejoint la consigne en `inertia` secondes environ
     const ki = 1 - Math.exp(-dt / s.inertia);
@@ -310,7 +359,7 @@ export class Plane {
       _acc.z -= _vdir.z * gAlong * ul;
     }
     // rafales verticales (atténuées tout près du sol pour ne pas gâcher les atterrissages)
-    _acc.y += s.turb * 0.9 * clamp(1 - this.agl / 400, 0.15, 1) * clamp(vr - 0.5, 0, 1) * (1 - 0.7 * this.ground) * wobble(tt * 0.8, 4.2);
+    _acc.y += s.turb * 0.9 * (clamp(1 - this.agl / 400, 0.15, 1) + 1.6 * (this.cloud || 0)) * clamp(vr - 0.5, 0, 1) * (1 - 0.7 * this.ground) * wobble(tt * 0.8, 4.2);
     _v0.copy(v);
     v.addScaledVector(_acc, dt);
 
@@ -364,7 +413,7 @@ export class Plane {
   //  - le manche gauche / droite fait virer (en s'inclinant), même en stationnaire ; le palonnier pivote sur place ;
   //  - Espace : retour automatique au vol stationnaire (assiette à plat, gaz à 50 %).
   stepHeli(dt, input, world) {
-    const s = this.spec, q = this.quat, v = this.vel, c = this.ctrl, pos = this.pos;
+    const s = this.hoverSpec, q = this.quat, v = this.vel, c = this.ctrl, pos = this.pos;
     const hdg0 = Math.atan2(-this.fwd.x, -this.fwd.z);
     const fx = -Math.sin(hdg0), fz = -Math.cos(hdg0);           // avant (horizontal)
     const vFwd = v.x * fx + v.z * fz, vSide = v.x * -fz + v.z * fx; // vitesse avant / vers la droite
@@ -378,7 +427,7 @@ export class Plane {
       v.set(0, 0, 0);
       this.gLoad = 1; this.stalling = false; this.stallWarn = false; this.buffet = 0; this.pitchRate = 0; this.rollRate = 0;
       if (this.throttle > 0.53) { // assez de pas : on décolle
-        this.onGround = false; this.airTime = 0; v.y = 0.8; pos.y += 0.05;
+        this.onGround = false; this.airTime = 0; v.y = 0.8; pos.y += 0.05; this.leaveDeck();
         this.events.push({ type: 'takeoff' });
       }
       return;
@@ -441,10 +490,10 @@ export class Plane {
     this.stalling = false; this.stallWarn = false; this.buffet = 0;
     if (this.agl <= 0) {
       if (g.type === 'land') world.normalAt(pos.x, pos.z, _n); else _n.set(0, 1, 0);
-      const hs = Math.hypot(v.x, v.z), ok = g.type !== 'water' && -v.y < s.maxSink && hs < 14 && this.up.y > 0.82 && _n.y > 0.85;
+      const hs = Math.hypot(v.x - (g.deck ? g.deck.vx : 0), v.z - (g.deck ? g.deck.vz : 0)), ok = g.type !== 'water' && -v.y < s.maxSink && hs < 14 && this.up.y > 0.82 && _n.y > 0.85;
       if (!ok) { this.crash(g.type === 'water' ? 'water' : 'ground'); return; }
       pos.y = g.h + this.standH; this.agl = 0;
-      this.onGround = true; this.gNormal.copy(_n); this.surface = g.type;
+      this.onGround = true; this.gNormal.copy(_n); this.surface = g.type; this.deck = g.deck || null;
       this.events.push({ type: 'touchdown', surface: g.type, sink: -v.y, airTime: this.airTime });
       v.set(0, 0, 0);
       // posé : on réduit les gaz sous le stationnaire pour rester au sol
@@ -465,6 +514,106 @@ export class Plane {
     }
   }
 
+  /** Vitesse du pont quitté (porte-avions en route, frégate…) ajoutée à celle de l'appareil. */
+  leaveDeck() {
+    if (this.deck) { this.vel.x += this.deck.vx; this.vel.z += this.deck.vz; }
+    this.deck = null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Montgolfière : R chauffe l'air (elle monte), F ouvre la soupape (elle descend). Elle va où va le vent, qui tourne
+  // et forcit avec l'altitude ; un petit ventilateur (le manche) aide à viser, le palonnier fait tourner la nacelle.
+  stepBalloon(dt, input, world) {
+    const s = this.spec, q = this.quat, v = this.vel, c = this.ctrl, pos = this.pos;
+    const hdg0 = Math.atan2(-this.fwd.x, -this.fwd.z);
+    // la manette est la température de l'enveloppe : 50 % = équilibre ; l'air refroidit tout seul
+    this.flame = damp(this.flame, input.throttle > 0.05 ? 1 : 0, 12, dt);
+    this.throttle = clamp(this.throttle - 0.6 * input.throttle * dt + (input.throttle > 0 ? 0.13 : input.throttle < 0 ? -0.16 : this.throttle > 0.5 ? -0.006 : this.onGround ? -0.02 : 0) * dt, 0, 1);
+    this.rpm = IDLE;
+    this.yawRate = damp(this.yawRate, c.yaw * 0.5 + c.roll * 0.35, 1.5, dt);
+    this.hBank = damp(this.hBank, 0.02 * Math.sin((this.time + this.seed) * 0.7), 2, dt);
+    q.setFromAxisAngle(Y, hdg0 - this.yawRate * dt).multiply(_q.setFromAxisAngle(X, 0.018 * Math.sin((this.time + this.seed) * 0.9))).multiply(_q.setFromAxisAngle(Z, this.hBank));
+    this.axes();
+    this.gLoad = 1; this.stalling = this.stallWarn = false; this.buffet = this.pitchRate = this.rollRate = 0;
+    const w = this.wind = world.wind ? world.wind(pos.x, pos.y, pos.z) : { x: 0, z: 0 };
+    if (this.onGround) {
+      v.set(0, 0, 0); this.groundSpeed = 0;
+      if (this.throttle > 0.53) { this.onGround = false; this.airTime = 0; v.y = 0.4; pos.y += 0.05; this.leaveDeck(); this.events.push({ type: 'takeoff' }); }
+      return;
+    }
+    this.airTime += dt;
+    const fx = -Math.sin(hdg0), fz = -Math.cos(hdg0), fan = -c.pitch * 2.6, slow = clamp(this.agl / 25, 0.25, 1);
+    const k = 1 - Math.exp(-dt * 0.45);
+    v.x += (w.x * slow + fx * fan - v.x) * k; v.z += (w.z * slow + fz * fan - v.z) * k;
+    const lift = (this.throttle - 0.5) * 7;
+    v.y += (lift - v.y * 0.55) * dt;
+    if (this.agl < 14) v.y = Math.max(v.y, -0.7 - this.agl * 0.22); // l'air chaud amortit l'arrivée
+    if (input.brake) v.y = damp(v.y, 0, 0.8, dt);
+    pos.addScaledVector(v, dt);
+    this.airLift = world.updraft ? world.updraft(pos.x, pos.y, pos.z) * 0.3 : 0; pos.y += this.airLift * dt;
+    const g = world.groundAt(pos.x, pos.z, pos.y);
+    this.agl = pos.y - this.standH - g.h; this.surface = g.type;
+    if (this.agl <= 0) {
+      pos.y -= this.agl; this.agl = 0;
+      if (g.type === 'water') { v.y = Math.max(0.5, v.y); this.throttle = Math.max(this.throttle, 0.52); return; } // effleure l'eau et repart
+      if (g.type === 'land') world.normalAt(pos.x, pos.z, _n); else _n.set(0, 1, 0);
+      if (-v.y > s.maxSink || _n.y < 0.75) { this.crash('ground'); return; }
+      this.onGround = true; this.gNormal.copy(_n); this.deck = g.deck || null;
+      this.events.push({ type: 'touchdown', surface: g.type, sink: -v.y, airTime: this.airTime });
+      this.throttle = Math.min(this.throttle, 0.46); v.set(0, 0, 0);
+      return;
+    }
+    if (world.hit(pos.x, pos.y, pos.z)) { this.crash('obstacle'); return; }
+    for (const hp of this.hitPts) {
+      _p.copy(hp).applyQuaternion(q).add(pos);
+      if (world.hit(_p.x, _p.y, _p.z)) { this.crash('obstacle'); return; }
+      const gp = world.groundAt(_p.x, _p.z, _p.y); if (_p.y < gp.h - 0.5) { this.crash('ground'); return; }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Parachutiste : chute libre (le manche fait dériver), puis voile ouverte (X, ou toute seule près du sol) qu'on dirige.
+  stepJump(dt, input, world) {
+    const q = this.quat, v = this.vel, c = this.ctrl, pos = this.pos;
+    let hdg = Math.atan2(-this.fwd.x, -this.fwd.z);
+    this.gLoad = 1; this.stalling = this.stallWarn = false; this.buffet = 0; this.throttle = 0;
+    if (this.onGround) { v.set(0, 0, 0); this.groundSpeed = 0; this.chute = damp(this.chute, 0, 1.5, dt); this.hPitch = damp(this.hPitch, 0, 4, dt); q.setFromAxisAngle(Y, hdg); this.axes(); return; }
+    this.airTime += dt;
+    if (!this.chuteOpen && this.agl < 170 && this.airTime > 1) this.openChute();
+    this.chute = damp(this.chute, this.chuteOpen ? 1 : 0, 1.6, dt);
+    const ch = this.chute, turn = (c.roll + c.yaw) * lerp(1.2, 0.95, ch);
+    this.yawRate = damp(this.yawRate, turn, 3, dt);
+    hdg -= this.yawRate * dt;
+    // à plat ventre en chute libre, debout sous la voile
+    this.flare = damp(this.flare, ch > 0.5 && input.brake ? 1 : 0, 3, dt);
+    this.hPitch = damp(this.hPitch, lerp(-1.2 + 0.35 * c.pitch, 0.1 * c.pitch, ch), 3, dt);
+    this.hBank = damp(this.hBank, this.yawRate * lerp(0.25, 0.4, ch), 3, dt);
+    q.setFromAxisAngle(Y, hdg).multiply(_q.setFromAxisAngle(Z, -this.hBank)).multiply(_q.setFromAxisAngle(X, this.hPitch));
+    this.axes();
+    const fx = -Math.sin(hdg), fz = -Math.cos(hdg);
+    const ahead = lerp(6 + 22 * Math.max(0, -c.pitch), 9.5 - 3 * Math.max(0, c.pitch) + 2.5 * Math.max(0, -c.pitch) - 5 * this.flare, ch);
+    const sink = lerp(56 + 14 * Math.max(0, -c.pitch) - 8 * Math.max(0, c.pitch), 4.6 + 2 * Math.max(0, -c.pitch) + 2.2 * Math.abs(this.yawRate) - 3.2 * this.flare, ch);
+    const k = 1 - Math.exp(-dt * lerp(0.35, 2.2, ch));
+    v.x += (fx * ahead - v.x) * k; v.z += (fz * ahead - v.z) * k; v.y += (-sink - v.y) * (1 - Math.exp(-dt * lerp(0.28, 1.8, ch)));
+    pos.addScaledVector(v, dt);
+    this.airLift = world.updraft ? world.updraft(pos.x, pos.y, pos.z) * 0.6 * ch : 0; pos.y += this.airLift * dt;
+    const g = world.groundAt(pos.x, pos.z, pos.y);
+    this.agl = pos.y - this.standH - g.h; this.surface = g.type;
+    if (this.agl <= 0) {
+      if (-v.y > 14) { this.crash(g.type === 'water' ? 'water' : 'ground'); return; }
+      pos.y -= this.agl; this.agl = 0; this.onGround = true; this.deck = g.deck || null; this.yawG = hdg;
+      this.events.push({ type: 'touchdown', surface: g.type, sink: -v.y, airTime: this.airTime });
+      v.set(0, 0, 0);
+      return;
+    }
+    if (world.hit(pos.x, pos.y, pos.z)) this.crash('obstacle');
+  }
+  openChute() {
+    if (this.chuteOpen || !this.spec.jumper) return;
+    this.chuteOpen = true;
+    this.events.push({ type: 'chute' });
+  }
+
   // -------------------------------------------------------------------------
   // Dirigeable : il flotte tout seul. Les gaz donnent la vitesse, le manche l'assiette (et un peu de montée même à
   // l'arrêt), il vire lentement au manche ou au palonnier. Espace : moteurs en marche arrière, il s'arrête suspendu.
@@ -478,7 +627,7 @@ export class Plane {
       this.hPitch = damp(this.hPitch, 0, 2, dt); this.hBank = 0; this.yawRate = damp(this.yawRate, (c.yaw + c.roll) * s.turnRate * 0.5, 1.5, dt);
       q.setFromAxisAngle(Y, hdg0 - this.yawRate * dt); this.axes(); v.multiplyScalar(Math.exp(-2 * dt)); pos.addScaledVector(v, dt); this.groundSpeed = v.length();
       this.gLoad = 1; this.stalling = this.stallWarn = false; this.buffet = this.pitchRate = this.rollRate = 0;
-      if (c.pitch > 0.25 || this.throttle > 0.5) { this.onGround = false; this.airTime = 0; v.y = 1; pos.y += 0.05; this.events.push({ type: 'takeoff' }); }
+      if (c.pitch > 0.25 || this.throttle > 0.5) { this.onGround = false; this.airTime = 0; v.y = 1; pos.y += 0.05; this.leaveDeck(); this.events.push({ type: 'takeoff' }); }
       return;
     }
     this.airTime += dt;
@@ -508,7 +657,7 @@ export class Plane {
       if (g.type === 'land') world.normalAt(pos.x, pos.z, _n); else _n.set(0, 1, 0);
       if (g.type === 'water') { pos.y -= this.agl; v.y = Math.max(0.6, v.y); this.agl = 0; return; } // rebondit au ras de l'eau
       if (-v.y > s.maxSink || hs > 15 || _n.y < 0.8) { this.crash('ground'); return; }
-      pos.y = g.h + this.standH; this.agl = 0; this.onGround = true; this.gNormal.copy(_n);
+      pos.y = g.h + this.standH; this.agl = 0; this.onGround = true; this.gNormal.copy(_n); this.deck = g.deck || null;
       this.events.push({ type: 'touchdown', surface: g.type, sink: -v.y, airTime: this.airTime });
       this.throttle = Math.min(this.throttle, 0.2); v.y = 0;
       return;
@@ -525,12 +674,15 @@ export class Plane {
     const pitch = this.pitch, bank = Math.abs(right.y);
     let ok = up.y > 0.6 && sink < s.maxSink && bank < 0.42 && pitch > -0.2 && pitch < 0.55 && -this.agl < 1.3;
     if (g.type === 'water' && !s.floats) ok = false;
-    if (g.type === 'land' && _n.y < 0.9) ok = false;
+    if (g.type === 'land' && _n.y < (s.foot ? 0.7 : s.tundra ? 0.82 : 0.9)) ok = false;
     if (!ok) { this.crash(g.type === 'water' ? 'water' : 'ground'); return; }
 
     this.onGround = true;
     this.yawG = Math.atan2(-fwd.x, -fwd.z);
-    this.groundSpeed = Math.hypot(vel.x, vel.z);
+    this.deck = g.deck || null;
+    const dvx = this.deck ? this.deck.vx : 0, dvz = this.deck ? this.deck.vz : 0;
+    this.groundSpeed = Math.hypot(vel.x - dvx, vel.z - dvz);
+    if (s.foot) this.throttle = 0;
     this.groundPitch = clamp(pitch, 0, 0.2);
     this.gNormal.copy(_n);
     this.arrest = g.type === 'carrier';
@@ -546,7 +698,7 @@ export class Plane {
     const belly = this.onBelly;
     let g = world.groundAt(pos.x, pos.z, pos.y + 2);
     let sp = this.groundSpeed;
-    const hard = g.type === 'runway' || g.type === 'carrier';
+    const hard = g.type === 'runway' || g.type === 'carrier' || g.type === 'deck';
 
     // direction (palonnier ou manche)
     const steer = clamp(c.roll + c.yaw, -1, 1);
@@ -555,7 +707,17 @@ export class Plane {
 
     // accélération / freinage
     let acc = this.thrust() - (s.dragK ?? s.accel / (s.maxSpeed * s.maxSpeed)) * sp * sp;
-    let fr = hard ? 0.35 : g.type === 'water' ? 1.5 : 2.2;
+    let fr = hard ? 0.35 : g.type === 'water' ? 1.5 : s.tundra ? 0.9 : 2.2;
+    if (s.foot) { acc = 5 * this.throttle * clamp(1.45 - sp / 8, 0, 1); fr = this.throttle > 0.05 ? 0.2 : 3; } // on court
+    // inverseurs de poussée (freins, gaz réduits) et parachute-frein du Jet
+    const calm = input.brake && this.throttle < 0.35;
+    this.reverse = damp(this.reverse, s.reverser && calm && sp > 8 && g.type !== 'carrier' ? 1 : 0, 3, dt);
+    fr += this.reverse * 5;
+    if (s.drogue && calm && sp > 32 && !this.drogueUsed && g.type === 'runway') { this.drogueUsed = true; this.drogue = 0.01; this.events.push({ type: 'drogue', open: true }); }
+    if (this.drogue > 0) {
+      this.drogue = Math.min(1, this.drogue + dt * 1.6); fr += 0.0024 * this.drogue * sp * sp;
+      if (sp < 7) { this.drogue = 0; this.events.push({ type: 'drogue', open: false }); }
+    }
     if (belly) fr += 14;
     if (input.brake) fr += g.type === 'water' ? 3 : s.brake;
     if (g.type === 'carrier') {
@@ -583,6 +745,7 @@ export class Plane {
     pos.x += fx * sp * dt; pos.z += fz * sp * dt;
     g = world.groundAt(pos.x, pos.z, pos.y + 2);
     const ty = g.h + this.standH;
+    if (pos.y - ty <= 0.9) this.deck = g.deck || null;
     this.surface = g.type; this.agl = 0; this.groundSpeed = sp;
     this.pitchRate = 0; this.rollRate = 0; this.yawRate = 0; this.gLoad = 1; this.stalling = false;
 
@@ -616,6 +779,8 @@ export class Plane {
     this.onGround = false;
     this.airTime = 0;
     this.vel.copy(this.fwd).multiplyScalar(sp);
+    this.leaveDeck();
+    this.drogue = 0; this.drogueUsed = false;
     if (announce) {
       this.vel.y += 1.2;
       this.pos.y += 0.05;

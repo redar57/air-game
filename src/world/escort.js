@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import { carrier, lightsPoints, spinners } from './airfields.js';
-import { addBox, addMoving } from './colliders.js';
-import { mergeColored, xform, toWorld, smoothstep, lerp } from '../util.js';
+import { addMoving } from './colliders.js';
+import { addDeck, moveDeck } from './decks.js';
+import { SPEED } from './carrier.js';
+import { Puffs } from './puffs.js';
+import { mergeColored, xform, toWorld, smoothstep, lerp, clamp } from '../util.js';
 import { kit } from './ports.js';
 import { parkedGeo } from './milbase.js';
 import { usFlag } from './flag.js';
+import { radome } from '../planes/models.js';
 
-// Escorte du porte-avions : deux destroyers et deux frégates qui tournent lentement de part et d'autre, un pétrolier
-// ravitailleur et un sous-marin en surface, deux vedettes de garde et un hélicoptère de sauvetage.
+// Escorte du porte-avions, qui navigue avec lui : deux destroyers, deux frégates (on peut poser un hélicoptère sur leur
+// plateforme), un pétrolier ravitailleur, un sous-marin qui plonge et refait surface, deux vedettes et un hélicoptère.
 // Les axes d'appontage et de catapultage (devant et derrière le pont) restent libres. Repère navire : -Z vers l'avant.
 
 const GR = 0x8a949c, GD = 0x6c767e, GL = 0x9da6ad, DK = 0x3b434a, GLASS = 0x22384a, RED = 0x7d3a34, WH = 0xe9ecee, BLK = 0x1f2428;
@@ -73,7 +77,7 @@ function destroyer() {
   block(k, 16, 6.5, 16, GL, 0, y, 41, 0.9); k.B(5.6, 4.6, 0.3, DK, -3.6, y + 2.6, 49); k.B(5.6, 4.6, 0.3, DK, 3.6, y + 2.6, 49); dome(k, 1.3, 0, y + 8, 38);
   for (const s of [-1, 1]) { k.B(1.8, 1.4, 6.5, 0xd96a2b, s * 8.6, y + 4.6, 12); k.C(0.8, 0.9, 1, WH, s * 5, y + 13.4, -8, 8); } // embarcations, lance-leurres
   helideck(k, y + 0.2, 60, 15, 21); rail(k, 8.2, y, 24, 33);
-  return { mesh: k.mesh(), L: 150, W: 19, y, top: [[-14, 22, 8.5, 22], [14, 18, 7.5, 13], [41, 9, 8, 8]], radar: [0, y + 24, -12.2], flag: [0, y, 72.5], deck: [0, y + 0.3, 60], lights: [0, y + 33, -13] };
+  return { mesh: k.mesh(), L: 150, W: 19, y, top: [[-14, 22, 8.5, 22], [14, 18, 7.5, 13], [41, 9, 8, 8]], radar: [0, y + 24, -12.2], flag: [0, y, 72.5], deck: [0, y + 0.3, 60, 7.5, 10.4], lights: [0, y + 33, -13] };
 }
 /** Frégate (122 m) : lignes plus douces, une cheminée, radar sous dôme. */
 function frigate() {
@@ -87,7 +91,7 @@ function frigate() {
   for (const s of [-1, 1]) { k.C(0.35, 0.35, 5, DK, s * 2.6, y + 7.4, -2, 8, Math.PI / 2 - 0.3, s * 0.5); k.B(1.6, 1.3, 5.6, 0xd96a2b, s * 6.4, y + 3.6, 3); }
   block(k, 13, 6, 18, GL, 0, y, 24, 0.9); k.B(7, 4.6, 0.3, DK, 0, y + 2.5, 33.1); k.B(1.4, 1.2, 2.6, GD, 0, y + 6.8, 24);
   helideck(k, y + 0.2, 45.5, 12.5, 23); rail(k, 6.6, y, 34, 34.1);
-  return { mesh: k.mesh(), L: 122, W: 15.5, y, top: [[-8, 22, 7, 12], [20, 13, 6.5, 8]], radar: [0, y + 17, 0.6], flag: [0, y, 59], deck: [0, y + 0.3, 46], lights: [0, y + 23, 0] };
+  return { mesh: k.mesh(), L: 122, W: 15.5, y, top: [[-8, 22, 7, 12], [20, 13, 6.5, 8]], radar: [0, y + 17, 0.6], flag: [0, y, 59], deck: [0, y + 0.3, 45.5, 6.4, 11.4], lights: [0, y + 23, 0] };
 }
 /** Pétrolier ravitailleur (175 m) : portiques et tuyaux, château arrière. */
 function oiler() {
@@ -102,7 +106,7 @@ function oiler() {
   block(k, 7, 8, 7, GD, 0, y + 9, 53, 0.8); k.B(5, 0.8, 5, BLK, 0, y + 17.2, 53);
   for (const s of [-1, 1]) k.B(2, 1.6, 7, 0xd96a2b, s * 11.3, y + 8, 47);
   helideck(k, y + 0.2, 72, 20, 25);
-  return { mesh: k.mesh(), L: 175, W: 25, y, top: [[-18, 20, 11, 38], [46, 18, 11, 14]], radar: [0, y + 20, 43], flag: [0, y, 86], deck: [0, y + 0.3, 72], lights: [0, y + 26, 44] };
+  return { mesh: k.mesh(), L: 175, W: 25, y, top: [[-18, 20, 11, 38], [46, 18, 11, 14]], radar: [0, y + 20, 43], flag: [0, y, 86], deck: [0, y + 0.3, 72, 10, 12.4], lights: [0, y + 26, 44] };
 }
 /** Sous-marin en surface (110 m). */
 function submarine() {
@@ -140,13 +144,14 @@ function stadium(o, s, out) {
 }
 
 export function buildEscort(scene) {
-  const C = carrier, ships = [], _o = {};
+  const C = carrier, ships = [], _o = {}, foam = new Puffs(scene, 60, { opacity: 0.75 });
   const wakeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
   const wakeGeo = new THREE.BufferGeometry();
   wakeGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.4, 0, 0, 0.4, 0, 0, 1, 0, 1, -0.4, 0, 0, 1, 0, 1, -1, 0, 1], 3));
   // lames d'étrave : deux rubans d'écume le long de la coque
   const bow = new THREE.BufferGeometry();
   bow.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.5, 0.5, 0, -0.1, 0.9, 0, 0.5, 0, 0, -0.5, -0.9, 0, 0.5, -0.5, 0, -0.1], 3));
+  /** Navire au poste (lx, lz) dans le repère du porte-avions, qui louvoie de ±ax (en travers) et ±az (en long). */
   const add = (d, opt) => {
     const root = new THREE.Group();
     root.rotation.order = 'YXZ';
@@ -162,33 +167,26 @@ export function buildEscort(scene) {
       const f = usFlag(2.2); f.position.set(d.flag[0], d.flag[1] + 4.6, d.flag[2]); f.rotation.y = -Math.PI / 2; root.add(f);
     }
     scene.add(root);
-    const s = { root, d, phase: ships.length * 1.7, v: 0, s: 0, ...opt, cols: [] };
-    const boxes = [[0, d.y, d.W / 2, d.L * 0.47], ...d.top.map(([z, h, hw, hd]) => [z, d.y + h, hw, hd])];
-    for (const [z, top, hw, hd] of boxes) s.cols.push({ z, c: s.route ? addMoving(hw, hd, -8, top) : (() => { toWorld(C, s.lx, s.lz, _w); const yaw = C.yaw + (s.h || 0); return addBox(_w.x + Math.sin(yaw) * z, _w.z + Math.cos(yaw) * z, yaw, hw, hd, -8, top); })() });
-    if (s.route) {
-      s.wake = new THREE.Mesh(wakeGeo, wakeMat); s.bow = new THREE.Mesh(bow, wakeMat);
-      s.wake.renderOrder = s.bow.renderOrder = 1;
-      s.wake.position.set(0, 0.2, d.L * 0.46); s.wake.scale.set(d.W * 0.55, 1, d.L * 0.5 + s.v * 14);
-      s.bow.position.set(0, 0.25, -d.L * 0.25); s.bow.scale.set(d.W * 0.8, 1, d.L * 0.42);
-      root.add(s.wake, s.bow);
-    }
+    const s = { root, d, phase: ships.length * 1.7, t: ships.length * 37, w: 0.02, ax: 0, az: 0, depth: 0, pitch: 0, ...opt, cols: [] };
+    for (const [z, top, hw, hd] of [[0, d.y, d.W / 2, d.L * 0.47], ...d.top.map(([z, h, hw, hd]) => [z, d.y + h, hw, hd])]) s.cols.push({ z, top, c: addMoving(hw, hd, -8, top) });
+    s.wake = new THREE.Mesh(wakeGeo, wakeMat); s.bow = new THREE.Mesh(bow, wakeMat);
+    s.wake.renderOrder = s.bow.renderOrder = 1;
+    s.wake.position.set(0, 0.2, d.L * 0.46); s.wake.scale.set(d.W * 0.55, 1, d.L * 0.5 + SPEED * 14);
+    s.bow.position.set(0, 0.25, -d.L * 0.25); s.bow.scale.set(d.W * 0.8, 1, d.L * 0.42);
+    root.add(s.wake, s.bow);
+    if (d.deck && opt.land) s.deck = addDeck({ x: 0, z: 0, yaw: 0, y: d.deck[1], hw: d.deck[3], hl: d.deck[4], kind: 'deck', name: opt.land });
     ships.push(s);
     return s;
   };
+  add(destroyer(), { lx: -560, lz: -420, ax: 70, az: 60, land: 'Destroyer' }); add(destroyer(), { lx: 560, lz: -380, ax: 60, az: 70, land: 'Destroyer' });
+  add(frigate(), { lx: -600, lz: 380, ax: 70, az: 60, land: 'Frégate' }); add(frigate(), { lx: 600, lz: 430, ax: 60, az: 70, land: 'Frégate' });
+  add(oiler(), { lx: 255, lz: 110, ax: 12, az: 20 });
+  const sub = add(submarine(), { lx: -300, lz: -40, ax: 60, az: 160, w: 0.012 });
+  add(guardBoat(), { lx: -190, lz: -330, ax: 55, az: 60, w: 0.09 }); add(guardBoat(), { lx: 205, lz: -330, ax: 45, az: 70, w: 0.08 });
 
-  // écrans latéraux : un destroyer et une frégate de chaque bord, à l'opposé l'un de l'autre
-  const port = { cx: -560, cz: 0, a: 620, r: 170, dir: 1 }, star = { cx: 560, cz: 0, a: 620, r: 160, dir: -1 };
-  const half = (o) => 2 * o.a + Math.PI * o.r;
-  add(destroyer(), { route: port, v: 7, s: 300 }); add(frigate(), { route: port, v: 7, s: 300 + half(port) });
-  add(destroyer(), { route: star, v: 7, s: 1500 }); add(frigate(), { route: star, v: 7, s: 1500 + half(star) });
-  add(oiler(), { lx: 225, lz: 60 });
-  add(submarine(), { lx: -215, lz: -40 });
-  const ring = { cx: 0, cz: 0, a: 190, r: 125, dir: 1 };
-  add(guardBoat(), { route: ring, v: 11, s: 0 }); add(guardBoat(), { route: ring, v: 11, s: half(ring) });
-
-  // hélicoptères gris : un garé sur chaque plateforme, un autre de garde au-dessus de l'eau
+  // hélicoptères gris : un garé sur le pétrolier, un autre de garde au-dessus de l'eau
   const { geo, spec } = parkedGeo('helico', [0x7d8790, 0x5d666e, 0x2b3138]), hmat = lam();
-  for (const s of ships) if (s.d.deck && s.d.L !== 122) { const h = new THREE.Mesh(geo, hmat); h.position.set(s.d.deck[0], s.d.deck[1] + spec.gearH, s.d.deck[2]); h.castShadow = true; s.root.add(h); }
+  for (const s of ships) if (s.d.deck && !s.deck) { const h = new THREE.Mesh(geo, hmat); h.position.set(s.d.deck[0], s.d.deck[1] + spec.gearH, s.d.deck[2]); h.castShadow = true; s.root.add(h); }
   const heli = new THREE.Mesh(parkedGeo('helico', [0x7d8790, 0x5d666e, 0x2b3138], true).geo, hmat); heli.castShadow = true; heli.rotation.order = 'YXZ';
   const disc = new THREE.Mesh(new THREE.CircleGeometry(6.2, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xd5dbe0, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }));
   disc.position.set(0, 2.5, 0); heli.add(disc);
@@ -197,31 +195,54 @@ export function buildEscort(scene) {
   heli.add(lightsPoints([0, -1, 0], 0xff4030, 5)); scene.add(heli);
   const guard = { route: { cx: 330, cz: 0, a: 380, r: 70, dir: 1 }, s: 0, v: 24, col: addMoving(4, 6, 0, 1), bank: 0 };
 
-  const set = (s) => {
-    if (s.route) { stadium(s.route, s.s, _o); } else { _o.lx = s.lx; _o.lz = s.lz; _o.h = s.h || 0; }
-    toWorld(C, _o.lx, _o.lz, _w);
-    s.x = _w.x; s.z = _w.z; s.yaw = C.yaw + _o.h;
-  };
+  // avion-radar : grands cercles au large, loin au-dessus de la flotte
+  const rg = parkedGeo('veilleur', null, true), awacs = new THREE.Mesh(rg.geo, hmat); awacs.castShadow = false; awacs.rotation.order = 'YXZ';
+  const dm = new THREE.Mesh(mergeColored(radome()), lam()); dm.position.set(0, 3.35, 1.2); awacs.add(dm); spinners.push({ obj: dm, rate: 0.7 });
+  for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.CircleGeometry(1.95, 20), disc.material); p.position.set(s * 3.6, 0.45, -4.4); awacs.add(p); }
+  awacs.add(lightsPoints([0, -1.4, 0], 0xff3020, 6)); scene.add(awacs);
+  const orbit = { a: 0, r: 2300, y: 620, v: 82, col: addMoving(6, 8, 0, 1) };
+
   const api = {
-    ships, heli,
+    ships, heli, sub, awacs,
     update(dt, time) {
-      for (const s of ships) {
-        s.s += s.v * dt; set(s);
-        const big = s.d.L > 60 ? 1 : 2.6, t = time + s.phase;
-        s.root.position.set(s.x, Math.sin(t * 0.6 * big) * 0.14 * big, s.z);
-        s.root.rotation.set(Math.sin(t * 0.5 * big) * 0.006 * big + (big > 1 ? 0.05 : 0), s.yaw, Math.sin(t * 0.43 * big) * 0.012 * big);
-        if (s.route) for (const { z, c } of s.cols) { c.x = s.x + Math.sin(s.yaw) * z; c.z = s.z + Math.cos(s.yaw) * z; c.yaw = s.yaw; }
+      // sous-marin : 80 s en surface, plonge, 50 s sous l'eau (en changeant de poste), refait surface
+      const P = 190; sub.t += dt; const u = sub.t % P;
+      const want = u < 80 ? 0 : u < 150 ? -26 : 0, v0 = sub.depth;
+      sub.depth += clamp((want - sub.depth) * 0.12, -1.3, 1.1) * dt;
+      const vy = dt > 0 ? (sub.depth - v0) / dt : 0;
+      sub.pitch += (clamp(vy * 0.11, -0.16, 0.2) - sub.pitch) * (1 - Math.exp(-0.8 * dt));
+      sub.under = sub.depth < -7.5;
+      if (dt > 0 && Math.abs(vy) > 0.15 && sub.depth < -0.4 && sub.depth > -12 && Math.random() < dt * 14) {
+        const b = (Math.random() - 0.5) * 80; foam.emit(sub.x + Math.sin(sub.yaw) * b, 0.2, sub.z + Math.cos(sub.yaw) * b, C.vx + (Math.random() - 0.5) * 4, 1 + Math.random() * 2, C.vz + (Math.random() - 0.5) * 4, 0.8, 3.2 + Math.random() * 2, 2.6);
       }
+      foam.update(dt);
+      for (const s of ships) {
+        if (s !== sub) s.t += dt;
+        const a = s.t * s.w, lx = s.lx + Math.sin(a) * s.ax, lz = s.lz + Math.cos(a * 0.83) * s.az;
+        const dx = Math.cos(a) * s.ax * s.w, dz = -Math.sin(a * 0.83) * s.az * 0.83 * s.w;
+        toWorld(C, lx, lz, _w);
+        s.x = _w.x; s.z = _w.z; s.yaw = C.yaw + Math.atan2(-dx, SPEED - dz);
+        const big = s.d.L > 60 ? 1 : 2.6, t = time + s.phase;
+        s.root.position.set(s.x, s.depth + Math.sin(t * 0.6 * big) * 0.14 * big, s.z);
+        s.root.rotation.set(Math.sin(t * 0.5 * big) * 0.006 * big + (big > 1 ? 0.05 : 0) + s.pitch, s.yaw, Math.sin(t * 0.43 * big) * 0.012 * big);
+        for (const { z, top, c } of s.cols) { c.x = s.x + Math.sin(s.yaw) * z; c.z = s.z + Math.cos(s.yaw) * z; c.yaw = s.yaw; c.y1 = top + s.depth; }
+        if (s.deck) moveDeck(s.deck, s.x + Math.sin(s.yaw) * s.d.deck[2], s.z + Math.cos(s.yaw) * s.d.deck[2], s.yaw, dt);
+      }
+      sub.wake.visible = sub.bow.visible = sub.depth > -1.5; sub.root.visible = sub.depth > -24;
       const g = guard;
-      g.s += g.v * dt; set(g);
+      g.s += g.v * dt;
+      stadium(g.route, g.s, _o); toWorld(C, _o.lx, _o.lz, _w); g.x = _w.x; g.z = _w.z; g.yaw = C.yaw + _o.h;
       stadium(g.route, g.s + 10, _o); const turn = Math.abs(Math.sin(_o.h + C.yaw - g.yaw)) > 0.02 ? 0.3 : 0;
       g.bank += (turn - g.bank) * (1 - Math.exp(-dt));
       const y = 72 + Math.sin(time * 0.4) * 3;
       heli.position.set(g.x, y, g.z); heli.rotation.set(-0.1, g.yaw, g.bank);
       Object.assign(g.col, { x: g.x, z: g.z, yaw: g.yaw, y0: y - 2.5, y1: y + 3 });
+      // avion-radar : cercle à gauche autour de la flotte
+      const o = orbit; o.a += (o.v / o.r) * dt;
+      awacs.position.set(C.x + Math.cos(o.a) * o.r, o.y + Math.sin(o.a * 3) * 12, C.z - Math.sin(o.a) * o.r); awacs.rotation.set(0.02, o.a, 0.24);
+      Object.assign(o.col, { x: awacs.position.x, z: awacs.position.z, yaw: o.a, y0: awacs.position.y - 3, y1: awacs.position.y + 4 });
     },
   };
-  for (const s of [...ships, guard]) set(s);
   api.update(0, 0); // en place dès la première image
   return api;
 }

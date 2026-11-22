@@ -43,6 +43,14 @@ export function setBig(big) {
   mca = Math.cos(MTN.ang); msa = Math.sin(MTN.ang);
 }
 
+/** Barrage : en travers du canyon, à l'abscisse u0 le long de la chaîne ; la retenue s'étend vers les u croissants. */
+export const DAM = { u0: 200, level: 92, bump: 100 };
+/** Coordonnées le long / en travers de la chaîne de montagnes, et retour. */
+export const alongRange = (x, z) => ({ u: (x - MTN.x) * mca + (z - MTN.z) * msa, v: -(x - MTN.x) * msa + (z - MTN.z) * mca });
+export const fromRange = (u, v) => ({ x: MTN.x + u * mca - v * msa, z: MTN.z + u * msa + v * mca });
+/** Axe du canyon (v) à l'abscisse u. */
+export const canyonAxis = (u) => 250 * Math.sin(u / 430) + 110 * Math.sin(u / 170 + 1.3);
+
 const nA = makeNoise2D(1337), nB = makeNoise2D(9001), nC = makeNoise2D(271);
 
 /** Distance au fond du canyon (qui serpente le long de la chaîne) et abscisse le long de celui-ci. */
@@ -115,7 +123,9 @@ export function rawBase(x, z) {
   // canyon
   const cd = canyonDist(x, z);
   if (cd < 300) {
-    const floor = 34 + 14 * nC(u * 0.0015, 7.7);
+    // (en amont du barrage, un seuil ferme la vallée : il retient le lac)
+    const sill = smoothstep(DAM.u0 + 520, DAM.u0 + 820, u) * (1 - smoothstep(DAM.u0 + 1000, DAM.u0 + 1500, u));
+    const floor = 34 + 14 * nC(u * 0.0015, 7.7) + DAM.bump * sill;
     if (h > floor) h = floor + (h - floor) * smoothstep(85, 290, cd);
   }
   return h;
@@ -141,6 +151,14 @@ export function flatInfo(x, z) {
     }
   }
   return { w, alt };
+}
+
+/** Plans d'eau en altitude (retenue du barrage) : { level, has(x, z) }. */
+export const highWaters = [];
+/** Niveau du plan d'eau au-dessus du sol en (x, z), ou null. */
+export function waterLevel(x, z) {
+  for (const w of highWaters) if (w.has(x, z)) return w.level;
+  return null;
 }
 
 let corridor = null;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { buildTerrain, heightAt, normalAt, flatInfo, setBig, setZones, BIG, HALF } from './world/terrain.js';
-import { defineAirfields, buildAirfields, buildCarrier, buildSeaBase, flatZones, seaBase, runways, carrier, runwayAt, onCarrierDeck, atFuelStation, atLoadPad, atBoarding, milBase, helipads, spinners, DECK_AXIS_X } from './world/airfields.js';
+import { buildTerrain, heightAt, normalAt, flatInfo, setBig, setZones, waterLevel, BIG, HALF } from './world/terrain.js';
+import { defineAirfields, buildAirfields, buildSeaBase, flatZones, seaBase, runways, carrier, runwayAt, atFuelStation, atLoadPad, atBoarding, milBase, helipads, spinners, DECK_AXIS_X } from './world/airfields.js';
 import { Sky } from './world/sky.js';
 import { buildScenery } from './world/scenery.js';
 import { hitObstacle } from './world/colliders.js';
@@ -8,7 +8,7 @@ import { defineThermals, updraft, buildThermalClouds, thermals } from './world/t
 import { IslandMap } from './world/map.js';
 import { Birds } from './world/birds.js';
 import { Boats } from './world/boats.js';
-import { PLANES, STARTS, liveriesOf } from './planes/catalog.js';
+import { PLANES, STARTS, JUMPER, liveriesOf } from './planes/catalog.js';
 import { createWaterBomber, createSprayer, createMail, canScoop } from './missions.js';
 import { createRescue, createSling } from './heli-missions.js';
 import { createParas } from './paras.js';
@@ -17,8 +17,14 @@ import { Tanker } from './tanker.js';
 import { createAirdrop } from './airdrop.js';
 import { buildMilBase } from './world/milbase.js';
 import { buildEscort } from './world/escort.js';
+import { buildFleetFlagship, fleetZones } from './world/carrier.js';
+import { decks, deckAt, ride } from './world/decks.js';
+import { planDam, buildDam } from './world/dam.js';
+import { planMountain, buildMountain, rampThermal } from './world/ski.js';
+import { planLandmarks, buildLandmarks } from './world/landmarks.js';
+import { buildAirport } from './world/airport.js';
 import { buildLaunchSite } from './world/spaceport.js';
-import { cityPort, fishPort, islets } from './world/places.js';
+import { cityPort, fishPort, peaks, rig as oilRig } from './world/places.js';
 import { buildHospital, hospital } from './world/sites.js';
 import { country, treatedShare, planRoutes } from './world/country.js';
 import { save } from './save.js';
@@ -37,7 +43,7 @@ import { Input, keyLabels } from './input.js';
 import { UI } from './ui.js';
 import { Sound } from './audio.js';
 import { Effects } from './fx.js';
-import { toWorld, clamp } from './util.js';
+import { toWorld, clamp, mergeColored, xform } from './util.js';
 
 const STEP = 1 / 120;       // pas fixe de la physique
 const EDGE = BIG ? 13600 : 7600; // au-delà (en mètres du centre), on est ramené en douceur
@@ -62,21 +68,30 @@ resize();
 /** Ce que la physique a besoin de savoir du monde. */
 const world = {
   groundAt(x, z, y) {
-    if (y > carrier.deckY - 2.5 && onCarrierDeck(x, z)) return { h: carrier.deckY, type: 'carrier' };
+    const d = deckAt(x, y, z);
+    if (d) return { h: d.y, type: d.kind, deck: d };
     const h = heightAt(x, z);
     if (h < 0) return { h: 0, type: 'water' };
+    const wl = waterLevel(x, z);
+    if (wl > h) return { h: wl, type: 'water' }; // retenue du barrage
     if (runwayAt(x, z)) return { h: h + 0.12, type: 'runway' };
     return { h, type: 'land' };
   },
   normalAt,
   hit: hitObstacle,
   updraft,
+  /** Vent à l'altitude y : il forcit et tourne à mesure qu'on monte (montgolfière). */
+  wind(x, y, z) {
+    const a = 0.6 + y * 0.0042 + Math.sin(time * 0.004) * 0.5, v = 2.2 + Math.min(y, 1500) * 0.004;
+    return { x: Math.cos(a) * v, z: Math.sin(a) * v };
+  },
   atFuel: atFuelStation,
 };
 
-let career, tanker, escort, spaceport, birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
+let career, tanker, flagship, escort, airport, dam, mountain, landmarks, spaceport, birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
+let jump = null; // saut en parachute : appareil abandonné { plane, model, t }, ou null
 let mission = null; // bombardier d'eau (hélicoptère rouge), ou null
-const _sv = new THREE.Vector3();
+const _sv = new THREE.Vector3(), _dv = new THREE.Vector3();
 let kills = 0; // montgolfières abattues depuis le lancement
 const input = new Input(), sound = new Sound(), tricks = new Tricks();
 let state = 'loading';
@@ -88,6 +103,7 @@ const tele = { vs: 0, turn: 0, prev: null, gMax: 1, hdg: 0 };
 
 // ---------------------------------------------------------------------------
 function setPlane(i) {
+  dropJump();
   selPlane = (i + PLANES.length) % PLANES.length;
   const spec = PLANES[selPlane];
   if (model) scene.remove(model.root);
@@ -131,7 +147,64 @@ function endMission() {
   ui.mission(null); ui.result(null);
 }
 
+/** Le joueur saute : il devient parachutiste, l'appareil continue tout seul un moment. */
+function bailOut() {
+  const p = plane;
+  if (jump || p.spec.jumper || p.onGround) return;
+  if (p.agl < 60) { ui.toast('Trop bas pour sauter (60 m au moins)', 1800); return; }
+  endMission(); missiles.reset(); guns.reset(); ui.lock(null); ui.sight(null); tricks.reset();
+  jump = { plane: p, model, t: 0 };
+  plane = new Plane(JUMPER); plane.fuelOn = false;
+  model = getModel(JUMPER, null); scene.add(model.root);
+  plane.placeInAir(p.pos.x - p.fwd.x * 2, p.pos.y - 2.5, p.pos.z - p.fwd.z * 2, Math.atan2(-p.fwd.x, -p.fwd.z), 0);
+  plane.airTime = 0; plane.agl = p.agl;
+  plane.vel.copy(p.vel).multiplyScalar(0.8); plane.vel.y -= 2;
+  accu = 0; sky.setShadowSpan(45); sound.setPlane(JUMPER);
+  rig.set('chase'); rig.snap(plane);
+  ui.hint("<kbd>X</kbd> ou <kbd>Espace</kbd> ouvre le parachute (seul à 170 m) · le manche dirige, <kbd>Espace</kbd> freine avant de toucher · <kbd>Retour arrière</kbd> reprendre l'appareil", 9000);
+}
+/** Fin du saut : on retrouve l'appareil. */
+function dropJump() {
+  if (!jump) return;
+  scene.remove(model.root);
+  plane = jump.plane; model = jump.model; jump = null;
+  model.root.visible = true; scene.add(model.root);
+  sky.setShadowSpan(Math.max(45, plane.spec.span * 1.7)); sound.setPlane(plane.spec);
+}
+/** L'appareil abandonné s'éloigne tout droit, puis disparaît. */
+function updateGhost(dt) {
+  if (!jump || !jump.model.root.visible) return;
+  const g = jump.plane, v = Math.max(g.vel.length(), 12);
+  jump.t += dt;
+  if (g.spec.heli || g.spec.balloon || g.spec.airship) g.pos.y += dt * 3; else g.pos.addScaledVector(g.fwd, v * dt);
+  if (jump.t > 25 || g.pos.y < Math.max(0, heightAt(g.pos.x, g.pos.z)) + 8) { jump.model.root.visible = false; scene.remove(jump.model.root); return; }
+  jump.model.root.position.copy(g.pos);
+  animateModel(jump.model, dt, { throttle: 0.6, gear: g.gearAnim, burner: 0, cockpitView: false, ctrl: g.ctrl, flaps: g.flapAnim, vtol: g.vtolAnim, reverse: 0, chute: 0, flame: 0 });
+}
+
+/** Parachute-frein, derrière la queue. */
+let drogueMesh = null;
+function updateDrogue() {
+  const k = plane.drogue || 0;
+  if (!k) { if (drogueMesh) drogueMesh.visible = false; return; }
+  if (!drogueMesh) {
+    const parts = [];
+    for (let i = 0; i < 12; i++) {
+      parts.push({ geo: new THREE.SphereGeometry(2.4, 1, 3, (i * Math.PI) / 6, Math.PI / 6, 0.12, 1.3).rotateX(Math.PI / 2), color: i % 2 ? 0xf4f1ea : 0xd8312b, matrix: xform(0, 0, 8) });
+      const a = (i * Math.PI) / 6, e = new THREE.Vector3(Math.cos(a) * 2.3, Math.sin(a) * 2.3, 8.6), m = new THREE.Matrix4().makeRotationFromQuaternion(_q.setFromUnitVectors(Y, e.clone().normalize())).setPosition(e.clone().multiplyScalar(0.5));
+      parts.push({ geo: new THREE.CylinderGeometry(0.025, 0.025, e.length(), 3), color: 0xd9d4c6, matrix: m });
+    }
+    drogueMesh = new THREE.Mesh(mergeColored(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
+    drogueMesh.castShadow = true; scene.add(drogueMesh);
+  }
+  drogueMesh.visible = true;
+  drogueMesh.position.copy(plane.pos).addScaledVector(plane.fwd, -plane.spec.len * 0.47).addScaledVector(Y, 0.3);
+  drogueMesh.quaternion.copy(plane.quat); drogueMesh.scale.set(0.3 + 0.7 * k, 0.3 + 0.7 * k, 0.4 + 0.6 * k);
+  drogueMesh.rotateZ(Math.sin(time * 3) * 0.12); drogueMesh.rotateX(Math.sin(time * 4.1) * 0.03);
+}
+
 function enterMenu() {
+  dropJump(); airport.leave();
   career.flush();
   endMission();
   state = 'menu';
@@ -143,18 +216,32 @@ function enterMenu() {
 
 function startFlight() {
   sound.start();
-  const id = STARTS[selStart].id, spec = plane.spec;
-  if (spec.glider && id !== 'vol') {
+  dropJump(); airport.leave();
+  const ramp = peaks.ramp, spec = plane.spec, id = STARTS[selStart].id === 'rampe' && !ramp ? 'vol' : STARTS[selStart].id;
+  let gate = false;
+  if (id === 'rampe') {
+    if (spec.foot || (spec.heli && spec.len < 14)) {
+      toWorld(ramp, 0, spec.foot ? 6 : 2, _w);
+      plane.placeOnGround(_w.x, _w.z, ramp.yaw, world);
+      ui.hint(spec.foot ? ui.footHint : ui.heliHint);
+      if (!spec.foot) sound.startup(spec);
+    } else {
+      toWorld(ramp, 0, 500, _w);
+      const b = clearestHeading(_w.x, _w.z);
+      plane.placeInAir(ramp.x, Math.max(ramp.y + 220, b.top + 140), ramp.z, b.yaw, spec.glider ? Math.min(30, spec.maxSpeed * 0.7) : spec.maxSpeed * 0.7);
+      ui.hint(spec.balloon ? ui.balloonHint : spec.glider ? ui.gliderHint : ui.flightHint.split(' · ').slice(2).join(' · '));
+    }
+  } else if (spec.glider && id !== 'vol') {
     // planeur : pas de moteur, on part en altitude au-dessus du terrain choisi
     const site = id === 'porte-avions' ? carrier : id === 'base' ? seaBase.site : runways.find((r) => r.id === id);
     const y = (id === 'porte-avions' ? carrier.deckY : site.alt) + 380;
     toWorld(site, 0, id === 'porte-avions' ? 600 : site.length / 2 + 900, _w);
-    plane.placeInAir(_w.x, y, _w.z, site.yaw, 30);
+    plane.placeInAir(_w.x, y, _w.z, site.yaw, Math.min(30, spec.maxSpeed * 0.7));
     ui.hint(ui.gliderHint);
   } else if (id === 'vol') {
     const rw = runways[0];
-    plane.placeInAir(rw.x - 2200, rw.alt + 420, rw.z + 700, rw.yaw, spec.maxSpeed * 0.7);
-    ui.hint(ui.flightHint.split(' · ').slice(2).join(' · '));
+    plane.placeInAir(rw.x - 2200, rw.alt + 420, rw.z + 700, rw.yaw, spec.glider ? Math.min(30, spec.maxSpeed * 0.7) : spec.maxSpeed * 0.7);
+    ui.hint(spec.balloon ? ui.balloonHint : spec.glider ? ui.gliderHint : ui.flightHint.split(' · ').slice(2).join(' · '));
   } else {
     if (id === 'porte-avions') {
       toWorld(carrier, DECK_AXIS_X, 112, _w);
@@ -163,17 +250,27 @@ function startFlight() {
       // base nautique : sur l'eau à côté du ponton pour un appareil qui flotte, sinon sur l'esplanade
       if (spec.floats) toWorld(seaBase, 5, 150, _w); else toWorld(seaBase, 0, -100, _w);
       plane.placeOnGround(_w.x, _w.z, seaBase.yaw + Math.PI, world);
+    } else if (id === 'aeroport' && spec.gate) {
+      airport.spawn(plane, world); gate = true;
     } else {
       const rw = runways.find((r) => r.id === id);
       toWorld(rw, 0, rw.length / 2 - 40 - spec.len, _w);
       plane.placeOnGround(_w.x, _w.z, rw.yaw, world);
     }
-    ui.hint(spec.heli ? ui.heliHint : spec.airship ? ui.shipHint : ui.flightHint);
+    ui.hint(gate ? "À ta porte d'embarquement : <kbd>X</kbd> demande le repoussage, puis roule jusqu'au seuil de piste" : spec.hover ? ui.hoverHint : spec.balloon ? ui.balloonHint : spec.heli ? ui.heliHint : spec.airship ? ui.shipHint : ui.flightHint);
     sound.startup(spec);
   }
   state = 'fly';
   accu = 0; edgeWarned = false;
   tricks.reset();
+  startMission(spec);
+  tele.gMax = 1; tele.prev = null;
+  ui.menu(false); ui.hud(true);
+  rig.set('chase'); rig.snap(plane);
+}
+
+/** Mission propre à l'appareil. */
+function startMission(spec) {
   endMission();
   if (canScoop(spec)) {
     const fires = !!save.get('fires');
@@ -193,8 +290,7 @@ function startFlight() {
     mission = createMail({ scene, sound, ui, heightAt, villages: scenery.villages, canLoad: (x, z) => flatInfo(x, z).w > 0.6, plane: () => plane });
     ui.mission(mission.hud());
     ui.hint(`Vole jusqu'au cercle jaune de ${mission.mailTarget ? mission.mailTarget.name : 'village'} et appuie sur <kbd>X</kbd> pour larguer un sac · <kbd>N</kbd> carte`);
-  }
-  else if (spec.rescue) {
+  } else if (spec.rescue) {
     mission = createRescue({ scene, sound, ui, heightAt, normalAt, span: HALF * 1.8, plane: () => plane });
     ui.mission(mission.hud());
     ui.hint(`Repère les colonnes orange (<kbd>N</kbd> carte), stationnaire au-dessus · maintiens <kbd>X</kbd> pour descendre le treuil, relâche pour remonter · dépose à l'hôpital`);
@@ -209,16 +305,12 @@ function startFlight() {
       canBoard: milBase.active ? atBoarding : (x, z) => !!runwayAt(x, z), plane: () => plane });
     ui.mission(mission.hud());
     ui.hint(`Vole vers la croix orange (<kbd>N</kbd> carte), au-dessus de 250 m · <kbd>X</kbd> fait sauter 4 parachutistes · ils se dirigent seuls vers la croix`);
-  }
-  else if (spec.drops) {
+  } else if (spec.drops) {
     mission = createAirdrop({ scene, sound, ui, heightAt, villages: scenery.villages, trees: scenery.treeList, span: HALF * 1.8, board: milBase.active ? milBase.board : runways[0],
       canBoard: (x, z) => !!runwayAt(x, z) || (milBase.active && atBoarding(x, z)), plane: () => plane });
     ui.mission(mission.hud());
     ui.hint(`Vole vers la cible jaune (<kbd>N</kbd> carte), au-dessus de 120 m · la croix bleue au sol montre où tombera la charge · <kbd>X</kbd> largue`);
   }
-  tele.gMax = 1; tele.prev = null;
-  ui.menu(false); ui.hud(true);
-  rig.set('chase'); rig.snap(plane);
 }
 
 /** Cap le plus dégagé autour d'un point, et hauteur du relief dans cette direction. */
@@ -234,9 +326,12 @@ function clearestHeading(x, z) {
 }
 
 function respawnInAir(x, z) {
+  const back = !!jump;
+  dropJump();
   const b = clearestHeading(x, z);
   const y = Math.max(Math.max(heightAt(x, z), 0) + 260, b.top + 140);
-  plane.placeInAir(x, y, z, b.yaw, plane.spec.maxSpeed * 0.7);
+  plane.placeInAir(x, y, z, b.yaw, plane.spec.glider ? Math.min(30, plane.spec.maxSpeed * 0.7) : plane.spec.maxSpeed * 0.7);
+  if (back) startMission(plane.spec);
   state = 'fly';
   accu = 0;
   tricks.reset();
@@ -255,16 +350,24 @@ function handleEvents() {
       input.rumble(1, 1, 700);
       ui.toast(e.why === 'wheels' ? "Capoté : roues sorties sur l'eau !" : water ? 'Plouf !' : 'Crash !', e.why ? 2600 : 1500);
     } else if (e.type === 'touchdown' && e.airTime > 2.5) {
+      if (plane.spec.jumper) {
+        ui.toast(e.surface === 'water' ? 'Dans l\'eau !' : e.sink < 3 ? 'Posé debout, en douceur !' : 'Posé !', 2200);
+        ui.hint("<kbd>Retour arrière</kbd> pour reprendre l'appareil", 6000); sound.touchdown(e.surface, e.sink);
+        continue;
+      }
       career.touchdown(e, plane, sky.night);
       sound.touchdown(e.surface, e.sink);
       input.rumble(clamp(e.sink / 5, 0.2, 1), 0.5, 160);
       if (e.belly) ui.toast(e.floats ? 'Posé sur les flotteurs… (G sort les roues)' : 'Posé sur le ventre… (G sort le train)', 3200);
       else if (e.surface === 'carrier') ui.toast('Appontage réussi !');
+      else if (e.surface === 'deck') ui.toast(`Posé : ${plane.deck && plane.deck.name ? plane.deck.name : 'plateforme'}`);
       else if (e.surface === 'water') ui.toast('Amerrissage !');
       else if (e.surface === 'runway') ui.toast(e.sink < 2 ? 'Atterrissage en douceur !' : 'Posé !');
       else ui.toast("Posé dans l'herbe !");
-      if (plane.spec.glider) ui.hint('Planeur posé : <kbd>Retour arrière</kbd> pour repartir en vol', 6000);
-    } else if (e.type === 'catapult') { ui.toast('Catapulte !', 1400); sound.catapult(); }
+      if (plane.spec.glider) ui.hint('Posé : <kbd>Retour arrière</kbd> pour repartir en vol', 6000);
+    } else if (e.type === 'catapult') { ui.toast('Catapulte !', 1400); sound.catapult(); flagship.catapult(); }
+    else if (e.type === 'chute') { ui.toast('Voile ouverte', 1400); sound.flaps(); }
+    else if (e.type === 'drogue') { if (e.open) { ui.toast('Parachute-frein !', 1400); sound.flaps(); } }
     else if (e.type === 'gear') sound.gear(e.down);
     else if (e.type === 'failure') {
       ui.toast(e.what === 'stop' ? 'PANNE MOTEUR ! Pose-toi sur une piste' : 'Moteur affaibli ! Pose-toi pour réparer', 3200);
@@ -275,7 +378,7 @@ function handleEvents() {
       else if (e.what === 'full') { ui.toast('Plein fait ⛽', 2000); sound.chime(1); }
     }
     else if (e.type === 'flaps') { sound.flaps(); if (e.blown) ui.toast('Volets rentrés : trop vite !', 1600); }
-    else if (e.type === 'takeoff') { ui.clearHint(); career.takeoff(plane); }
+    else if (e.type === 'takeoff') { ui.clearHint(); airport.leave(); career.takeoff(plane); }
   }
   plane.events.length = 0;
 }
@@ -291,7 +394,7 @@ function simulate(dt) {
   if (state !== 'fly') return;
   const msg = tricks.update(dt, plane);
   if (msg) { ui.toast(mission && mission.onTrick ? mission.onTrick(msg) : msg); career.trick(msg); }
-  career.update(dt, plane, { mission, kills, refuels: tanker.refuels, erupting: scenery.volcano.on });
+  if (plane.spec.jumper) { if (!plane.onGround && input.has('KeyX', 'Space') && plane.airTime > 0.8) plane.openChute(); } else career.update(dt, plane, { mission, kills, refuels: tanker.refuels, erupting: scenery.volcano.on });
   if (mission && state === 'fly') {
     const res = mission.update(dt, plane, input);
     if (frameNo % 4 === 0) ui.mission(mission.hud());
@@ -340,11 +443,14 @@ function handleKeys() {
       if (code === 'Escape' || key === 'p') { state = 'pause'; ui.pause(true); }
       else if (code === 'Backspace') respawnInAir(plane.pos.x, plane.pos.z);
       else if (key === 'c') ui.toast(rig.next(), 1300);
+      else if (key === 'b') bailOut();
       else if (key === 'g') ui.toast(plane.toggleGear(), 1300);
       else if (key === 'v') ui.toast(plane.cycleFlaps(), 1300);
       else if (key === 'n') ui.bigMap(!ui.bigMapOpen);
       else if (key === 'x') {
-        if (plane.spec.guns || mission) { /* tir / largage maintenus : gérés ailleurs */ }
+        if (airport.ready) { if (airport.start()) { ui.toast('Repoussage…', 1800); ui.clearHint(); } }
+        else if (plane.spec.jumper) plane.openChute();
+        else if (plane.spec.guns || mission) { /* tir / largage maintenus : gérés ailleurs */ }
         else if (!plane.spec.missiles) ui.toast('Armes : missiles sur le jet, mitrailleuses sur le chasseur, eau sur l\'hélicoptère rouge et l\'écopeur, produit sur l\'épandeur', 1800);
         else if (missiles.fire(plane, scenery.balloons)) input.rumble(0.25, 0.35, 120);
       }
@@ -391,10 +497,21 @@ function updateTanker(dt) {
   tankHud = show;
 }
 
+/** Échos du radar (Le Veilleur) : tout ce qui navigue ou vole autour. */
+function radarContacts() {
+  const out = [], add = (o, icon, color) => out.push({ x: o.x, z: o.z, icon, color });
+  for (const b of boats.boats) out.push({ x: b.mesh.position.x, z: b.mesh.position.z, icon: '', color: '#9fe8b0', r: 2.6 });
+  for (const sh of escort.ships) if (sh !== escort.sub) out.push({ x: sh.x, z: sh.z, icon: '', color: '#ffd34d', r: 3.4 });
+  add(carrier, 'P', '#ff9d5c'); if (escort.sub) add(escort.sub, 'S', '#c79bff');
+  if (tanker.flying) add(tanker.pos, 'R', '#7fd4ff');
+  add(escort.heli.position || escort.heli, 'H', '#7fd4ff');
+  return out;
+}
+
 /** Mini-carte (toutes les 3 images) et grande carte si elle est ouverte. */
 function drawMaps() {
   if (!islandMap) return;
-  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : plane.spec.afterburner && tanker.flying ? [{ x: tanker.pos.x, z: tanker.pos.z, color: '#7fd4ff', icon: 'R' }] : [] };
+  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : plane.spec.radar ? radarContacts() : plane.spec.afterburner && tanker.flying ? [{ x: tanker.pos.x, z: tanker.pos.z, color: '#7fd4ff', icon: 'R' }] : [] };
   if (frameNo % 3 === 0) islandMap.drawMini(document.getElementById('minimap'), plane, tele.hdg, extras, plane.spec.maxSpeed > 120 ? 3500 : 2200);
   if (ui.bigMapOpen && frameNo % 4 === 0) islandMap.drawFull(document.getElementById('bigmapc'), plane, tele.hdg, extras);
 }
@@ -511,8 +628,15 @@ function frame(now) {
   if (!paused) {
     animateModel(model, dt, {
       throttle: plane.power, gear: plane.gearAnim, burner: plane.burner, cockpitView: cockpit,
-      ctrl: plane.ctrl, flaps: plane.flapAnim,
+      ctrl: plane.ctrl, flaps: plane.flapAnim, vtol: plane.vtolAnim, reverse: plane.reverse, chute: plane.chute, flame: plane.flame,
     });
+    updateGhost(dt); updateDrogue();
+    plane.cloud = sky.inCloud;
+    // souffle des tuyères près du sol
+    if (state === 'fly' && plane.vtol && plane.agl < 14 && plane.power > 0.3 && frameNo % 2 === 0) {
+      const a = Math.random() * 6.28, wet = plane.surface === 'water';
+      fx.emit(_sv.copy(plane.pos).setY(plane.pos.y - plane.agl - 0.6), _dv.set(Math.cos(a) * 16, 2, Math.sin(a) * 16), 0.9, 0.5, wet ? 0xdfeff6 : 0xcfc6b0, 1.4, 0);
+    }
     fx.update(dt);
     updateWeapons(dt);
     fx.updateTrails(dt, plane, model.tips,
@@ -524,7 +648,9 @@ function frame(now) {
     birds.update(dt, time, plane);
     boats.update(dt, time);
     spaceport.update(dt, camera.position);
-    escort.update(dt, time);
+    ride(plane, () => { flagship.update(dt, time, state === 'fly' ? plane : null, camera.position); escort.update(dt, time); });
+    if (airport.update(dt, time, camera.position, plane)) { ui.toast('Repoussage terminé, bon vol !', 2200); sound.chime(1); }
+    dam.update(dt, camera.position); mountain.update(dt, camera.position); landmarks.update(dt, camera.position);
     updateTanker(dt);
     for (const sp of spinners) if (sp.tick) sp.tick(time); else sp.obj.rotation.y += sp.rate * dt;
   }
@@ -555,6 +681,12 @@ function frame(now) {
     if (plane.spec.amphibian && !plane.onGround) flags.push(plane.surface === 'water' ? '' : plane.gearDown ? 'ROUES SORTIES' : 'ROUES RENTRÉES');
     else if (plane.spec.retract && plane.gearDown && !plane.onGround) flags.push('TRAIN SORTI');
     if (plane.onGround && plane.onBelly) flags.push(plane.spec.floats ? 'SUR LES FLOTTEURS' : 'SUR LE VENTRE');
+    if (plane.spec.hover) flags.push(plane.vtol ? 'TUYÈRES VERS LE BAS' : '');
+    if (plane.reverse > 0.4) flags.push('INVERSEURS');
+    if (plane.drogue > 0) flags.push('PARACHUTE-FREIN');
+    if (airport.busy) flags.push('REPOUSSAGE'); else if (airport.ready) flags.push('À LA PORTE · X : REPOUSSAGE');
+    if (plane.spec.jumper && !plane.onGround) flags.push(plane.chuteOpen ? 'SOUS VOILE' : 'CHUTE LIBRE');
+    if (plane.wind) { const w = plane.wind, d = (Math.atan2(w.x, -w.z) * 180 / Math.PI + 360) % 360; flags.push(`VENT ${Math.round(Math.hypot(w.x, w.z) * 3.6)} km/h VERS ${['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round(d / 45) % 8]}`); }
     if (plane.braking) flags.push(plane.onGround ? 'FREINS' : 'AÉROFREINS');
     const vs = Math.abs(tele.vs) < 0.05 ? 0 : tele.vs;
     ui.setHud(String(Math.round(plane.speed * 3.6)), String(Math.max(0, Math.round(plane.pos.y - plane.standH))),
@@ -562,7 +694,7 @@ function frame(now) {
     ui.compass(tele.hdg);
     drawMaps();
     ui.fuel(plane.fuelOn && !plane.spec.glider ? plane.fuel : null);
-    if (frameNo % 5 === 0) ui.approach(plane.agl < 900 ? approachInfo(plane, runways, carrier, DECK_AXIS_X) : null);
+    if (frameNo % 5 === 0) ui.approach(plane.agl < 900 && !plane.spec.balloon && !plane.spec.jumper && !plane.spec.foot ? approachInfo(plane, runways, carrier, DECK_AXIS_X) : null);
   } else ui.approach(null);
   sound.update({
     plane, camera, cockpit, dt, active: state === 'fly' || state === 'crash',
@@ -585,16 +717,22 @@ async function boot() {
   buildSeaBase(scene);
   buildMilBase(scene);
   spaceport = buildLaunchSite(scene);
-  buildCarrier(scene);
+  flagship = buildFleetFlagship(scene);
   escort = buildEscort(scene);
+  airport = buildAirport(scene);
+  planDam(); planMountain(); planLandmarks(); // avant les arbres, qui évitent ces lieux
   sky = new Sky(scene);
   scenery = buildScenery(scene);
   buildHospital(scene, scenery.villages, scenery.treeList);
   defineThermals(heightAt, HALF * 1.82, BIG ? 30 : 14);
+  rampThermal();
+  dam = buildDam(scene, sky.sea.material);
+  mountain = buildMountain(scene);
+  landmarks = buildLandmarks(scene);
   if (BIG) STARTS.splice(2, 0, { id: 'baie', name: 'La Baie' }, { id: 'prairie', name: 'La Prairie' }, { id: 'base', name: 'Base nautique' }, { id: 'militaire', name: 'Base militaire' });
-  buildThermalClouds(scene);
+  buildThermalClouds(scene, sky.puffs);
   birds = new Birds(scene, heightAt, thermals, runways, scenery.ports ? scenery.ports.gulls : []);
-  boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 1150 }, ...(cityPort.active ? [{ ...cityPort, r: 480 }, { ...fishPort, r: 420 }] : [])]);
+  boats = new Boats(scene, heightAt, [...fleetZones(), { x: oilRig.x, z: oilRig.z, r: 300 }, ...(cityPort.active ? [{ ...cityPort, r: 480 }, { ...fishPort, r: 420 }] : [])]);
   career = new Career(badge);
   tanker = new Tanker(scene);
   fx = new Effects(scene);
@@ -641,7 +779,7 @@ async function boot() {
   // petit accès pour le débogage depuis la console
   window.airgame = {
     get plane() { return plane; }, get state() { return state; },
-    world, rig, sky, hospital, get tanker() { return tanker; }, get career() { return career; }, milBase, get spaceport() { return spaceport; }, get escort() { return escort; }, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
+    world, rig, sky, hospital, decks, peaks, bailOut, get flagship() { return flagship; }, get airport() { return airport; }, get jump() { return jump; }, get tanker() { return tanker; }, get career() { return career; }, milBase, get spaceport() { return spaceport; }, get escort() { return escort; }, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
     select(planeId, startId) {
       setPlane(PLANES.findIndex((p) => p.id === planeId));
       setStart(STARTS.findIndex((s) => s.id === startId));

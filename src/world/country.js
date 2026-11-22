@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { heightAt, normalAt, groundHeight, setCorridor, HALF, BIG } from './terrain.js';
 import { runways, seaBase } from './airfields.js';
-import { city, cityPort, fishPort } from './places.js';
+import { city, cityPort, fishPort, circuit, castle } from './places.js';
 import { toLocal, toWorld, lerp, smoothstep } from '../util.js';
 
 // Campagne de la grande île : quelques villages reliés par des chemins de terre, et les champs de la Prairie
@@ -44,7 +44,7 @@ function findPath(a, b) {
   const pos = (k) => [-HALF + (k % n) * G, -HALF + Math.floor(k / n) * G];
   const hgt = new Float32Array(N).fill(NaN);
   const H = (k) => { if (Number.isNaN(hgt[k])) { const [x, z] = pos(k); hgt[k] = hf(x, z); } return hgt[k]; };
-  const onRunway = (x, z) => runways.some((rw) => { const l = toLocal(rw, x, z, {}); return Math.abs(l.x) < rw.halfWid && Math.abs(l.z) < rw.halfLen; });
+  const onRunway = (x, z) => [...runways, circuit, castle].some((rw) => { const l = toLocal(rw, x, z, {}); return Math.abs(l.x) < rw.halfWid && Math.abs(l.z) < rw.halfLen; });
   const start = idx(a.x, a.z), goal = idx(b.x, b.z), [gx, gz] = pos(goal);
   const g = new Float32Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), done = new Uint8Array(N);
   const heap = [];
@@ -189,15 +189,15 @@ export function planRoutes() {
   // la grande ville compte comme un bourg (étiquette, voitures au pas, arbres écartés), mais ses rues sont à part
   const ville = { name: 'Grande Ville', x: city.x, z: city.z, r: 520, count: 0, seed: 16, city: true };
   country.villages.push(lac, sud, port, col, pre, ville);
-  for (let x = -city.halfWid; x <= city.halfWid; x += 20) for (let z = -city.halfLen; z <= city.halfLen; z += 20) mark(city.x + x, city.z + z, 12, 3);
-  for (const p of [cityPort, fishPort]) { const w = {}; for (let a = -p.halfWid; a <= p.halfWid; a += 15) for (let b = -p.halfLen; b <= p.halfLen; b += 15) { toWorld(p, a, b, w); mark(w.x, w.z, 10, 3); } }
+  for (let x = -city.halfWid; x <= city.halfWid; x += 20) for (let z = -city.halfLen; z <= city.halfLen; z += 20) if (Math.hypot(x / city.halfWid, z / city.halfLen) < 1.03) mark(city.x + x, city.z + z, 12, 3);
+  for (const p of [cityPort, fishPort, circuit, castle]) { const w = {}; for (let a = -p.halfWid; a <= p.halfWid; a += 15) for (let b = -p.halfLen; b <= p.halfLen; b += 15) { toWorld(p, a, b, w); mark(w.x, w.z, 10, 3); } }
   const ap = rw('aeroport'), pr = rw('prairie'), bz = rw('baie');
   const end = (r, f) => { const w = {}; toWorld(r, r.width / 2 + 60, f * r.length / 2, w); return w; };
   // la voie d'abord : les routes la traversent mais évitent de la longer
   planRail([...[sud, port, pre].map((v) => [v.name, v.x, v.z]), ['Grande Ville', city.x - city.halfWid, city.z], ["Aéroport", ap.x, ap.z], ['Plage du Nord', 1500, -8500], ['Cap du Nord-Est', 10500, -3200], ['Pied du Volcan', -11500, -3500]]);
   const gate = (a, b) => ({ x: city.x + a * city.halfWid, z: city.z + b * city.halfLen });
   // routes goudronnées entre les bourgs et les terrains, chemins de terre vers le col et la base nautique
-  const links = [[end(ap, -0.6), lac, 1], [lac, pre, 1], [pre, end(pr, 0.55), 1], [lac, sud, 1], [sud, gate(0, 1), 1], [lac, gate(1, 0), 1], [gate(0, -1), port, 1], [gate(-1, 0), { x: cityPort.x + 20, z: cityPort.z }, 1], [port, toWorld(fishPort, 40, 0, {}), 1], [port, end(bz, 0.4), 1], [lac, col, 0]];
+  const links = [[end(ap, -0.6), lac, 1], [lac, pre, 1], [pre, end(pr, 0.55), 1], [lac, sud, 1], [sud, gate(0, 1), 1], [lac, gate(1, 0), 1], [gate(0, -1), port, 1], [gate(-1, 0), { x: cityPort.x + 20, z: cityPort.z }, 1], [port, toWorld(fishPort, 40, 0, {}), 1], [port, end(bz, 0.4), 1], [lac, col, 0], [lac, toWorld(castle, 0, 74, {}), 0], [lac, toWorld(circuit, 60, 335, {}), 1]];
   if (seaBase.active) links.push([lac, toWorld(seaBase, 70, -125, {}), 0]);
   for (const [a, b, paved] of links) {
     const path = findPath(a, b);
@@ -255,7 +255,7 @@ function coastLoop() {
   const l = {};
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const x = at(i), z = at(j);
-    const strip = runways.some((r) => { toLocal(r, x, z, l); return Math.abs(l.x) < r.halfWid + RAIL.clear && Math.abs(l.z) < r.halfLen + RAIL.clear; });
+    const strip = [...runways, circuit].some((r) => { toLocal(r, x, z, l); return Math.abs(l.x) < r.halfWid + RAIL.clear && Math.abs(l.z) < r.halfLen + RAIL.clear; });
     const dock = [cityPort, fishPort].some((r) => { toLocal(r, x, z, l); return Math.abs(l.x) < r.halfWid + 45 && Math.abs(l.z) < r.halfLen + 45; });
     m[i + j * n] = sea[i + j * n] || strip || dock ? 0 : 1;
   }

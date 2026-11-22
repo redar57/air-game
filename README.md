@@ -1,8 +1,8 @@
 # Air Game — vol libre
 
-Petit simulateur de vol arcade au-dessus d'une île : treize avions et ULM (tourisme, planeur, biplan de voltige, hydravion
-amphibie, écopeur bombardier d'eau, chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur, double poutre, avion de ligne, pendulaire, autogire), un dirigeable et trois hélicoptères (bombardier d'eau ou secours au treuil,
-Libellule à bulle, Bi-rotor de transport), un aéroport, un altiport et un porte-avions.
+Petit simulateur de vol arcade au-dessus d'une île : dix-sept avions et ULM (tourisme, planeur, biplan de voltige, hydravion
+amphibie, écopeur bombardier d'eau, chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur, double poutre, avion de ligne, pendulaire, autogire, avion-radar, jet à décollage vertical, avion de brousse, grand hydravion), un deltaplane et un parapente, une montgolfière, un dirigeable et quatre hélicoptères (bombardier d'eau ou secours au treuil,
+Libellule à bulle, Bi-rotor de transport, hélicoptère grue), un aéroport, un altiport et un porte-avions.
 Tout est généré par le code : relief, avions, sons. Aucune installation.
 
 ## Jouer
@@ -24,8 +24,9 @@ Navigateurs : Chrome, Edge, Firefox ou Safari récents (Safari 16.4 minimum).
 | Q/D ou ←/→ | stick gauche ↔ | Incliner |
 | A/E | LB / RB | Palonnier |
 | R/F | RT / LT | Gaz |
-| V | B (Rond) | Volets (3 crans) |
-| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) · larguer l'eau (bombardiers d'eau, maintenir) · treuil (secours, maintenir) · élingue (Bi-rotor) · parachutistes (Gros Porteur) · matériel (Bipoutre) |
+| V | B (Rond) | Volets (3 crans) · tuyères (Vertical) |
+| B | croix → | Sauter en parachute |
+| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) · larguer l'eau (bombardiers d'eau, maintenir) · treuil (secours, maintenir) · élingue (Bi-rotor) · parachutistes (Gros Porteur) · matériel (Bipoutre) · repoussage (Long-Courrier à sa porte) · ouvrir le parachute |
 | G | X (Carré) | Train |
 | Espace | A (Croix) | Freins / aérofreins |
 | C | Y (Triangle) | Changer de vue |
@@ -82,7 +83,7 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   Place-toi derrière, sous sa perche, à la même vitesse : elle se branche, le plein prend 20 s, Espace pour se débrancher.
 - **Dirigeable** : il flotte tout seul. Gaz pour avancer, manche pour monter ou descendre, Espace pour s'arrêter.
 - **Carnet de vol** (bouton du menu ou J) : heures, kilomètres, décollages et atterrissages par appareil, 33 badges.
-- **Grande Ville** (grande carte) : gratte-ciel, cathédrale, parc, stade, fête foraine, port avec ferry vers le Village
+- **Grande Ville** (grande carte) : en étoile autour d'une place à fontaine, gratte-ciel, cathédrale, parc, stade, fête foraine, port avec ferry vers le Village
   des Pêcheurs, port de pêche et ses chalutiers.
 - **Îlots** : phare habité, station météo, île au trésor, village de pêcheurs (grande carte).
 - **Plages et lac** : parasols, baigneurs, surfeurs, voiliers, planches à voile ; club nautique et canoës sur le lac.
@@ -91,8 +92,27 @@ des roues, au décrochage et au crash (si le navigateur le permet).
 - **Base militaire** (grande carte) : sur l'îlot voisin du porte-avions. Drapeau américain, piste, hangars, radar,
   casernes, hélisurfaces, carburant, aire d'embarquement des parachutistes, appareils garés, abris bétonnés, batterie
   antiaérienne, chars, ponton et patrouilleur ; un Stratotanker y reste garé ; c'est aussi un point de départ.
-- **Escorte du porte-avions** : deux destroyers et deux frégates tournent de part et d'autre, avec un pétrolier
-  ravitailleur, un sous-marin en surface, deux vedettes et un hélicoptère. L'axe d'appontage reste libre.
+- **Porte-avions et sa flotte** : ils font route ensemble le long d'un grand ovale ; l'appareil posé sur le pont est
+  emporté avec lui. Avions garés, ascenseur, déflecteur, équipe en gilets de couleur, pompe à carburant (carré jaune à
+  l'arrière, à droite). On se pose en hélicoptère sur les destroyers et les frégates ; le sous-marin plonge et refait
+  surface ; un avion-radar tourne au-dessus.
+- **Le Veilleur** (avion-radar) : la carte montre tout ce qui navigue ou vole autour.
+- **Le Vertical** : tuyères vers le bas, il se pilote comme un hélicoptère ; prends de la vitesse puis V pour voler
+  comme un jet, V encore (sous 430 km/h) pour revenir au vol vertical.
+- **Le Baroudeur** : gros pneus, il se pose dans les prés et les pentes. **Le Paquebot volant** : quadrimoteur amphibie.
+- **Vol libre** (deltaplane, parapente) : départ *Rampe de vol libre*, maintiens R pour courir, puis monte dans
+  l'ascendance devant la rampe.
+- **Montgolfière** : R brûleur, F soupape. Le vent tourne et forcit avec l'altitude (son sens est affiché).
+- **Hélicoptère grue** : comme le Bi-rotor, mais pour une maison, une locomotive, une pelleteuse…
+- **Saut en parachute** (B, au-dessus de 60 m) : X ou Espace ouvre la voile, le manche la dirige, Espace freine juste
+  avant le sol. Retour arrière rend l'appareil.
+- **Inverseurs de poussée et parachute-frein** : à l'atterrissage, gaz réduits et Espace.
+- **Repoussage** : au départ de l'aéroport, le Long-Courrier est à sa porte ; X appelle le tracteur.
+- **Nuages** : on entre vraiment dedans (brouillard, soleil voilé, quelques secousses).
+- **Aéroport animé** : passerelles, bus, chariots à bagages, passagers.
+- **Barrage et centrale** dans le canyon, avec retenue et cascade ; **station de ski** et son téléphérique ;
+  **éoliennes**, **château fort**, **monastère** sur son piton ; **circuit** où dix voitures se disputent la course ;
+  **plateforme pétrolière** avec hélisurface et carburant.
 - **Site de lancement** : sur un îlot. Environ toutes les 20 minutes, une fusée sort du hall, roule
   jusqu'au pas de tir et décolle.
 - **Routes et train** (grande carte) : des voitures, camionnettes, camions et cars circulent sur les routes

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cloudDissolve } from './sky.js';
 import { mulberry32, mergeColored, xform } from '../util.js';
 
 // Thermiques : colonnes d'air chaud qui montent au-dessus de l'île (surtout utiles au planeur).
@@ -30,18 +31,20 @@ export function updraft(x, y, z) {
   return w;
 }
 
-export function buildThermalClouds(scene) {
+/** `puffs` reçoit les boules (pour le brouillard quand on entre dans le nuage). */
+export function buildThermalClouds(scene, puffs = []) {
   const rnd = mulberry32(99), parts = [];
   for (const t of thermals) {
     const s = t.r * 0.55;
     for (let k = 0; k < 6; k++) {
       const a = rnd() * 6.28, d = rnd() * s * 0.9;
-      parts.push({ geo: new THREE.IcosahedronGeometry(s * (0.55 + rnd() * 0.45), 1), color: 0xffffff,
-        matrix: xform(t.x + Math.cos(a) * d, t.top + 60 + rnd() * s * 0.4, t.z + Math.sin(a) * d, rnd() * 6, 1, 0.62, 1) });
+      const R = s * (0.55 + rnd() * 0.45), x = t.x + Math.cos(a) * d, y = t.top + 60 + rnd() * s * 0.4, z = t.z + Math.sin(a) * d;
+      parts.push({ geo: new THREE.IcosahedronGeometry(R, 1), color: 0xffffff, matrix: xform(x, y, z, rnd() * 6, 1, 0.62, 1) });
+      puffs.push({ x, y, z, a: R, b: R * 0.62, c: R, cs: 1, sn: 0, drift: 0 });
     }
     parts.push({ geo: new THREE.CylinderGeometry(s * 1.1, s * 1.15, s * 0.25, 9), color: 0xe9eef3, matrix: xform(t.x, t.top + 40, t.z) });
   }
-  const mesh = new THREE.Mesh(mergeColored(parts), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.94 }));
+  const mesh = new THREE.Mesh(mergeColored(parts), cloudDissolve(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.94 })));
   scene.add(mesh);
   return mesh;
 }

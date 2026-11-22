@@ -11,6 +11,7 @@ import { buildPorts } from './ports.js';
 import { Volcano } from './volcano.js';
 import { buildIslets, lighthouseBeam } from './islets.js';
 import { buildBeaches } from './beach.js';
+import { keepOut } from './places.js';
 import { planCountry, buildCountry, updateCountry, country, occupied } from './country.js';
 
 /** Arche rocheuse en mer (utilisée aussi par la détection des figures). */
@@ -50,6 +51,7 @@ function buildTrees(scene) {
     if (normalAt(x, z, _n).y < 0.83) continue;
     if (flatInfo(x, z).w > 0.02) continue;
     if (Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < 850) continue;
+    if (keepOut.some((f) => f(x, z))) continue;
     if (BIG && (occupied(x, z) || country.villages.some((v) => Math.hypot(x - v.x, z - v.z) < v.r))) continue;
     const f = fbm(nF, x * 0.0015, z * 0.0015, 3);
     if (rnd() > smoothstep(-0.28, 0.3, f) * 0.92 + 0.035) continue;

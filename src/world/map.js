@@ -2,8 +2,10 @@ import { toWorld } from '../util.js';
 import { fuelStation, loadPad, seaBase, extraPumps, launchSite } from './airfields.js';
 import { country } from './country.js';
 import { hospital } from './sites.js';
-import { city, cityPort, fishPort, islets } from './places.js';
-import { BIG } from './terrain.js';
+import { city, cityPort, fishPort, islets, circuit, castle, monastery, rig, windFarm, peaks } from './places.js';
+import { BIG, highWaters } from './terrain.js';
+import { cityOutline } from './city.js';
+import { decks } from './decks.js';
 
 // Carte de l'île : un fond pré-calculé une fois (relief ombré, plages, pistes), puis à chaque image
 // une mini-carte qui tourne avec l'avion et, sur demande (touche N), la grande carte.
@@ -27,7 +29,8 @@ export class IslandMap {
       for (let i = 0; i < S; i++) {
         const h = H[j * S + i];
         let c;
-        if (h < 0) c = mix([60, 140, 205], [24, 78, 150], Math.min(1, -h / 60));
+        if (highWaters.some((w) => h < w.level && w.has(this.wx(i + 0.5), this.wz(j + 0.5)))) c = [62, 132, 190];
+        else if (h < 0) c = mix([60, 140, 205], [24, 78, 150], Math.min(1, -h / 60));
         else if (h < 5) c = [233, 216, 163];
         else if (h < 180) c = mix([111, 176, 82], [86, 140, 64], h / 180);
         else if (h < 520) c = mix([86, 140, 64], [138, 124, 104], (h - 180) / 340);
@@ -46,7 +49,6 @@ export class IslandMap {
     // pistes et porte-avions
     g.fillStyle = '#3b3f45';
     for (const rw of runways) this.rect(g, rw, 0, 0, rw.width * 1.6, rw.length);
-    this.rect(g, carrier, 0, 0, carrier.halfWid * 2.4, carrier.halfLen * 2);
     // campagne (grande carte) : champs, chemins, villages
     g.fillStyle = '#d6bd62';
     for (const fl of country.fields) this.rect(g, fl, 0, 0, fl.hw * 2, fl.hl * 2);
@@ -69,10 +71,16 @@ export class IslandMap {
       g.setLineDash([]);
     }
     if (city.active) { // grande ville (pâtés de maisons) et quais
-      g.fillStyle = '#8f9499'; this.rect(g, city, 0, 0, city.halfWid * 2, city.halfLen * 2);
-      g.fillStyle = '#d9d2c4'; for (let i = 0; i < 9; i++) for (let j = 0; j < 10; j++) this.rect(g, city, -380 + i * 95, -427 + j * 95, 72, 72);
+      const poly = (r) => { g.beginPath(); cityOutline(r).forEach((p, i) => (i ? g.lineTo : g.moveTo).call(g, this.px(city.x + p.x), this.px(city.z + p.z))); g.closePath(); };
+      g.fillStyle = '#d9d2c4'; poly(425); g.fill(); g.strokeStyle = '#8f9499'; g.lineWidth = Math.max(0.6, S / 900);
+      for (const r of [56, 128, 205, 285, 362]) { poly(r); g.stroke(); }
+      for (let a = 0; a < 8; a++) { g.beginPath(); for (const r of [56, 205, 285, 425]) { const p = cityOutline(r, 8)[a]; g.lineTo(this.px(city.x + p.x), this.px(city.z + p.z)); } g.stroke(); }
       g.fillStyle = '#8f9499'; for (const o of [cityPort, fishPort]) this.rect(g, o, 0, 0, o.halfWid * 2, o.halfLen * 2);
     }
+    // circuit, château
+    g.strokeStyle = '#3f4247'; g.lineWidth = Math.max(1, S / 520); g.beginPath();
+    for (let i = 0; i <= 24; i++) { const a = i * 0.2618; toWorld(circuit, Math.cos(a) * 150, Math.sin(a) * 270, _w); (i ? g.lineTo : g.moveTo).call(g, this.px(_w.x), this.px(_w.z)); }
+    g.stroke(); g.fillStyle = '#9f9482'; this.rect(g, castle, 0, 0, 90, 100);
     g.fillStyle = '#b9472f';
     for (const v of country.villages) {
       if (v.city) continue; g.beginPath(); g.arc(this.px(v.x), this.px(v.z), Math.max(2, v.r * S / (2 * E) * 0.6), 0, 6.283); g.fill(); }
@@ -96,7 +104,7 @@ export class IslandMap {
   marks(g, f, extras, scale, rk) {
     const { thermals = [], balloons = [], fires = [], fuel = false, load = false, mail = null, pins = [] } = extras;
     for (const p of pins) { // objectifs des missions (blessés, charges, zones de saut…)
-      const [x, y] = f(p.x, p.z), r = 6 * scale;
+      const [x, y] = f(p.x, p.z), r = (p.r || 6) * scale;
       g.fillStyle = p.color; g.strokeStyle = '#1b1d21'; g.lineWidth = scale;
       g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill(); g.stroke();
       g.fillStyle = '#1b1d21'; g.font = `800 ${Math.round(r * 1.2)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -116,7 +124,17 @@ export class IslandMap {
       g.fillStyle = '#2b2205'; g.font = `800 ${Math.round(r * 1.3)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText('✉', x, y + r * 0.06);
     }
+    // ponts mobiles (porte-avions, plateformes) : dessinés à leur place du moment
+    for (const d of decks) {
+      const w = {}, pt = (lx, lz) => { toWorld(d, lx, lz, w); return f(w.x, w.z); }, big = d.kind === 'carrier';
+      if (!big) { const [x, y] = f(d.x, d.z); g.fillStyle = '#4a5158'; g.beginPath(); g.arc(x, y, 2.2 * scale, 0, 6.283); g.fill(); continue; }
+      const K = Math.max(1, (4 * scale) / (d.hw * rk * 1.2)), c = f(d.x, d.z);
+      g.fillStyle = '#3b3f45'; g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = scale * 0.6; g.beginPath();
+      [[0, -d.hl], [d.hw, -d.hl * 0.6], [d.hw, d.hl], [-d.hw, d.hl], [-d.hw, -d.hl * 0.6]].forEach(([a, b], i) => { const q = pt(a, b); (i ? g.lineTo : g.moveTo).call(g, c[0] + (q[0] - c[0]) * K, c[1] + (q[1] - c[1]) * K); });
+      g.closePath(); g.fill(); g.stroke();
+    }
     const pumps = [fuelStation, ...extraPumps];
+    for (const d of decks) if (d.fuel) { const w = {}; toWorld(d, d.fuel.lx, d.fuel.lz, w); pumps.push(w); }
     if (seaBase.active) { const w = {}; toWorld(seaBase, seaBase.fuel.lx, seaBase.fuel.lz, w); pumps.push(w); }
     if (fuel) for (const st of pumps) { // stations de carburant
       const [x, y] = f(st.x, st.z), r = 5 * scale;
@@ -203,6 +221,11 @@ export class IslandMap {
     for (const v of country.villages) if (!v.city) label(v, v.name, -8);
     for (const o of islets) label(o, o.name, 4);
     if (fishPort.active) label(fishPort, fishPort.name, 18);
+    for (const o of [circuit, castle, monastery, rig]) label(o, o.name, -6);
+    if (windFarm.spots.length) label(windFarm, windFarm.name, -6);
+    if (peaks.dam) label(peaks.dam, 'Barrage', 16);
+    if (peaks.ski) label(peaks.ski, 'Station de ski', -6);
+    if (peaks.ramp) label(peaks.ramp, 'Rampe de vol libre', 14);
     g.font = `700 ${Math.round(W / 55)}px sans-serif`;
     label(this.carrier, 'Porte-avions', -14);
     if (city.active) label(city, 'Grande Ville', -16);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { HALF } from './terrain.js';
-import { mulberry32, lerp } from '../util.js';
+import { mulberry32, lerp, smoothstep } from '../util.js';
 import { nightLights } from './airfields.js';
 
 const dir = (elevDeg, azDeg) => {
@@ -23,6 +23,16 @@ const PRESETS = [
     hemiSky: C(0x33457a), hemiGround: C(0x10151f), hemiInt: 0.75, water: C(0x0d2242), cloud: C(0x46527a), disc: C(0xe8eeff), night: 1,
   },
 ];
+
+/** Les nuages se dissolvent quand la caméra s'en approche : on entre dedans au lieu de traverser des facettes. */
+export function cloudDissolve(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      float dCam = length(vViewPosition);
+      if (dCam < 170.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > smoothstep(25.0, 170.0, dCam)) discard;`);
+  };
+  return mat;
+}
 
 export class Sky {
   constructor(scene) {
@@ -52,18 +62,18 @@ export class Sky {
         side: THREE.BackSide, depthWrite: false, fog: false,
         uniforms: {
           top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() },
-          sunDir: { value: new THREE.Vector3() }, disc: { value: new THREE.Color() },
+          sunDir: { value: new THREE.Vector3() }, disc: { value: new THREE.Color() }, mist: { value: new THREE.Color() }, mistK: { value: 0 },
         },
         vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
         fragmentShader: `
-          uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; uniform vec3 disc; varying vec3 vDir;
+          uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; uniform vec3 disc; uniform vec3 mist; uniform float mistK; varying vec3 vDir;
           void main(){
             vec3 d = normalize(vDir);
             float h = max(d.y, 0.0);
             vec3 col = mix(horizon, top, pow(h, 0.5));
             float s = max(dot(d, sunDir), 0.0);
             col += disc * (smoothstep(0.9992, 0.9996, s) * 1.2 + pow(s, 90.0) * 0.35 + pow(s, 7.0) * 0.16);
-            gl_FragColor = vec4(col, 1.0);
+            gl_FragColor = vec4(mix(col, mist, mistK), 1.0);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
           }`,
@@ -115,7 +125,18 @@ export class Sky {
         });
       }
     }
-    this.cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    // gros cumulus plus bas, à hauteur de vol des petits avions
+    for (let c = 0; c < Math.round(16 * wide); c++) {
+      const a = rnd() * Math.PI * 2, r = 1200 + rnd() * 6800 * wide, cx = Math.cos(a) * r, cz = Math.sin(a) * r, cy = 640 + rnd() * 220;
+      for (let k = 0; k < 9; k++) {
+        const d = Math.sqrt(rnd()) * 230, b = rnd() * 6.28;
+        puffs.push({ x: cx + Math.cos(b) * d, y: cy + (1 - d / 230) * 80 * rnd(), z: cz + Math.sin(b) * d * 0.8, s: 95 + rnd() * 60 - d * 0.15, ry: rnd() * 6 });
+      }
+    }
+    /** Boules de nuages (x, y, z, demi-axes a, b, c, lacet ry, drift : suit la dérive) pour savoir si l'on est dedans. */
+    this.puffs = puffs.map((p) => ({ x: p.x, y: p.y, z: p.z, a: p.s * 1.25, b: p.s * 0.55, c: p.s, cs: Math.cos(p.ry), sn: Math.sin(p.ry), drift: 1 }));
+    this.inCloud = 0; this.mist = new THREE.Color();
+    this.cloudMat = cloudDissolve(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }));
     this.clouds = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), this.cloudMat, puffs.length);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     puffs.forEach((pf, i) => {
@@ -170,8 +191,18 @@ export class Sky {
     this.apply();
 
     this.fogScale = lerp(this.fogScale, fogScale, 1 - Math.exp(-1.2 * dt));
-    this.fog.near = 1800 * this.fogScale;
-    this.fog.far = 17000 * (0.12 + 0.88 * this.fogScale);
+    this.clouds.position.x = Math.sin(performance.now() * 0.00002) * 900;
+    // dans un nuage : brouillard épais et clair, soleil voilé
+    const inside = this.cloudAt(camera.position);
+    this.inCloud = lerp(this.inCloud, inside, 1 - Math.exp(-5 * dt));
+    const m = this.inCloud < 0.005 ? 0 : this.inCloud, q = m * (2 - m);
+    const near = 1800 * this.fogScale, far = 17000 * (0.12 + 0.88 * this.fogScale);
+    this.fog.near = lerp(near, 2, q);
+    this.fog.far = far * Math.pow((55 + 2.6 * camera.position.distanceTo(focus)) / far, q);
+    this.mist.copy(c.cloud).multiplyScalar(0.8).lerp(c.horizon, 0.35);
+    this.fog.color.copy(c.horizon).lerp(this.mist, m);
+    const u = this.dome.material.uniforms; u.mist.value.copy(this.fog.color); u.mistK.value = Math.min(1, m * 1.15);
+    this.sun.intensity = c.sunInt * (1 - 0.65 * m); this.stars.material.opacity *= 1 - m;
 
     this.dome.position.copy(camera.position);
     this.stars.position.copy(camera.position);
@@ -179,6 +210,17 @@ export class Sky {
     this.floor.position.set(camera.position.x, -60.4, camera.position.z);
     this.sun.position.copy(focus).addScaledVector(c.sunDir, 420);
     this.sun.target.position.copy(focus);
-    this.clouds.position.x = Math.sin(performance.now() * 0.00002) * 900;
+  }
+
+  /** Densité de nuage (0 à 1) au point p. */
+  cloudAt(p) {
+    let best = 0; const drift = this.clouds.position.x;
+    for (const o of this.puffs) {
+      const dx = p.x - o.x - (o.drift ? drift : 0), dy = p.y - o.y, dz = p.z - o.z;
+      if (dx > 260 || dx < -260 || dz > 260 || dz < -260 || dy > 160 || dy < -160) continue;
+      const lx = (dx * o.cs - dz * o.sn) / o.a, lz = (dx * o.sn + dz * o.cs) / o.c, ly = dy / o.b, d = Math.sqrt(lx * lx + ly * ly + lz * lz);
+      if (d < 1.05) best = Math.max(best, smoothstep(1.05, 0.55, d));
+    }
+    return best;
   }
 }

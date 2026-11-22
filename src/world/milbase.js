@@ -20,7 +20,7 @@ export function parkedGeo(id, colors, bare = false) { // bare : sans les pales
   m.root.updateMatrixWorld(true);
   const inv = m.root.matrixWorld.clone().invert();
   const walk = (o) => {
-    if (o === m.cockpit || m.flames.includes(o) || (bare && m.props.some((p) => p.blades === o))) return;
+    if (o === m.cockpit || m.flames.includes(o) || (bare && (o === m.spin || m.props.some((p) => p.blades === o)))) return;
     if (o.isMesh && !o.material.transparent && !o.material.vertexColors) parts.push({ geo: o.geometry, color: o.material.color, matrix: inv.clone().multiply(o.matrixWorld) });
     o.children.forEach(walk);
   };

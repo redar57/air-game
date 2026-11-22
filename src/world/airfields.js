@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { MTN, rawBase, BIG, LAKE, heightAt } from './terrain.js';
 import { mergeColored, xform, toLocal, toWorld, clamp, smoothstep, lerp } from '../util.js';
-import { addBox } from './colliders.js';
+import { addBox, addMoving } from './colliders.js';
 import { placeZones, definePlaces } from './places.js';
+import { addDeck, deckPump } from './decks.js';
 
 export const runways = [];
-export const carrier = { x: 0, z: 0, yaw: -Math.PI / 2, deckY: 21, halfLen: 145, halfWid: 30 };
+export const carrier = addDeck({ x: 0, z: 0, yaw: -Math.PI / 2, deckY: 21, halfLen: 145, halfWid: 30, y: 21, hw: 30, hl: 145, kind: 'carrier', name: 'Porte-avions',
+  fuel: { lx: 17, lz: 96, half: 11 } });
 /** Station de carburant (devant les hangars de l'aéroport) : centre en coordonnées monde, demi-côté. */
 export const fuelStation = { x: 0, z: 0, yaw: 0, lx: 0, lz: 0, half: 24 };
 /** Aire de chargement de l'épandeur (devant la grange de la piste en herbe), repère local de sa piste. */
@@ -136,6 +138,7 @@ export function runwayAt(x, z) {
 
 /** Vrai si (x, z) est sur l'aire de la station de carburant. */
 export function atFuelStation(x, z) {
+  if (deckPump(x, z)) return true;
   for (const p of extraPumps) {
     toLocal(p, x, z, _l);
     if (Math.abs(_l.x) <= p.half && Math.abs(_l.z) <= p.half) return true;
@@ -162,11 +165,6 @@ export function atLoadPad(x, z) {
   if (!loadPad.rw) return atFuelStation(x, z);
   toLocal(loadPad.rw, x, z, _l);
   return Math.abs(_l.x - loadPad.lx) <= loadPad.half && Math.abs(_l.z - loadPad.lz) <= loadPad.half;
-}
-
-export function onCarrierDeck(x, z) {
-  toLocal(carrier, x, z, _l);
-  return Math.abs(_l.x) <= carrier.halfWid && Math.abs(_l.z) <= carrier.halfLen;
 }
 
 // ---------------------------------------------------------------------------
@@ -620,9 +618,10 @@ export function buildCarrier(scene) {
   group.add(lightsPoints(pos, 0xbfe0ff, 5));
   scene.add(group);
 
-  // collisions : coque (sous le pont) et îlot de commandement
-  addBox(C.x, C.z, C.yaw, 24, 143, -6, C.deckY - 2.6);
-  toWorld(C, 24, 11, _w);
-  addBox(_w.x, _w.z, C.yaw, 5.5, 18, C.deckY, C.deckY + 33);
+  // collisions (mobiles) : coque sous le pont et îlot de commandement
+  group.userData.cols = [
+    { lx: 0, lz: 0, c: addMoving(24, 143, -6, C.deckY - 2.6) },
+    { lx: 24, lz: 11, c: addMoving(5.5, 18, C.deckY, C.deckY + 33) },
+  ];
   return group;
 }

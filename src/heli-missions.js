@@ -278,12 +278,21 @@ const LOADS = [
   { name: 'Poutres de charpente', k: 0.15, h: 1.2, build: (P) => { for (let i = 0; i < 3; i++) P(new THREE.BoxGeometry(0.5, 0.4, 9), 0xa8743f, (i - 1) * 0.55, 0.2 + (i % 2) * 0.4, 0); } },
 ];
 
+/** Charges de l'hélicoptère grue : bien trop lourdes pour le Bi-rotor. */
+const HEAVY = [
+  { name: 'Maison en bois', k: 0.34, h: 5.6, w: 2.8, build: (P) => { P(new THREE.BoxGeometry(7, 3.2, 6), 0xb98a52, 0, 1.6, 0); P(new THREE.ConeGeometry(5.4, 2.4, 4).rotateY(Math.PI / 4), 0x8e3a2a, 0, 4.4, 0); P(new THREE.BoxGeometry(1.2, 2.2, 0.1), 0x4a3422, 0, 1.1, 3.02); for (const x of [-2.2, 2.2]) P(new THREE.BoxGeometry(1.2, 1.1, 6.1), 0x9ec8e0, x, 1.9, 0); } },
+  { name: 'Locomotive', k: 0.42, h: 3.8, w: 2.6, build: (P) => { P(new THREE.BoxGeometry(2.6, 0.5, 9), 0x2b2e33, 0, 0.9, 0); P(new THREE.CylinderGeometry(1.1, 1.1, 5.4, 12).rotateX(Math.PI / 2), 0x1f5a3a, 0, 2.3, -1.4); P(new THREE.BoxGeometry(2.6, 2.6, 2.8), 0x1f5a3a, 0, 2.5, 2.8); P(new THREE.CylinderGeometry(0.35, 0.3, 1.2, 8), 0x2b2e33, 0, 3.4, -3.4); for (const x of [-1.2, 1.2]) for (const z of [-3, -1, 1, 3]) P(new THREE.CylinderGeometry(0.7, 0.7, 0.25, 12).rotateZ(Math.PI / 2), 0xc8402f, x, 0.7, z); } },
+  { name: 'Vedette', k: 0.32, h: 3.6, w: 2.4, build: (P) => { P(new THREE.BoxGeometry(3.2, 1.4, 8), 0xf4f4f0, 0, 1.1, 0.6); P(new THREE.ConeGeometry(1.62, 3, 4).rotateY(Math.PI / 4).rotateX(-Math.PI / 2).scale(1.4, 0.6, 1), 0xf4f4f0, 0, 1.1, -4.8); P(new THREE.BoxGeometry(3.24, 0.35, 8), 0x2f5fa8, 0, 1.5, 0.6); P(new THREE.BoxGeometry(2.4, 1.4, 3), 0xe9ecef, 0, 2.5, 0); P(new THREE.BoxGeometry(2.45, 0.6, 2.4), 0x2f4f66, 0, 2.7, -0.2); } },
+  { name: 'Pylône électrique', k: 0.28, h: 2.4, w: 1.2, build: (P) => { for (const x of [-1, 1]) for (const y of [0.3, 2.1]) P(new THREE.BoxGeometry(0.22, 0.22, 16), 0x8d959c, x, y, 0); for (let z = -7; z <= 7; z += 2) { P(new THREE.BoxGeometry(2.2, 0.14, 0.14), 0x8d959c, 0, 0.3, z); P(new THREE.BoxGeometry(2.2, 0.14, 0.14), 0x8d959c, 0, 2.1, z); P(new THREE.BoxGeometry(0.14, 2, 0.14), 0x8d959c, z % 4 ? -1 : 1, 1.2, z); } P(new THREE.BoxGeometry(7, 0.3, 0.3), 0x8d959c, 0, 1.2, -6); } },
+  { name: 'Pelleteuse', k: 0.38, h: 3.4, w: 2.4, build: (P) => { for (const x of [-1.3, 1.3]) P(new THREE.BoxGeometry(0.8, 1, 4.6), 0x2b2e33, x, 0.5, 0); P(new THREE.BoxGeometry(2.8, 1.4, 3.4), 0xf2c230, 0, 1.8, 0.4); P(new THREE.BoxGeometry(1.2, 1.3, 1.6), 0x2f4f66, -0.7, 2.8, -0.4); P(new THREE.BoxGeometry(0.5, 0.6, 4), 0xf2c230, 0.5, 2.6, -2.8); P(new THREE.BoxGeometry(1.4, 1, 0.9), 0x4a5158, 0.5, 1.2, -4.8); } },
+];
+
 function loadMesh(kind) {
   const parts = [];
   kind.build((geo, color, x, y, z) => parts.push({ geo, color, matrix: xform(x, y, z) }));
-  const apex = kind.h + 2.6;
+  const apex = kind.h + 2.6, w = kind.w || 0.9;
   // élingues : quatre sangles jusqu'à l'anneau au-dessus de la charge
-  for (const [x, z] of [[-0.9, -1.4], [0.9, -1.4], [-0.9, 1.4], [0.9, 1.4]]) {
+  for (const [x, z] of [[-w, -1.4], [w, -1.4], [-w, 1.4], [w, 1.4]]) {
     const a = new THREE.Vector3(x, kind.h, z), b = new THREE.Vector3(0, apex, 0), len = a.distanceTo(b);
     const m = new THREE.Matrix4().lookAt(a, b, new THREE.Vector3(0, 1, 0)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
     m.setPosition((x) / 2, (kind.h + apex) / 2, z / 2);
@@ -297,7 +306,9 @@ function loadMesh(kind) {
 
 class Sling {
   constructor(ctx) {
-    this.ctx = ctx; this.id = 'elingue'; this.title = 'Élingue';
+    const crane = ctx.plane().spec.crane;
+    this.ctx = ctx; this.id = 'elingue'; this.title = crane ? 'Charges lourdes' : 'Élingue';
+    this.kinds = crane ? HEAVY : LOADS; this.point = crane ? new THREE.Vector3(0, 0, 0.2) : HOOK;
     this.rope = new Rope(ctx.scene, 0x2b2e33); this.rope.len = SLING;
     this.delivered = 0; this.prevFire = false; this.hooked = false; this.load = null; this.job = null;
     this.sites = this.findSites();
@@ -333,7 +344,7 @@ class Sling {
     const far = sites.filter((s) => s !== from && Math.hypot(s.x - from.x, s.z - from.z) > 1200);
     const list = far.length ? far : sites.filter((s) => s !== from);
     const to = list[Math.floor(Math.random() * list.length)];
-    const kind = LOADS[Math.floor(Math.random() * LOADS.length)];
+    const kind = this.kinds[Math.floor(Math.random() * this.kinds.length)];
     this.job = { from, to, kind };
     this.spawnLoad();
     this.zone.position.set(to.x, to.y + 0.4, to.z); this.zoneBeam.position.set(to.x, to.y, to.z);
@@ -353,7 +364,7 @@ class Sling {
     const floor = (x, z) => Math.max(heightAt(x, z), -0.5);
     // le crochet seul ou la charge accrochée, au bout de l'élingue
     const k = this.hooked ? L.kind.k : 0.01;
-    plane.extAcc.copy(this.rope.step(dt, plane, HOOK, this.hooked ? (x, z) => floor(x, z) + L.apex : floor, k));
+    plane.extAcc.copy(this.rope.step(dt, plane, this.point, this.hooked ? (x, z) => floor(x, z) + L.apex : floor, k));
     if (plane.onGround) plane.extAcc.set(0, 0, 0);
     const fire = input.fireHeld(), press = fire && !this.prevFire;
     this.prevFire = fire;

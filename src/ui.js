@@ -64,6 +64,7 @@ export class UI {
       [k('X'), 'Armes : missile (jet, vise ~1 s pour verrouiller) · mitrailleuses (chasseur, maintenir)'],
       [k('C'), 'Changer de vue (glisser la souris pour regarder autour)'],
       [k('N'), "Carte de l'île (croix ← à la manette)"],
+      [k('B'), 'Sauter en parachute (croix → à la manette)'],
       [k('T'), 'Heure du jour'],
       [k('Retour arrière'), 'Réapparaître en vol'],
       [k('H', 'M'), "Masquer l'interface / couper le son"],
@@ -74,6 +75,9 @@ export class UI {
     this.L = L; this.k = k;
     $('keys').innerHTML = this.keysHtml.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
     this.gliderHint = `Pas de moteur : cherche les thermiques sous les gros nuages ronds et tourne dedans · le vario bipe quand ça monte · ${k('Espace')} aérofreins`;
+    this.footHint = `Maintiens ${k(L.KeyR)} pour courir jusqu'au bout de la rampe, puis relâche · ${k(L.KeyA, L.KeyD)} virer · ${k('Espace')} freiner pour se poser · le vario bipe quand ça monte`;
+    this.balloonHint = `${k(L.KeyR)} brûleur : monter · ${k(L.KeyF)} soupape : descendre · le vent change avec l'altitude : choisis ta hauteur pour choisir ta route`;
+    this.hoverHint = `${k(L.KeyR)} gaz au-dessus de 50 % pour monter · ${k(L.KeyW, L.KeyS)} avancer / reculer · de la vitesse puis ${k('V')} : tuyères vers l'arrière · ${k('V')} encore pour se poser`;
     this.heliHint = `${k(L.KeyR)} gaz au-dessus de 50 % pour décoller · ${k(L.KeyW, L.KeyS)} avancer / reculer · ${k(L.KeyA, L.KeyD)} tourner · ${k(L.KeyQ, L.KeyE)} pivoter · ${k('Espace')} stationnaire`;
     this.shipHint = `${k(L.KeyR)} gaz pour avancer · ${k(L.KeyS)} monter · ${k(L.KeyW)} descendre · ${k(L.KeyA, L.KeyD)} virer · ${k('Espace')} s'arrêter et rester suspendu`;
     this.flightHint = `${k(L.KeyR)} mettre les gaz · ${k(L.KeyS)} cabrer pour décoller · ${k(L.KeyA, L.KeyD)} incliner · ${k('C')} vue · ${k('Échap')} toutes les commandes`;
@@ -88,8 +92,14 @@ export class UI {
   tagsOf(p) {
     const t = [];
     if (p.id === 'helico' || p.id === 'canadair') t.push("Bombardier d'eau");
+    if (p.hover) t.push('Décollage vertical');
+    if (p.radar) t.push('Radar');
+    if (p.tundra) t.push('Se pose partout');
+    if (p.foot) t.push('Décollage à pied');
+    if (p.balloon) t.push('Va où va le vent');
+    if (p.crane) t.push('Charges très lourdes');
     if (p.rescue) t.push('Treuil de secours');
-    if (p.sling) t.push('Élingue');
+    if (p.sling && !p.crane) t.push('Élingue');
     if (p.paras) t.push('Parachutistes');
     if (p.drops) t.push('Largage de matériel');
     if (p.airship) t.push("Plus léger que l'air");
@@ -101,7 +111,9 @@ export class UI {
     if (p.afterburner) t.push('Postcombustion');
     if (p.engine && p.engine.count > 1) t.push(p.heli ? `${p.engine.count} rotors` : `${p.engine.count} moteurs`);
     if (p.retract && !p.amphibian) t.push('Train rentrant');
-    if (p.flaps) t.push('Volets');
+    if (p.reverser) t.push('Inverseurs');
+    if (p.drogue) t.push('Parachute-frein');
+    if (p.flaps && !p.hover) t.push('Volets');
     return t;
   }
 
@@ -114,6 +126,9 @@ export class UI {
       rows.push([k(L.KeyA, L.KeyD), 'Tourner']);
       rows.push([k(L.KeyQ, L.KeyE), 'Pivoter sur place']);
       rows.push([k('Espace'), 'Retour au vol stationnaire']);
+    } else if (p.balloon) {
+      rows.push([k(L.KeyR, L.KeyF), 'Brûleur (monter) / soupape (descendre)']);
+      rows.push([k(L.KeyW, L.KeyS, L.KeyA, L.KeyD), 'Petit ventilateur : avancer un peu, pivoter']);
     } else if (p.airship) {
       rows.push([k(L.KeyR, L.KeyF), 'Gaz : vitesse']);
       rows.push([k(L.KeyW, L.KeyS), 'Descendre / monter']);
@@ -123,7 +138,10 @@ export class UI {
       rows.push([k(L.KeyR, L.KeyF), 'Gaz']);
       rows.push([k(L.KeyW, L.KeyS), 'Piquer / cabrer']);
       rows.push([k(L.KeyA, L.KeyD), 'Incliner (et virer)']);
-      if (p.flaps) rows.push([k('V'), 'Volets']);
+      if (p.foot) rows.push([k(L.KeyR), 'Courir pour décoller (au sol)']);
+      if (p.hover) rows.push([k('V'), 'Tuyères : vers le bas (vol vertical) / vers l\'arrière (avion)']);
+      else if (p.flaps) rows.push([k('V'), 'Volets']);
+      if (p.reverser || p.drogue) rows.push([k('Espace'), p.drogue ? 'Au sol, gaz réduits : freins et parachute-frein' : 'Au sol, gaz réduits : freins et inverseurs']);
       if (p.retract) rows.push([k('G'), p.amphibian ? 'Roues : piste (sorties) / eau (rentrées)' : 'Train']);
     }
     if (p.missiles) rows.push([k('X'), 'Missile : vise ~1 s pour verrouiller']);
@@ -135,6 +153,8 @@ export class UI {
     if (p.drops) rows.push([k('X'), 'Larguer une charge (plus de 120 m de haut)']);
     if (p.missiles && p.afterburner) rows.push(['Ravitailleur', 'Place-toi sous sa perche, derrière lui, à la même vitesse']);
     if (p.id === 'canadair') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en rasant l'eau"]);
+    if (p.gate) rows.push([k('X'), "À la porte de l'aéroport : demander le repoussage"]);
+    rows.push([k('B'), 'Sauter en parachute']);
     rows.push(['🎮', p.heli ? 'Stick gauche · RT / LT gaz · LB / RB pivot' : 'Stick gauche · RT / LT gaz · LB / RB palonnier']);
     return rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
   }
