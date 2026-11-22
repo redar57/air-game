@@ -6,6 +6,11 @@ import { addCylinder, addSphere, addCustom } from './colliders.js';
 import { buildLife } from './life.js';
 import { buildTraffic } from './traffic.js';
 import { buildFauna } from './fauna.js';
+import { buildCity } from './city.js';
+import { buildPorts } from './ports.js';
+import { Volcano } from './volcano.js';
+import { buildIslets, lighthouseBeam } from './islets.js';
+import { buildBeaches } from './beach.js';
 import { planCountry, buildCountry, updateCountry, country, occupied } from './country.js';
 
 /** Arche rocheuse en mer (utilisée aussi par la détection des figures). */
@@ -124,22 +129,12 @@ function buildLighthouse(scene) {
   const lamp = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 3.8, 8), new THREE.MeshBasicMaterial({ color: 0xfff0a0 }));
   lamp.position.y = 36.4;
   mesh.add(lamp);
-  // faisceau tournant : deux cônes opposés, visibles seulement à la tombée du jour
-  const beam = new THREE.Group();
+  const beam = lighthouseBeam();
   beam.position.y = 36.4;
-  const beamMat = new THREE.MeshBasicMaterial({ color: 0xfff2c0, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
-  for (const s of [1, -1]) {
-    const geo = new THREE.ConeGeometry(34, 560, 16, 6, true).translate(0, -280, 0), pp = geo.attributes.position, col = [];
-    for (let i = 0; i < pp.count; i++) { const k = Math.pow(1 + pp.getY(i) / 560, 1.6); col.push(k, k, k); } // s'éteint vers le bout
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    const cone = new THREE.Mesh(geo, beamMat);
-    cone.rotation.z = s * Math.PI / 2 - s * 0.03; // légèrement plongeant
-    beam.add(cone);
-  }
   mesh.add(beam);
   scene.add(mesh);
   addCylinder(c.x, c.z, 5.5, y - 2, y + 42);
-  return { lamp, beam, beamMat };
+  return { lamp, beam };
 }
 
 function buildRocks(scene) {
@@ -200,9 +195,13 @@ export function buildScenery(scene) {
   const villages = BIG ? country.villages : [{ ...coastPoint(0.75, -430), name: 'Village du Cap', r: 300, count: 38, seed: 77 }];
   for (const v of villages) v.houses = buildVillage(scene, v, v.count, v.seed, v.r);
   buildCountry(scene);
-  const { lamp, beam, beamMat } = buildLighthouse(scene);
+  const { lamp, beam } = buildLighthouse(scene);
   const life = buildLife(scene, villages, country.roads);
   const traffic = buildTraffic(scene);
+  const city = buildCity(scene);
+  const ports = buildPorts(scene);
+  const isles = buildIslets(scene);
+  const shore = buildBeaches(scene, villages);
   const fauna = buildFauna(scene, treeList, villages);
   buildRocks(scene);
   const balloons = buildBalloons(scene);
@@ -212,6 +211,7 @@ export function buildScenery(scene) {
   const lava = new THREE.Mesh(new THREE.CircleGeometry(95, 9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff7a1f }));
   lava.position.set(VOLCANO.x, lavaY, VOLCANO.z);
   scene.add(lava);
+  const volcano = new Volcano(scene);
   const glow = new THREE.PointLight(0xff6a20, 0, 900, 1.2);
   glow.position.set(VOLCANO.x, lavaY + 60, VOLCANO.z);
   scene.add(glow);
@@ -219,7 +219,7 @@ export function buildScenery(scene) {
   return {
     trees: treeList.length,
     /** Arbres (pour placer les feux de forêt) et villages (feux qui menacent les maisons). */
-    treeList, villages, life, traffic, fauna,
+    treeList, villages, life, traffic, fauna, city, ports, isles, shore, volcano,
     /** Cibles : montgolfières encore en l'air. */
     balloons,
     /** Abat une montgolfière ; elle revient (en gonflant) au bout de 40 s. */
@@ -232,6 +232,11 @@ export function buildScenery(scene) {
       life.update(dt, t, night, cam);
       traffic.update(dt, cam);
       fauna.update(dt, t, cam);
+      if (city) city.update(dt, t, night, cam);
+      if (ports) ports.update(dt, t, cam);
+      isles.update(dt, t, night, cam);
+      shore.update(dt, t, cam);
+      volcano.update(dt, cam);
       for (const b of balloons) {
         b.mesh.position.y = b.by + Math.sin(t * 0.35 + b.ph) * 3;
         if (!b.alive && (b.back -= dt) <= 0) { b.alive = true; b.col.off = false; b.mesh.visible = true; b.grow = 0; }
@@ -242,11 +247,9 @@ export function buildScenery(scene) {
         }
       }
       lamp.material.color.setHex(night > 0.2 ? 0xffffff : 0xfff0a0);
-      beam.rotation.y = t * 0.9;
-      beamMat.opacity = 0.22 * smoothstep(0.15, 0.7, night);
-      beam.visible = beamMat.opacity > 0.005;
+      beam.userData.update(t, night);
       lava.material.color.setRGB(1, 0.42 + 0.1 * Math.sin(t * 1.7), 0.1);
-      glow.intensity = 1600 * (0.3 + night) * (0.85 + 0.15 * Math.sin(t * 1.7));
+      glow.intensity = 1600 * (0.3 + night) * (1 + 2.5 * volcano.k) * (0.85 + 0.15 * Math.sin(t * 1.7));
     },
   };
 }

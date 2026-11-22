@@ -9,7 +9,7 @@ export const ISLAND_R = 4400;
 /** Chaîne de montagnes : centre, orientation, demi-longueur et demi-largeur, hauteur des crêtes. */
 export const MTN = { x: 800, z: -900, ang: 0.45, len: 2600, wid: 1250, amp: 1080 };
 export const VOLCANO = { x: -2500, z: 1000, rimR: 300, baseR: 1350, h: 760, depth: 230 };
-const ISLETS = [
+export const ISLETS = [
   { x: 4300, z: -3700, r: 380, a: 150 },
   { x: -4700, z: -3000, r: 300, a: 125 },
   { x: 3500, z: 4300, r: 420, a: 110 }, // îlot du site de lancement

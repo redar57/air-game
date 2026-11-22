@@ -12,8 +12,12 @@ import { PLANES, STARTS, liveriesOf } from './planes/catalog.js';
 import { createWaterBomber, createSprayer, createMail, canScoop } from './missions.js';
 import { createRescue, createSling } from './heli-missions.js';
 import { createParas } from './paras.js';
+import { Career } from './career.js';
+import { Tanker } from './tanker.js';
+import { createAirdrop } from './airdrop.js';
 import { buildMilBase } from './world/milbase.js';
 import { buildLaunchSite } from './world/spaceport.js';
+import { cityPort, fishPort, islets } from './world/places.js';
 import { buildHospital, hospital } from './world/sites.js';
 import { country, treatedShare, planRoutes } from './world/country.js';
 import { save } from './save.js';
@@ -69,7 +73,7 @@ const world = {
   atFuel: atFuelStation,
 };
 
-let spaceport, birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
+let career, tanker, spaceport, birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
 let mission = null; // bombardier d'eau (hélicoptère rouge), ou null
 const _sv = new THREE.Vector3();
 let kills = 0; // montgolfières abattues depuis le lancement
@@ -127,6 +131,7 @@ function endMission() {
 }
 
 function enterMenu() {
+  career.flush();
   endMission();
   state = 'menu';
   missiles.reset(); guns.reset(); ui.lock(null); ui.sight(null);
@@ -162,7 +167,7 @@ function startFlight() {
       toWorld(rw, 0, rw.length / 2 - 40 - spec.len, _w);
       plane.placeOnGround(_w.x, _w.z, rw.yaw, world);
     }
-    ui.hint(spec.heli ? ui.heliHint : ui.flightHint);
+    ui.hint(spec.heli ? ui.heliHint : spec.airship ? ui.shipHint : ui.flightHint);
     sound.startup(spec);
   }
   state = 'fly';
@@ -204,6 +209,12 @@ function startFlight() {
     ui.mission(mission.hud());
     ui.hint(`Vole vers la croix orange (<kbd>N</kbd> carte), au-dessus de 250 m · <kbd>X</kbd> fait sauter 4 parachutistes · ils se dirigent seuls vers la croix`);
   }
+  else if (spec.drops) {
+    mission = createAirdrop({ scene, sound, ui, heightAt, villages: scenery.villages, trees: scenery.treeList, span: HALF * 1.8, board: milBase.active ? milBase.board : runways[0],
+      canBoard: (x, z) => !!runwayAt(x, z) || (milBase.active && atBoarding(x, z)), plane: () => plane });
+    ui.mission(mission.hud());
+    ui.hint(`Vole vers la cible jaune (<kbd>N</kbd> carte), au-dessus de 120 m · la croix bleue au sol montre où tombera la charge · <kbd>X</kbd> largue`);
+  }
   tele.gMax = 1; tele.prev = null;
   ui.menu(false); ui.hud(true);
   rig.set('chase'); rig.snap(plane);
@@ -243,6 +254,7 @@ function handleEvents() {
       input.rumble(1, 1, 700);
       ui.toast(e.why === 'wheels' ? "Capoté : roues sorties sur l'eau !" : water ? 'Plouf !' : 'Crash !', e.why ? 2600 : 1500);
     } else if (e.type === 'touchdown' && e.airTime > 2.5) {
+      career.touchdown(e, plane, sky.night);
       sound.touchdown(e.surface, e.sink);
       input.rumble(clamp(e.sink / 5, 0.2, 1), 0.5, 160);
       if (e.belly) ui.toast(e.floats ? 'Posé sur les flotteurs… (G sort les roues)' : 'Posé sur le ventre… (G sort le train)', 3200);
@@ -262,7 +274,7 @@ function handleEvents() {
       else if (e.what === 'full') { ui.toast('Plein fait ⛽', 2000); sound.chime(1); }
     }
     else if (e.type === 'flaps') { sound.flaps(); if (e.blown) ui.toast('Volets rentrés : trop vite !', 1600); }
-    else if (e.type === 'takeoff') ui.clearHint();
+    else if (e.type === 'takeoff') { ui.clearHint(); career.takeoff(plane); }
   }
   plane.events.length = 0;
 }
@@ -277,7 +289,8 @@ function simulate(dt) {
   }
   if (state !== 'fly') return;
   const msg = tricks.update(dt, plane);
-  if (msg) ui.toast(mission && mission.onTrick ? mission.onTrick(msg) : msg);
+  if (msg) { ui.toast(mission && mission.onTrick ? mission.onTrick(msg) : msg); career.trick(msg); }
+  career.update(dt, plane, { mission, kills, refuels: tanker.refuels, erupting: scenery.volcano.on });
   if (mission && state === 'fly') {
     const res = mission.update(dt, plane, input);
     if (frameNo % 4 === 0) ui.mission(mission.hud());
@@ -303,8 +316,10 @@ function handleKeys() {
   input.poll();
   for (const { code, key, stick } of input.take()) {
     if (stick && state !== 'menu') continue;
+    if (state === 'menu' && ui.careerOpen) { if (code === 'Escape' || key === 'j' || code === 'Enter' || code === 'Backspace') ui.career(null); continue; }
     if (state === 'menu') {
-      if (code === 'ArrowUp' || code === 'KeyW') { setPlane(ui.step(-1)); sound.click(); }
+      if (key === 'j') openCareer();
+      else if (code === 'ArrowUp' || code === 'KeyW') { setPlane(ui.step(-1)); sound.click(); }
       else if (code === 'ArrowDown' || code === 'KeyS') { setPlane(ui.step(1)); sound.click(); }
       else if (code === 'ArrowLeft' || code === 'KeyA') setStart(selStart - 1);
       else if (code === 'ArrowRight' || code === 'KeyD') setStart(selStart + 1);
@@ -339,6 +354,17 @@ function handleKeys() {
   }
 }
 
+function openCareer() { career.flush(); ui.career(career.html(PLANES)); }
+/** Badges obtenus : un message discret, l'un après l'autre. */
+const badgeQueue = [];
+function badge(name) {
+  badgeQueue.push(name);
+  if (badgeQueue.length === 1) setTimeout(showBadge, 1600);
+}
+function showBadge() {
+  ui.toast(`Badge : ${badgeQueue[0]}`, 2400); sound.chime(2);
+  setTimeout(() => { badgeQueue.shift(); if (badgeQueue.length) showBadge(); }, 2800);
+}
 function toggleInvert() {
   input.invert = !input.invert;
   ui.setInvert(input.invert);
@@ -350,10 +376,24 @@ function resume() {
   ui.pause(false);
 }
 
+/** Ravitailleur : il vole toujours ; panneau et messages seulement pour le Jet, quand il est proche. */
+let tankHud = false;
+function updateTanker(dt) {
+  tanker.update(dt, state === 'fly' ? plane : null);
+  const ev = tanker.event; tanker.event = null;
+  if (ev === 'on') { ui.toast('Branché !', 1500); sound.gear(true); input.rumble(0.5, 0.3, 250); }
+  else if (ev === 'off') { ui.toast('Débranché', 1300); sound.gear(false); }
+  else if (ev === 'full') { ui.toast('Plein fait en vol !', 2400); sound.chime(3); }
+  if (mission) return;
+  const show = state === 'fly' && tanker.near;
+  if (show && frameNo % 4 === 0) ui.mission(tanker.hud(plane)); else if (!show && tankHud) ui.mission(null);
+  tankHud = show;
+}
+
 /** Mini-carte (toutes les 3 images) et grande carte si elle est ouverte. */
 function drawMaps() {
   if (!islandMap) return;
-  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : [] };
+  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : plane.spec.afterburner && tanker.flying ? [{ x: tanker.pos.x, z: tanker.pos.z, color: '#7fd4ff', icon: 'R' }] : [] };
   if (frameNo % 3 === 0) islandMap.drawMini(document.getElementById('minimap'), plane, tele.hdg, extras, plane.spec.maxSpeed > 120 ? 3500 : 2200);
   if (ui.bigMapOpen && frameNo % 4 === 0) islandMap.drawFull(document.getElementById('bigmapc'), plane, tele.hdg, extras);
 }
@@ -483,6 +523,7 @@ function frame(now) {
     birds.update(dt, time, plane);
     boats.update(dt, time);
     spaceport.update(dt, camera.position);
+    updateTanker(dt);
     for (const sp of spinners) if (sp.tick) sp.tick(time); else sp.obj.rotation.y += sp.rate * dt;
   }
   if (!paused) {
@@ -525,7 +566,8 @@ function frame(now) {
     plane, camera, cockpit, dt, active: state === 'fly' || state === 'crash',
     engineOn: state === 'fly' && plane.engineRunning,
   });
-  sound.rocket(paused || state === 'menu' ? 0 : spaceport.loudness(camera.position));
+  sound.trains(scenery.traffic.rails, camera.position, !paused && state !== 'menu', dt);
+  sound.rocket(paused || state === 'menu' ? 0 : spaceport.loudness(camera.position) + scenery.volcano.loudness(camera.position));
   renderer.render(scene, camera);
 }
 
@@ -548,8 +590,10 @@ async function boot() {
   defineThermals(heightAt, HALF * 1.82, BIG ? 30 : 14);
   if (BIG) STARTS.splice(2, 0, { id: 'baie', name: 'La Baie' }, { id: 'prairie', name: 'La Prairie' }, { id: 'base', name: 'Base nautique' }, { id: 'militaire', name: 'Base militaire' });
   buildThermalClouds(scene);
-  birds = new Birds(scene, heightAt, thermals, runways);
-  boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 450 }]);
+  birds = new Birds(scene, heightAt, thermals, runways, scenery.ports ? scenery.ports.gulls : []);
+  boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 450 }, ...(cityPort.active ? [{ ...cityPort, r: 480 }, { ...fishPort, r: 420 }] : [])]);
+  career = new Career(badge);
+  tanker = new Tanker(scene);
   fx = new Effects(scene);
   missiles = new Missiles(scene, fx, sound);
   guns = new Guns(scene, fx, sound);
@@ -563,6 +607,7 @@ async function boot() {
   // le son ne peut démarrer qu'après un geste : dès le premier clic ou la première touche au menu
   const wake = () => { sound.start(); window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); };
   window.addEventListener('pointerdown', wake); window.addEventListener('keydown', wake);
+  ui.on('career', openCareer);
   ui.on('fires', toggleFires);
   ui.on('livery-select', setLivery);
   ui.on('bigmap', () => { save.set('bigMap', !BIG); ui.toast('Chargement de la carte…', 4000); setTimeout(() => location.reload(), 60); });
@@ -593,7 +638,7 @@ async function boot() {
   // petit accès pour le débogage depuis la console
   window.airgame = {
     get plane() { return plane; }, get state() { return state; },
-    world, rig, sky, hospital, milBase, get spaceport() { return spaceport; }, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
+    world, rig, sky, hospital, get tanker() { return tanker; }, get career() { return career; }, milBase, get spaceport() { return spaceport; }, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
     select(planeId, startId) {
       setPlane(PLANES.findIndex((p) => p.id === planeId));
       setStart(STARTS.findIndex((s) => s.id === startId));

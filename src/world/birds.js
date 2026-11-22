@@ -25,7 +25,7 @@ function wingGeometry() {
 }
 
 export class Birds {
-  constructor(scene, heightAt, thermals, runways = []) {
+  constructor(scene, heightAt, thermals, runways = [], extra = []) {
     this.heightAt = heightAt;
     const rnd = mulberry32(4242);
     this.flocks = [];
@@ -42,6 +42,12 @@ export class Birds {
       this.flocks.push(f);
       const count = 12 + Math.floor(rnd() * 12);
       for (let k = 0; k < count; k++) this.addBird(f, rnd);
+    }
+    // mouettes des ports et des chalutiers : basses et serrées (follow : suivent un bateau)
+    for (const o of extra) {
+      const f = { kind: 'gull', fixed: true, low: true, follow: o.follow, x: o.x, z: o.z, alt: o.alt, r: o.r || 45, w: (rnd() < 0.5 ? -1 : 1) * 0.22, th: rnd() * 6.3 };
+      this.flocks.push(f);
+      for (let k = 0; k < (o.count || 16); k++) this.addBird(f, rnd);
     }
     // rapaces : un ou deux par thermique, haut et lents
     for (const t of thermals) {
@@ -78,6 +84,7 @@ export class Birds {
   target(b, t, out) {
     const f = b.f, a = f.th + b.a, r = f.r + b.dr;
     out.set(f.x + Math.cos(a) * r, 0, f.z + Math.sin(a) * r);
+    if (f.low) { out.y = Math.max(f.alt + b.dy * 0.5 + Math.sin(t * 0.3 + b.a) * 4, Math.max(0, this.heightAt(out.x, out.z)) + 4); return out; }
     out.y = Math.max(f.alt + b.dy + Math.sin(t * 0.3 + b.a) * 6, this.heightAt(out.x, out.z) + 30);
     return out;
   }
@@ -87,6 +94,7 @@ export class Birds {
     // volées de mouettes : elles longent la côte d'un point à l'autre
     for (const f of this.flocks) {
       f.th += f.w * dt;
+      if (f.follow) { f.x = f.follow.x; f.z = f.follow.z; }
       if (f.fixed) continue;
       const dx = f.tx - f.x, dz = f.tz - f.z, d = Math.hypot(dx, dz);
       if (d < 20) {

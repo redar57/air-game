@@ -48,7 +48,7 @@ function hull(parts, { len, w, h, sheer, color, rim, deck }) {
   return yt;
 }
 
-function buildModel(kind, variant = 0) {
+export function buildModel(kind, variant = 0) {
   const parts = [];
   const B = (w, h, d, color, x, y, z, ry = 0, rx = 0) => parts.push({ geo: new THREE.BoxGeometry(w, h, d), color, matrix: xform(x, y, z, ry, 1, 1, 1, rx) });
   const C = (r, h, color, x, y, z, seg = 8) => parts.push({ geo: new THREE.CylinderGeometry(r, r, h, seg), color, matrix: xform(x, y, z) });

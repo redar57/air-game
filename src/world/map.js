@@ -2,6 +2,7 @@ import { toWorld } from '../util.js';
 import { fuelStation, loadPad, seaBase, extraPumps, launchSite } from './airfields.js';
 import { country } from './country.js';
 import { hospital } from './sites.js';
+import { city, cityPort, fishPort, islets } from './places.js';
 import { BIG } from './terrain.js';
 
 // Carte de l'île : un fond pré-calculé une fois (relief ombré, plages, pistes), puis à chaque image
@@ -67,8 +68,14 @@ export class IslandMap {
       line(Math.max(1, S / 640), '#e9e2d0', [S / 200, S / 200]);
       g.setLineDash([]);
     }
+    if (city.active) { // grande ville (pâtés de maisons) et quais
+      g.fillStyle = '#8f9499'; this.rect(g, city, 0, 0, city.halfWid * 2, city.halfLen * 2);
+      g.fillStyle = '#d9d2c4'; for (let i = 0; i < 9; i++) for (let j = 0; j < 10; j++) this.rect(g, city, -380 + i * 95, -427 + j * 95, 72, 72);
+      g.fillStyle = '#8f9499'; for (const o of [cityPort, fishPort]) this.rect(g, o, 0, 0, o.halfWid * 2, o.halfLen * 2);
+    }
     g.fillStyle = '#b9472f';
-    for (const v of country.villages) { g.beginPath(); g.arc(this.px(v.x), this.px(v.z), Math.max(2, v.r * S / (2 * E) * 0.6), 0, 6.283); g.fill(); }
+    for (const v of country.villages) {
+      if (v.city) continue; g.beginPath(); g.arc(this.px(v.x), this.px(v.z), Math.max(2, v.r * S / (2 * E) * 0.6), 0, 6.283); g.fill(); }
   }
 
   wx(i) { return (i / S) * 2 * E - E; }
@@ -193,9 +200,12 @@ export class IslandMap {
     };
     for (const rw of this.runways) label(rw, rw.name, -14);
     g.font = `italic 600 ${Math.round(W / 70)}px sans-serif`;
-    for (const v of country.villages) label(v, v.name, -8);
+    for (const v of country.villages) if (!v.city) label(v, v.name, -8);
+    for (const o of islets) label(o, o.name, 4);
+    if (fishPort.active) label(fishPort, fishPort.name, 18);
     g.font = `700 ${Math.round(W / 55)}px sans-serif`;
     label(this.carrier, 'Porte-avions', -14);
+    if (city.active) label(city, 'Grande Ville', -16);
     if (seaBase.active) label(seaBase, 'Base nautique', -14);
     label(launchSite, 'Site de lancement', -14);
     if (hospital.active) label(hospital, 'Hôpital', -12);

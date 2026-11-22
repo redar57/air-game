@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { heightAt, normalAt, flatInfo, BIG } from './terrain.js';
-import { occupied } from './country.js';
+import { heightAt, normalAt, flatInfo, BIG, HALF } from './terrain.js';
+import { occupied, country } from './country.js';
 import { lightsPoints } from './airfields.js';
 import { Effects } from '../fx.js';
-import { mulberry32, mergeColored, xform } from '../util.js';
+import { mulberry32, mergeColored, xform, toWorld } from '../util.js';
 
 // Vie au sol : troupeaux qui paissent, tracteurs sur les chemins, fumée des cheminées,
 // fenêtres et lampadaires allumés la nuit. Repère des animaux et tracteurs : -Z vers l'avant.
 
 const _n = new THREE.Vector3(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1);
-const _p = new THREE.Vector3(), _v = new THREE.Vector3(), _e = new THREE.Euler(), _c = new THREE.Color();
+const _w2 = { x: 0, z: 0 }, _p = new THREE.Vector3(), _v = new THREE.Vector3(), _e = new THREE.Euler(), _c = new THREE.Color();
 const NEAR = 3500; // au-delà, on ne fait plus bouger bêtes et tracteurs
 
 const lam = () => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -38,6 +38,22 @@ function sheepGeo() {
   ];
   for (const [x, z] of [[-0.25, -0.45], [0.25, -0.45], [-0.25, 0.45], [0.25, 0.45]]) {
     parts.push({ geo: new THREE.BoxGeometry(0.13, 0.6, 0.13), color: D, matrix: xform(x, 0.3, z) });
+  }
+  return mergeColored(parts);
+}
+
+function horseGeo() {
+  const W = 0xffffff, D = 0x2a221c;
+  const parts = [
+    { geo: new THREE.BoxGeometry(0.8, 0.95, 2.1), color: W, matrix: xform(0, 1.55, 0) },
+    { geo: new THREE.BoxGeometry(0.42, 1.3, 0.62), color: W, matrix: xform(0, 2.15, -1.15, 0, 1, 1, 1, -0.55) },
+    { geo: new THREE.BoxGeometry(0.36, 0.42, 0.95), color: W, matrix: xform(0, 2.65, -1.75, 0, 1, 1, 1, -0.35) },
+    { geo: new THREE.BoxGeometry(0.12, 1.2, 0.3), color: D, matrix: xform(0, 2.4, -0.92, 0, 1, 1, 1, -0.55) },
+    { geo: new THREE.BoxGeometry(0.18, 1.1, 0.2), color: D, matrix: xform(0, 1.4, 1.15, 0, 1, 1, 1, 0.25) },
+  ];
+  for (const [x, z] of [[-0.28, -0.8], [0.28, -0.8], [-0.28, 0.8], [0.28, 0.8]]) {
+    parts.push({ geo: new THREE.BoxGeometry(0.2, 1.1, 0.22), color: W, matrix: xform(x, 0.6, z) });
+    parts.push({ geo: new THREE.BoxGeometry(0.22, 0.16, 0.24), color: D, matrix: xform(x, 0.08, z) });
   }
   return mergeColored(parts);
 }
@@ -108,21 +124,43 @@ export function buildLife(scene, villages, roads) {
     const n = BIG ? 2 : 3;
     for (let k = 0; k < n; k++) spots.push(v);
   }
+  const SIZE_OF = { cow: [38, 7, 0.6], sheep: [28, 11, 0.8], horse: [32, 6, 1.1] }, KIND = ['cow', 'sheep', 'horse'];
+  const herd = (x, z) => {
+    if (!pasture(x, z, villages) || herds.some((h) => Math.hypot(h.x - x, h.z - z) < 250)) return false;
+    for (let i = 0; i < 24; i++) for (const r of [16, 34, 46]) if (!pasture(x + Math.cos(i * 0.262) * r, z + Math.sin(i * 0.262) * r, villages)) return false; // la clôture ne coupe ni route ni champ
+    const kind = KIND[herds.length % 3], [R, N, sp] = SIZE_OF[kind], animals = [];
+    for (let i = 0, tries = 0; i < N && tries < 60; tries++) {
+      const ax = x + (rnd() - 0.5) * R * 1.6, az = z + (rnd() - 0.5) * R * 1.6;
+      if (!pasture(ax, az, villages)) continue;
+      animals.push({ x: ax, z: az, yaw: rnd() * 6.283, tx: ax, tz: az, wait: rnd() * 10, sp: sp * (0.8 + rnd() * 0.4) });
+      i++;
+    }
+    if (animals.length >= 3) herds.push({ x, z, R, kind, animals });
+    return true;
+  };
   for (const v of spots) {
     for (let t = 0; t < 200; t++) {
-      const a = rnd() * 6.283, d = v.r + 120 + rnd() * 300, x = v.x + Math.cos(a) * d, z = v.z + Math.sin(a) * d;
-      if (!pasture(x, z, villages) || herds.some((h) => Math.hypot(h.x - x, h.z - z) < 250)) continue;
-      const kind = herds.length % 2 ? 'sheep' : 'cow', R = kind === 'cow' ? 38 : 28, animals = [];
-      for (let i = 0, tries = 0; i < (kind === 'cow' ? 7 : 11) && tries < 60; tries++) {
-        const ax = x + (rnd() - 0.5) * R * 1.6, az = z + (rnd() - 0.5) * R * 1.6;
-        if (!pasture(ax, az, villages)) continue;
-        animals.push({ x: ax, z: az, yaw: rnd() * 6.283, tx: ax, tz: az, wait: rnd() * 10, sp: (kind === 'cow' ? 0.6 : 0.8) * (0.8 + rnd() * 0.4) });
-        i++;
-      }
-      if (animals.length >= 3) herds.push({ x, z, R, kind, animals });
-      break;
+      const a = rnd() * 6.283, d = v.r + 120 + rnd() * 300;
+      if (herd(v.x + Math.cos(a) * d, v.z + Math.sin(a) * d)) break;
     }
   }
+  // troupeaux dans les prairies du reste de l'île
+  const more = herds.length + (BIG ? 34 : 12);
+  for (let t = 0; t < 6000 && herds.length < more; t++) { const x = (rnd() - 0.5) * HALF * 1.6, z = (rnd() - 0.5) * HALF * 1.6; if (heightAt(x, z) < 160) herd(x, z); }
+  // clôture de bois autour de chaque troupeau, une ouverture, un abreuvoir
+  const fp = [];
+  for (const h of herds) {
+    const n = 22, R = h.R + 8, pt = (i) => { const a = (i / n) * 6.283, x = h.x + Math.cos(a) * R, z = h.z + Math.sin(a) * R; return [x, heightAt(x, z), z]; };
+    for (let i = 0; i < n; i++) {
+      const [x, y, z] = pt(i), [u, w, v] = pt(i + 1);
+      fp.push({ geo: new THREE.BoxGeometry(0.18, 1.5, 0.18), color: 0x8a6a48, matrix: xform(x, y + 0.65, z) });
+      if (i === 0 || y < 2 || w < 2) continue;
+      const L = Math.hypot(u - x, w - y, v - z);
+      for (const o of [0.6, 1.15]) fp.push({ geo: new THREE.BoxGeometry(0.1, 0.14, L), color: 0x9a7650, matrix: xform((x + u) / 2, (y + w) / 2 + o, (z + v) / 2, Math.atan2(u - x, v - z), 1, 1, 1, -Math.atan2(w - y, Math.hypot(u - x, v - z))) });
+    }
+    fp.push({ geo: new THREE.BoxGeometry(3, 0.7, 1), color: 0x9aa0a6, matrix: xform(h.x, heightAt(h.x, h.z) + 0.35, h.z) });
+  }
+  if (fp.length) { const m = new THREE.Mesh(mergeColored(fp), lam()); m.castShadow = true; scene.add(m); }
   const mkIM = (geo, list, colors) => {
     const im = new THREE.InstancedMesh(geo, lam(), Math.max(1, list.length));
     im.count = list.length;
@@ -133,6 +171,8 @@ export function buildLife(scene, villages, roads) {
   };
   const cows = herds.filter((h) => h.kind === 'cow').flatMap((h) => h.animals);
   const sheep = herds.filter((h) => h.kind === 'sheep').flatMap((h) => h.animals);
+  const horses = herds.filter((h) => h.kind === 'horse').flatMap((h) => h.animals);
+  const horseIM = mkIM(horseGeo(), horses, [0x6b4428, 0x8a5a36, 0x3a2a20, 0xd9c7a8, 0xb08a5a, 0x4a3a30]);
   const cowIM = mkIM(cowGeo(), cows, [0x8a5a3a, 0xf2efe6, 0x2e2a28, 0xd9c7a0, 0xa86a3e]);
   const sheepIM = mkIM(sheepGeo(), sheep, [0xf4f1e8, 0xeae3d2, 0xf8f6f0, 0x8a7a6a]);
   const place = (im, list) => {
@@ -143,7 +183,7 @@ export function buildLife(scene, villages, roads) {
     });
     im.instanceMatrix.needsUpdate = true;
   };
-  place(cowIM, cows); place(sheepIM, sheep);
+  place(cowIM, cows); place(sheepIM, sheep); place(horseIM, horses);
 
   // ------------------------------------------------------------------ tracteurs
   const tractors = [];
@@ -155,6 +195,14 @@ export function buildLife(scene, villages, roads) {
       tractors.push({ path, mesh, s: rnd() * (path.length - 1), dir: rnd() < 0.5 ? 1 : -1, wait: 0, sp: 4 + rnd() * 1.5 });
     }
   }
+
+  // tracteurs au travail : vont et viennent dans leur champ, une charrue derrière
+  const ploughs = country.fields.map((f, i) => {
+    const mesh = tractorMesh(rnd, false), p = [{ geo: new THREE.BoxGeometry(4.6, 0.2, 0.3), color: 0xd8312b, matrix: xform(0, 0.9, 2.6) }, { geo: new THREE.BoxGeometry(0.3, 0.3, 1.4), color: 0x3a3f45, matrix: xform(0, 0.9, 2) }];
+    for (let k = -2; k <= 2; k++) p.push({ geo: new THREE.BoxGeometry(0.15, 0.9, 0.5), color: 0x6b6f73, matrix: xform(k, 0.45, 2.8) });
+    mesh.add(new THREE.Mesh(mergeColored(p), lam())); scene.add(mesh);
+    return { f, mesh, lane: i * 3, side: 1, s: 0, dir: 1, yaw: f.yaw, t: 0, turn: 0 };
+  });
 
   // ------------------------------------------------------------------ fenêtres, lampadaires, cheminées
   const win = [], lamps = [], posts = [], chimneys = [];
@@ -201,7 +249,7 @@ export function buildLife(scene, villages, roads) {
   const smoke = new Effects(scene, { max: 420, opacity: 0.35, drag: 0.6 });
 
   return {
-    herds, tractors, chimneys,
+    herds, tractors, ploughs, chimneys,
     update(dt, t, night, cam) {
       const cx = cam ? cam.x : 0, cz = cam ? cam.z : 0;
       // bêtes : marchent un peu vers un coin d'herbe, puis broutent un moment
@@ -227,14 +275,15 @@ export function buildLife(scene, villages, roads) {
           moved = true;
         }
       }
-      if (moved) { place(cowIM, cows); place(sheepIM, sheep); }
+      if (moved) { place(cowIM, cows); place(sheepIM, sheep); place(horseIM, horses); }
 
       // tracteurs : font l'aller-retour sur leur chemin, avec une pause à chaque bout
       for (const tr of tractors) {
         const n = tr.path.length - 1;
         if (tr.wait > 0) tr.wait -= dt;
         else {
-          tr.s += (tr.dir * tr.sp * dt) / 8; // points du chemin espacés de 8 m
+          const shut = (tr.path.crossings || []).some((x) => { const g = (x.k - tr.s) * tr.dir * 8 - x.off; return x.closed > 0.12 && g > -2 && g < 9; });
+          if (!shut) tr.s += (tr.dir * tr.sp * dt) / 8; // points du chemin espacés de 8 m
           if (tr.s <= 0 || tr.s >= n) { tr.s = Math.max(0, Math.min(n, tr.s)); tr.dir *= -1; tr.wait = 8 + Math.random() * 10; }
         }
         const i = Math.min(n - 1, Math.floor(tr.s)), f = tr.s - i, a = tr.path[i], b = tr.path[i + 1];
@@ -248,6 +297,18 @@ export function buildLife(scene, villages, roads) {
         let dy = yaw - tr.mesh.userData.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         tr.mesh.userData.yaw += dy * Math.min(1, dt * 3);
         tr.mesh.rotation.y = tr.mesh.userData.yaw;
+      }
+
+      for (const g of ploughs) {
+        const { f } = g, lanes = Math.max(1, Math.floor((f.hw * 2 - 10) / 5)), end = f.hl - 7;
+        if (cam && Math.hypot(f.x - cx, f.z - cz) > NEAR) continue;
+        g.s += g.dir * 3.2 * dt;
+        if (Math.abs(g.s) > end) { g.s = end * g.dir; g.dir = -g.dir; g.lane += g.side; if (g.lane >= lanes || g.lane < 0) { g.side = -g.side; g.lane += 2 * g.side; } }
+        const tx = -f.hw + 5 + g.lane * 5; g.lx = g.lx === undefined ? tx : g.lx + Math.max(-2.2 * dt, Math.min(2.2 * dt, tx - g.lx));
+        toWorld(f, g.lx, g.s, _w2);
+        const want = f.yaw + (g.dir > 0 ? Math.PI : 0); let dy = want - g.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); g.yaw += dy * Math.min(1, dt * 1.6);
+        g.mesh.position.set(_w2.x, heightAt(_w2.x, _w2.z) + 0.1, _w2.z); g.mesh.rotation.y = g.yaw;
+        if ((g.t -= dt) <= 0) { g.t = 0.5; _v.set((Math.random() - 0.5) * 2, 1.2, (Math.random() - 0.5) * 2); smoke.emit(_p.set(_w2.x + Math.sin(g.yaw) * 3, g.mesh.position.y + 0.4, _w2.z + Math.cos(g.yaw) * 3), _v, 3, 0.9, 0xb89a70, 1, 0); }
       }
 
       // fumée des cheminées (près de la caméra), plus fournie le soir et la nuit

@@ -1,7 +1,7 @@
 # Air Game — vol libre
 
-Petit simulateur de vol arcade au-dessus d'une île : neuf avions (tourisme, planeur, biplan de voltige, hydravion
-amphibie, écopeur bombardier d'eau, chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur) et trois hélicoptères (bombardier d'eau ou secours au treuil,
+Petit simulateur de vol arcade au-dessus d'une île : treize avions et ULM (tourisme, planeur, biplan de voltige, hydravion
+amphibie, écopeur bombardier d'eau, chasseur à hélice, avion de course, jet avec postcombustion, quadrimoteur, double poutre, avion de ligne, pendulaire, autogire), un dirigeable et trois hélicoptères (bombardier d'eau ou secours au treuil,
 Libellule à bulle, Bi-rotor de transport), un aéroport, un altiport et un porte-avions.
 Tout est généré par le code : relief, avions, sons. Aucune installation.
 
@@ -25,7 +25,7 @@ Navigateurs : Chrome, Edge, Firefox ou Safari récents (Safari 16.4 minimum).
 | A/E | LB / RB | Palonnier |
 | R/F | RT / LT | Gaz |
 | V | B (Rond) | Volets (3 crans) |
-| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) · larguer l'eau (bombardiers d'eau, maintenir) · treuil (secours, maintenir) · élingue (Bi-rotor) · parachutistes (Gros Porteur) |
+| X | R3 ou croix ↓ | Missile (jet) · mitrailleuses (chasseur, maintenir) · larguer l'eau (bombardiers d'eau, maintenir) · treuil (secours, maintenir) · élingue (Bi-rotor) · parachutistes (Gros Porteur) · matériel (Bipoutre) |
 | G | X (Carré) | Train |
 | Espace | A (Croix) | Freins / aérofreins |
 | C | Y (Triangle) | Changer de vue |
@@ -34,6 +34,7 @@ Navigateurs : Chrome, Edge, Firefox ou Safari récents (Safari 16.4 minimum).
 | T | croix ↑ | Heure du jour |
 | Retour arrière | Select | Réapparaître en vol |
 | Échap | Start | Pause |
+| J (au menu) | | Carnet de vol et badges |
 | H / M | | Masquer l'interface / couper le son |
 
 **Manette** : n'importe quelle manette Bluetooth ou USB reconnue par le navigateur (Xbox, PlayStation, Switch Pro…).
@@ -74,13 +75,27 @@ des roues, au décrochage et au crash (si le navigateur le permet).
 - **Parachutistes** (Gros Porteur) : 12 hommes à bord. Au-dessus de 250 m et sous 340 km/h, X en fait sauter 4 ;
   ils ouvrent leur voile et se dirigent seuls vers la croix orange, à condition d'être largués assez près. On
   rembarque à l'arrêt sur l'aire verte de la base militaire (sur la petite carte : sur une piste).
+- **Largage de matériel** (Bipoutre) : jeeps, caisses et canon sous parachutes. La croix bleue au sol montre où la
+  charge tombera ; X largue (au-dessus de 120 m). On recharge à l'arrêt sur une piste.
+- **Ravitaillement en vol** (Jet de chasse) : un ravitailleur fait le tour de la carte, se pose de temps en temps à la
+  base (petite carte : à l'aéroport) et repart. Pastille « R » sur la carte du Jet. Approche le panier par derrière, à
+  la même vitesse : il se branche, le plein prend 20 s, Espace pour se débrancher.
+- **Dirigeable** : il flotte tout seul. Gaz pour avancer, manche pour monter ou descendre, Espace pour s'arrêter.
+- **Carnet de vol** (bouton du menu ou J) : heures, kilomètres, décollages et atterrissages par appareil, 33 badges.
+- **Grande Ville** (grande carte) : gratte-ciel, cathédrale, parc, stade, fête foraine, port avec ferry vers le Village
+  des Pêcheurs, port de pêche et ses chalutiers.
+- **Îlots** : phare habité, station météo, île au trésor, village de pêcheurs (grande carte).
+- **Plages et lac** : parasols, baigneurs, surfeurs, voiliers, planches à voile ; club nautique et canoës sur le lac.
+- **Campagne** : vaches, moutons et chevaux au pré, tracteurs aux champs, promeneurs.
+- **Volcan** : il fume, et entre en éruption toutes les 15 minutes environ (cendres, bombes, coulées de lave).
 - **Base militaire** (grande carte) : sur l'îlot voisin du porte-avions. Drapeau américain, piste, hangars, radar,
   casernes, hélisurfaces, carburant, aire d'embarquement des parachutistes, appareils garés, abris bétonnés, batterie
   antiaérienne, chars, ponton et patrouilleur ; c'est aussi un point de départ.
 - **Site de lancement** : sur un îlot. Environ toutes les 20 minutes, une fusée sort du hall, roule
   jusqu'au pas de tir et décolle.
 - **Routes et train** (grande carte) : des voitures, camionnettes, camions et cars circulent sur les routes
-  goudronnées ; un petit train à vapeur fait le tour de l'île le long de la côte et s'arrête dans 7 gares.
+  goudronnées ; un petit train à vapeur fait le tour de l'île le long de la côte et s'arrête dans 8 gares, où il
+  croise un train de marchandises ; barrières et feux aux passages à niveau.
 - **Animaux** : bancs de dauphins qui bondissent près des côtes, baleines qui soufflent au large, cerfs à l'orée
   des bois (ils s'enfuient si on les frôle).
 - **Planeur** : sans moteur, il part en altitude. Les gros nuages ronds marquent les thermiques : tourne dedans pour

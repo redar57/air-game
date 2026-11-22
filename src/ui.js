@@ -21,6 +21,9 @@ export class UI {
     $('daytime').addEventListener('click', () => this.emit('daytime'));
     $('mutebtn').addEventListener('click', () => this.emit('mute'));
     $('fuelbtn').addEventListener('click', () => this.emit('fuel'));
+    $('logbtn').addEventListener('click', () => this.emit('career'));
+    $('c-close').addEventListener('click', () => this.career(null));
+    $('career').addEventListener('click', (e) => { if (e.target.id === 'career') this.career(null); });
     $('mapbtn').addEventListener('click', () => this.emit('bigmap'));
     $('r-again').addEventListener('click', () => this.emit('again'));
     $('r-menu').addEventListener('click', () => this.emit('menu'));
@@ -35,7 +38,7 @@ export class UI {
       const b = document.createElement('button');
       b.className = 'item';
       const versions = p.family ? planes.filter((q) => q.family === p.family).length : 1;
-      const sub = versions > 1 ? `${versions} versions` : this.tagsOf(p).slice(0, 2).join(' · ') || (p.heli ? 'Hélicoptère' : 'Avion');
+      const sub = versions > 1 ? `${versions} versions` : this.tagsOf(p).slice(0, 2).join(' · ') || p.label || (p.heli ? 'Hélicoptère' : 'Avion');
       b.innerHTML = `<span class="ph"></span><span><b>${p.name}</b><small>${sub}</small></span>`;
       b.addEventListener('click', () => this.emit('plane-select', p.family && this.lastVariant[p.family] !== undefined ? this.lastVariant[p.family] : i));
       $('list').appendChild(b);
@@ -72,6 +75,7 @@ export class UI {
     $('keys').innerHTML = this.keysHtml.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
     this.gliderHint = `Pas de moteur : cherche les thermiques sous les gros nuages ronds et tourne dedans · le vario bipe quand ça monte · ${k('Espace')} aérofreins`;
     this.heliHint = `${k(L.KeyR)} gaz au-dessus de 50 % pour décoller · ${k(L.KeyW, L.KeyS)} avancer / reculer · ${k(L.KeyA, L.KeyD)} tourner · ${k(L.KeyQ, L.KeyE)} pivoter · ${k('Espace')} stationnaire`;
+    this.shipHint = `${k(L.KeyR)} gaz pour avancer · ${k(L.KeyS)} monter · ${k(L.KeyW)} descendre · ${k(L.KeyA, L.KeyD)} virer · ${k('Espace')} s'arrêter et rester suspendu`;
     this.flightHint = `${k(L.KeyR)} mettre les gaz · ${k(L.KeyS)} cabrer pour décoller · ${k(L.KeyA, L.KeyD)} incliner · ${k('C')} vue · ${k('Échap')} toutes les commandes`;
   }
 
@@ -87,6 +91,9 @@ export class UI {
     if (p.rescue) t.push('Treuil de secours');
     if (p.sling) t.push('Élingue');
     if (p.paras) t.push('Parachutistes');
+    if (p.drops) t.push('Largage de matériel');
+    if (p.airship) t.push("Plus léger que l'air");
+    if (p.missiles && p.afterburner) t.push('Ravitaillement en vol');
     if (p.heli) t.push('Vol stationnaire');
     if (p.missiles) t.push('Missiles');
     if (p.guns) t.push('Mitrailleuses');
@@ -107,6 +114,11 @@ export class UI {
       rows.push([k(L.KeyA, L.KeyD), 'Tourner']);
       rows.push([k(L.KeyQ, L.KeyE), 'Pivoter sur place']);
       rows.push([k('Espace'), 'Retour au vol stationnaire']);
+    } else if (p.airship) {
+      rows.push([k(L.KeyR, L.KeyF), 'Gaz : vitesse']);
+      rows.push([k(L.KeyW, L.KeyS), 'Descendre / monter']);
+      rows.push([k(L.KeyA, L.KeyD), 'Virer (lentement)']);
+      rows.push([k('Espace'), "S'arrêter, rester suspendu"]);
     } else {
       rows.push([k(L.KeyR, L.KeyF), 'Gaz']);
       rows.push([k(L.KeyW, L.KeyS), 'Piquer / cabrer']);
@@ -120,6 +132,8 @@ export class UI {
     if (p.rescue) rows.push([k('X'), 'Treuil : maintenir pour descendre le câble, relâcher pour remonter']);
     if (p.sling) rows.push([k('X'), "Accrocher / décrocher la charge (crochet près de l'anneau jaune)"]);
     if (p.paras) rows.push([k('X'), 'Faire sauter 4 parachutistes (plus de 250 m de haut)']);
+    if (p.drops) rows.push([k('X'), 'Larguer une charge (plus de 120 m de haut)']);
+    if (p.missiles && p.afterburner) rows.push(['Ravitailleur', 'Approche-toi du panier derrière lui, à la même vitesse']);
     if (p.id === 'canadair') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en rasant l'eau"]);
     rows.push(['🎮', p.heli ? 'Stick gauche · RT / LT gaz · LB / RB pivot' : 'Stick gauche · RT / LT gaz · LB / RB palonnier']);
     return rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
@@ -127,7 +141,7 @@ export class UI {
 
   showPlane(spec, index = this.sel) {
     this.sel = index;
-    $('pkind').textContent = spec.heli ? 'Hélicoptère' : 'Avion';
+    $('pkind').textContent = spec.label || (spec.heli ? 'Hélicoptère' : 'Avion');
     $('pname').textContent = spec.variant ? `${spec.name} · ${spec.variant}` : spec.name;
     this.showVariants(spec, index);
     $('pdesc').textContent = spec.desc;
@@ -251,6 +265,9 @@ export class UI {
     $('hud').hidden = !show; $('compass').hidden = !show; $('minimap').hidden = !show;
     if (!show) { this.approach(null); this.bigMap(false); }
   }
+  /** Carnet de vol : contenu HTML, ou null pour fermer. */
+  career(html) { $('career').hidden = !html; if (html) { $('c-body').innerHTML = html; $('c-body').scrollTop = 0; } }
+  get careerOpen() { return !$('career').hidden; }
   bigMap(show) { $('bigmap').hidden = !show; }
   get bigMapOpen() { return !$('bigmap').hidden; }
 

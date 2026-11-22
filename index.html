@@ -131,6 +131,29 @@
   #lock span { position: absolute; left: 62px; top: 0; font-size: .75rem; font-weight: 800; letter-spacing: .08em; color: #ffd34d; white-space: nowrap; }
   .off-ui #hud, .off-ui #hint, .off-ui #compass, .off-ui #papi, .off-ui #lock { opacity: 0 !important; }
 
+  /* ---------- carnet de vol ---------- */
+  #career { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8, 18, 32, .5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); z-index: 7; }
+  #career .box { width: min(860px, 94vw); max-height: 88vh; display: flex; flex-direction: column; padding: 20px 24px; border-radius: 20px; border: 1px solid var(--line); background: rgba(12, 24, 40, .86); }
+  #career header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+  #career h2 { margin: 0; letter-spacing: .1em; }
+  #career header button { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .1); color: #fff; font: inherit; cursor: pointer; }
+  #c-body { overflow-y: auto; padding-right: 6px; scrollbar-width: thin; }
+  #career .sums { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  #career .sums div { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .08); font-size: .78rem; opacity: .95; }
+  #career .sums b { display: block; font-size: 1.25rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+  #career table { width: 100%; border-collapse: collapse; margin: 14px 0 6px; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  #career th { text-align: right; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; opacity: .7; padding: 4px 8px; }
+  #career td { text-align: right; padding: 5px 8px; border-top: 1px solid rgba(255, 255, 255, .1); }
+  #career th:first-child, #career td:first-child { text-align: left; }
+  #career .none { opacity: .85; margin: 14px 0; }
+  #career h4 { margin: 14px 0 6px; font-size: .74rem; text-transform: uppercase; letter-spacing: .12em; opacity: .75; }
+  #career .badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 7px; }
+  #career .badge { padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .14); opacity: .6; font-size: .78rem; }
+  #career .badge b { display: block; font-size: .92rem; }
+  #career .badge span { display: block; margin-top: 2px; }
+  #career .badge i { display: block; margin-top: 4px; font-style: normal; font-size: .72rem; color: #2b2205; opacity: .75; }
+  #career .badge.on { opacity: 1; background: var(--accent); color: #2b2205; border-color: transparent; }
+
   /* ---------- pause ---------- */
   #pause { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8, 18, 32, .45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); z-index: 5; }
   #pause .box { width: min(560px, 92vw); padding: 24px 28px; border-radius: 20px; border: 1px solid var(--line); background: rgba(12, 24, 40, .72); }
@@ -201,16 +224,21 @@
     <h3>Livrée</h3>
     <div id="liveries"></div>
     <h3>Options</h3>
-    <div id="opts"><button id="mapbtn">Carte : petite</button><button id="fuelbtn">Carburant : non</button><button id="invert">Tangage : normal</button><button id="daytime">Heure : Plein jour</button><button id="mutebtn">Son : activé</button></div>
+    <div id="opts"><button id="mapbtn">Carte : petite</button><button id="logbtn">Carnet de vol</button><button id="fuelbtn">Carburant : non</button><button id="invert">Tangage : normal</button><button id="daytime">Heure : Plein jour</button><button id="mutebtn">Son : activé</button></div>
     <button id="go">Décoller <kbd>Entrée</kbd></button>
   </section>
   <div id="menukeys" class="shadowed">
     <span><kbd>↑</kbd> <kbd>↓</kbd> appareil</span>
     <span><kbd>←</kbd> <kbd>→</kbd> départ</span>
-    <span><kbd>T</kbd> heure · <kbd>I</kbd> tangage · <kbd>M</kbd> son · <kbd>F</kbd> incendies (bombardiers d'eau)</span>
+    <span><kbd>T</kbd> heure · <kbd>I</kbd> tangage · <kbd>M</kbd> son · <kbd>F</kbd> incendies (bombardiers d'eau) · <kbd>J</kbd> carnet de vol</span>
     <span>🎮 croix / stick : choisir · LB / RB : catégorie · A : décoller</span>
   </div>
 </div>
+
+<div id="career" hidden><div class="box">
+  <header><h2>CARNET DE VOL</h2><button id="c-close">Fermer <kbd>Échap</kbd></button></header>
+  <div id="c-body"></div>
+</div></div>
 
 <div id="pause" hidden>
   <div class="box">

@@ -211,6 +211,65 @@ PLANES.splice(PLANES.findIndex((p) => p.id === 'postier') + 1, 0, {
     stats: [0.2, 0.42, 0.9],
   });
 
+// Nouveaux appareils, toujours en fin de liste (l'appareil choisi est sauvegardé par son rang).
+PLANES.push({
+  id: 'bipoutre', name: 'Le Bipoutre',
+  desc: "Bimoteur de transport à double poutre, qui largue du matériel par l'arrière : jeeps, caisses et canons sous parachutes, avec X. Une croix au sol montre où la charge tombera. On recharge à l'arrêt sur une piste.",
+  maxSpeed: 118, stall: 31, accel: 4.6, pitchRate: 0.72, rollRate: 0.95, yawRate: 0.32, gLimit: 3.2,
+  brake: 6.5, maxSink: 6, gearH: 3.2, bellyH: 2.1, span: 33, len: 23, wingY: 1.9,
+  retract: true, floats: false, jet: false, drops: true,
+  cam: { dist: 46, height: 10.5 }, eye: [0, 1.15, -7.6],
+  inertia: 0.38, stallBite: 0.45, flaps: true, turb: 0.4,
+  engine: { kind: 'turboprop', count: 2, blades: 6, prop: 1080, spool: 0.8 },
+  paint: [0x8a8f63, 0x6b7048, 0x3d4130],
+  stats: [0.38, 0.28, 0.6],
+}, {
+  id: 'ligne', name: 'Le Long-Courrier', label: 'Avion de ligne',
+  desc: "Biréacteur de ligne, 160 passagers. Rapide, lourd, tout en douceur : prépare tes virages et tes descentes de loin, et pose-le comme une fleur.",
+  maxSpeed: 205, stall: 46, accel: 4.6, pitchRate: 0.46, rollRate: 0.55, yawRate: 0.22, gLimit: 2.6,
+  brake: 7.5, maxSink: 4.6, gearH: 4.0, bellyH: 2.7, span: 38, len: 41, wingY: -0.6,
+  retract: true, floats: false, jet: true,
+  cam: { dist: 70, height: 14 }, eye: [-0.5, 0.95, -18.3],
+  inertia: 0.5, stallBite: 0.5, flaps: true, turb: 0.25,
+  engine: { kind: 'jet', spool: 1.7 },
+  paint: [0xf6f6f2, 0x1f5fa8, 0xf2a22c],
+  stats: [0.75, 0.08, 0.4],
+}, {
+  id: 'pendulaire', name: 'Le Pendulaire', label: 'ULM',
+  desc: "Trois roues, une aile en toile et un petit moteur dans le dos. Très lent, en plein air : pour flâner au ras des plages et se poser dans un mouchoir de poche.",
+  maxSpeed: 30, stall: 11, accel: 4.2, pitchRate: 1.1, rollRate: 1.35, yawRate: 0.4, gLimit: 3.5,
+  brake: 5, maxSink: 5.5, gearH: 1.35, bellyH: 1.35, span: 10, len: 4.6, wingY: 2.2,
+  retract: false, floats: false, jet: false,
+  cam: { dist: 14, height: 3.6 }, eye: [0, 0.25, -0.55],
+  inertia: 0.28, stallBite: 0.1, flaps: false, turb: 1.5,
+  engine: { kind: 'piston', cyl: 2, idle: 1500, max: 5200, blades: 3, gear: 0.4, exhaust: 150, rough: 0.6 },
+  paint: [0xf08a2c, 0x2f5fa8, 0xf4f1ea],
+  stats: [0.08, 0.5, 0.9],
+}, {
+  id: 'autogire', name: "L'Autogire", label: 'Autogire',
+  desc: "Mi-avion, mi-hélicoptère : une hélice pousse, le rotor tourne tout seul dans le vent. Ne décroche presque pas, décolle et se pose très court.",
+  maxSpeed: 50, stall: 8, accel: 5.2, pitchRate: 1.35, rollRate: 2.0, yawRate: 0.9, gLimit: 3.2,
+  brake: 7, maxSink: 7.5, gearH: 1.2, bellyH: 1.2, span: 8.6, len: 5, wingY: 1.9,
+  retract: false, floats: false, jet: false,
+  cam: { dist: 14, height: 3.6 }, eye: [0, 0.4, -0.75],
+  inertia: 0.2, stallBite: 0, flaps: false, turb: 0.8,
+  engine: { kind: 'piston', cyl: 4, idle: 1400, max: 5400, blades: 3, gear: 0.42, exhaust: 130, rough: 0.5 },
+  paint: [0xd8312b, 0x26292d, 0xf4f1ea],
+  stats: [0.16, 0.75, 0.95],
+}, {
+  id: 'dirigeable', name: 'Le Dirigeable', label: 'Dirigeable',
+  desc: "Plus léger que l'air : il ne décroche jamais et tient en l'air tout seul. Gaz pour avancer, manche pour monter et descendre, Espace pour s'arrêter et rester suspendu. Il vire lentement.",
+  maxSpeed: 34, stall: 3, accel: 1.2, pitchRate: 0.3, rollRate: 0.3, yawRate: 0.3, gLimit: 1.6,
+  tilt: 0.42, turnRate: 0.26,
+  brake: 4, maxSink: 5, gearH: 3.1, bellyH: 3.1, span: 13, len: 46, wingY: 6.5,
+  retract: false, floats: false, jet: false, airship: true,
+  cam: { dist: 66, height: 15 }, eye: [0, -0.7, -6.2],
+  inertia: 1.1, stallBite: 0, flaps: false, turb: 0.5,
+  engine: { kind: 'piston', cyl: 6, idle: 600, max: 2300, blades: 3, gear: 1, exhaust: 80, rough: 0.35 },
+  paint: [0xe9edf0, 0xd8312b, 0x2b3440],
+  stats: [0.1, 0.05, 1],
+});
+
 for (const p of PLANES) p.takeoff = p.stall * 1.12;
 
 /** Livrées propres à chaque appareil : remplacent dans l'ordre ses couleurs « paint ». */
@@ -230,6 +289,11 @@ const LIVERY_SETS = {
   birotor: [['Marine', [0x5d6e80, 0x3f4c5a, 0xe9e4d4]], ['Sable', [0xc8a46a, 0x9a7a4a, 0xe9e4d4]], ['Secours', [0xd8312b, 0xf3f1ec, 0x2b2e33]], ['Gris', [0x9aa3ab, 0x6b7480, 0xf3f1ec]], ['Jaune', [0xf2c230, 0x26292d, 0xf3f1ec]]],
   racer: [['Or', [0xd9a92b, 0x26292d]], ['Bleu course', [0x1f4f9c, 0xf5f3ee]], ['Vert anglais', [0x1f5a3a, 0xf2e7c9]], ['Noir et or', [0x1b1d21, 0xd9a92b]], ['Orange', [0xf27a1f, 0x1b1d21]]],
   epandeur: [['Rouge ferme', [0xc8402f, 0xf4f1ea, 0x2b2e33]], ['Bleu', [0x2f6fb5, 0xf2c230, 0xf4f1ea]], ['Vert pomme', [0x8cc63f, 0x2f5a2a, 0xf4f1ea]], ['Orange', [0xf08a2c, 0x2b2e33, 0xf4f1ea]], ['Argent', [0xbfc4c9, 0xc8402f, 0x2b2e33]]],
+  bipoutre: [['Désert', [0xc8a46a, 0x9a7a4a, 0x5a4a35]], ['Argent', [0xbfc4c9, 0x8d969c, 0xd8312b]], ['Humanitaire', [0xf2f2ee, 0x2f7fdc, 0x2b3440]], ['Hiver', [0xeeeeea, 0x9aa3ab, 0x2b3440]], ['Marine', [0x3f5068, 0x2b3a4f, 0xf2c230]]],
+  ligne: [['Soleil', [0xf6f6f2, 0xe0533d, 0xf2c230]], ['Lagon', [0xf6f6f2, 0x1fa8a0, 0x24467a]], ['Nuit', [0x24304a, 0xf2c230, 0xf4f1ea]], ['Forêt', [0xf6f6f2, 0x2f6b47, 0xc9d94a]], ['Prune', [0xf2eef4, 0x6b2f78, 0xe0457b]]],
+  pendulaire: [['Citron', [0xf2c230, 0x2b2e33, 0xf4f1ea]], ['Menthe', [0x2fae7a, 0xf4f1ea, 0x26292d]], ['Cerise', [0xd8312b, 0xf4f1ea, 0x26292d]], ['Ciel', [0x5fb8e8, 0xf2c230, 0xf4f1ea]], ['Violet', [0x8e5cc9, 0xf2c230, 0xf4f1ea]]],
+  autogire: [['Jaune', [0xf2c230, 0x26292d, 0xf4f1ea]], ['Bleu', [0x2f6fb5, 0x26292d, 0xf4f1ea]], ['Vert', [0x2f8a5a, 0x26292d, 0xf4f1ea]], ['Noir', [0x26292d, 0xf2c230, 0xd8312b]], ['Blanc', [0xf4f1ea, 0xd8312b, 0x2f6fb5]]],
+  dirigeable: [['Or', [0xf2d28a, 0x8a5a33, 0x4a3a2a]], ['Azur', [0x8fc8ee, 0xf4f1ea, 0x24467a]], ['Corail', [0xf4b0a0, 0xd8432f, 0x4a2b2b]], ['Nuit', [0x2b3a55, 0xf2c230, 0x1b1d21]], ['Citron vert', [0xcfe38a, 0x2f8a5a, 0x2b3a2f]]],
 };
 const ORIGINAL = { name: "D'origine", colors: null };
 /** Livrées proposées pour un appareil (la première est toujours celle d'origine). */

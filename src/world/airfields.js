@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MTN, rawBase, BIG, LAKE, heightAt } from './terrain.js';
 import { mergeColored, xform, toLocal, toWorld, clamp, smoothstep, lerp } from '../util.js';
 import { addBox } from './colliders.js';
+import { placeZones, definePlaces } from './places.js';
 
 export const runways = [];
 export const carrier = { x: 0, z: 0, yaw: -Math.PI / 2, deckY: 21, halfLen: 145, halfWid: 30 };
@@ -28,7 +29,7 @@ export const extraPumps = [];
 /** Objets animés à chaque image : { obj, rate } tourne sur lui-même (antenne), { tick(t) } fait ce qu'il veut. */
 export const spinners = [];
 /** Zones à aplanir : les pistes, plus l'esplanade de la base nautique. */
-export function flatZones() { return [...runways, seaBase.zone, launchSite].filter(Boolean); }
+export function flatZones() { return [...runways, seaBase.zone, launchSite, ...placeZones].filter(Boolean); }
 /** Matériaux des balises lumineuses (leur opacité suit la tombée de la nuit). */
 export const nightLights = [];
 
@@ -119,6 +120,7 @@ export function defineAirfields() {
   toWorld(main, fuelStation.lx, fuelStation.lz, _w);
   fuelStation.x = _w.x; fuelStation.z = _w.z; fuelStation.yaw = main.yaw; fuelStation.rw = main;
 
+  definePlaces();
   carrier.x = BIG ? ax0 : -1900;
   carrier.z = zc + (BIG ? 3200 : 2000);
   return runways;

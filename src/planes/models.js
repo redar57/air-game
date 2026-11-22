@@ -687,7 +687,146 @@ function planeur(spec) {
   return m;
 }
 
-const BUILDERS = { planeur, tourisme, postier, biplan, epandeur, hydravion, canadair, chasseur, jet, cargo, helico, secours, libellule, birotor, racer };
+// ---------------------------------------------------------------------------
+/** Roue avec sa fourche. */
+function leg(g, x, yTop, yWheel, z, r, w, color = METAL) { bar(g, [x, yTop, z], [x, yWheel, z], Math.max(0.08, r * 0.35), color); wheel(g, r, w, x, yWheel, z); }
+
+// Transport à double poutre : nacelle centrale courte ouverte à l'arrière, deux turbines prolongées par les poutres
+function bipoutre(spec) {
+  const m = base(), { hull, always } = m, G = 0x8a8f63, D = 0x6b7048, N = 0x3d4130;
+  hull.add(tube(0.9, 1.75, -11.3, -9, G, { y: -0.2, sy: 1.0 }), tube(1.75, 1.85, -9, 3.6, G, { sy: 1.08, seg: 10 }), tube(1.85, 1.2, 3.6, 6.4, G, { y: 0.35, sy: 1.0, seg: 10 }));
+  hull.add(tube(0.35, 0.9, -11.8, -11.3, D, { y: -0.2 }));
+  hull.add(box(2.4, 0.75, 1.3, GLASS, 0, 1.15, -8.6), box(3.1, 0.6, 0.9, GLASS, 0, 0.95, -7.5));
+  for (const z of [-5, -3.2, -1.4, 0.4, 2.2]) hull.add(box(3.74, 0.5, 0.6, GLASS, 0, 0.6, z));
+  hull.add(box(2.3, 2.1, 0.2, N, 0, -0.1, 6.45)); const ramp = box(2.3, 0.16, 3, N, 0, -1.35, 5.1); ramp.rotation.x = -0.2; hull.add(ramp);
+  for (const s of [-1, 1]) {
+    hull.add(box(0.06, 1.3, 1.2, D, s * 1.86, 0, -6.6));
+    always.add(tube(0.5, 0.85, -6.2, -5.4, D, { x: s * 5.2, y: 1.5 }), tube(0.85, 0.8, -5.4, 0.5, G, { x: s * 5.2, y: 1.5 }), tube(0.8, 0.32, 0.5, 11.2, G, { x: s * 5.2, y: 1.5 }));
+    always.add(box(0.45, 0.6, 1.4, N, s * 5.2, 0.75, -4.4));
+    finS(m, hull, [3.6, 3.0, 1.9, 0.22, 1.0], G, s * 5.2, 1.4, 10);
+    hull.add(box(0.2, 1.2, 1.8, D, s * 5.2, 0.8, 10.6));
+    m.props.push(makeProp(always, 2.05, 6, s * 5.2, 1.5, -6.3));
+  }
+  wingS(m, hull, [5.1, 2.5, 2.5, 0.22, 0], G, 0.05, 3.7, 10.6, [{ kind: 'elevator', t0: 0.02, t1: 0.98 }], 0.35);
+  wingS(m, always, [15.6, 3.8, 2.0, 0.5, 0.5, 0.7], G, 0.7, 1.9, -2.2, [{ kind: 'flap', t0: 0.04, t1: 0.6 }, { kind: 'aileron', t0: 0.63, t1: 0.97 }], 0.24);
+  always.add(box(2.6, 0.6, 3.7, G, 0, 1.95, -2.2));
+  const gear = new THREE.Group();
+  for (const s of [-1, 1]) { leg(gear, s * 5.2, 1, -2.6, 0.6, 0.6, 0.42); wheel(gear, 0.6, 0.42, s * 4.6, -2.6, 0.6); }
+  leg(gear, 0.22, -1.2, -2.75, -8.6, 0.45, 0.24); wheel(gear, 0.45, 0.24, -0.22, -2.75, -8.6);
+  hull.add(gear); m.gear = gear;
+  m.cockpit = makeCockpit(spec.eye, { w: 2.0, frame: true, nose: { w: 1.9, len: 1.8, color: G, drop: 0.12 } });
+  m.tips = [[16.2, 2.6, -1.4], [-16.2, 2.6, -1.4]];
+  return m;
+}
+
+// Biréacteur de ligne
+function ligne(spec) {
+  const m = base(), { hull, always } = m, W = 0xf6f6f2, B = 0x1f5fa8, O = 0xf2a22c;
+  hull.add(tube(0.35, 1.35, -20.6, -19, W, { y: -0.35, seg: 12 }), tube(1.35, 2, -19, -16.4, W, { y: -0.1, seg: 12 }), tube(2, 2, -16.4, 9.5, W, { seg: 12 }), tube(2, 0.45, 9.5, 20.4, W, { y: 0.75, seg: 12 }));
+  hull.add(box(2.5, 0.62, 0.9, GLASS, 0, 0.85, -18));
+  hull.add(tube(2.02, 2.02, -16.4, 9.5, B, { seg: 12, sy: 0.34, y: -1.2, sx: 0.93 }));
+  for (const s of [-1, 1]) {
+    for (let z = -14; z < 9; z += 0.95) if (Math.abs(z + 2.5) > 0.6) hull.add(box(0.06, 0.36, 0.28, GLASS, s * 1.97, 0.35, z));
+    for (const z of [-15.3, 8.6]) hull.add(box(0.06, 1.5, 0.8, O, s * 1.96, 0.1, z));
+    hull.add(box(0.07, 0.16, 26, O, s * 1.95, -0.28, -3.2));
+  }
+  finS(m, hull, [6.6, 5.4, 2.6, 0.4, 3.4], B, 0, 1.6, 15.2, 0, 0.3, 0.06, 0.94);
+  hull.add(box(0.44, 1.1, 2.6, O, 0, 5.6, 17.4));
+  wingS(m, hull, [6.6, 3.4, 1.5, 0.28, 2.2, 0.5], W, 0.5, 1.1, 17, [{ kind: 'elevator', t0: 0.08, t1: 1 }], 0.32);
+  wingS(m, always, [17.4, 6.8, 1.7, 0.75, 6.2, 1.3, 0.4], W, 1.4, -0.9, -1, [{ kind: 'flap', t0: 0.05, t1: 0.66 }, { kind: 'aileron', t0: 0.7, t1: 0.97 }], 0.2);
+  always.add(box(3.4, 1.1, 8, W, 0, -1.2, -0.6));
+  for (const s of [-1, 1]) {
+    fin(always, wingGeo(1.9, 1.6, 0.7, 0.14, 1.1), B, s * 18.8, 0.4, 5.2, s * 0.25);
+    const x = s * 6.4; always.add(box(0.3, 0.9, 3, W, x, -1.05, -2.4), tube(1.25, 1.3, -5.6, -4.8, B, { x, y: -1.9, seg: 12 }), tube(1.3, 0.95, -4.8, -1.6, B, { x, y: -1.9, seg: 12 }), tube(1.02, 1.02, -5.7, -5.6, DARK, { x, y: -1.9, seg: 12 }), tube(0.62, 0.3, -1.6, -0.6, DARK, { x, y: -1.9 }));
+  }
+  const gear = new THREE.Group();
+  for (const s of [-1, 1]) for (const z of [0.7, 2]) { leg(gear, s * 2.9, -1.4, -3.4, z, 0.6, 0.45); wheel(gear, 0.6, 0.45, s * 2.2, -3.4, z); }
+  leg(gear, 0.26, -1.6, -3.55, -15.6, 0.45, 0.26); wheel(gear, 0.45, 0.26, -0.26, -3.55, -15.6);
+  hull.add(gear); m.gear = gear;
+  m.cockpit = makeCockpit(spec.eye, { w: 1.9, frame: true, nose: { w: 1.7, len: 0.9, color: W, drop: 0.16 } });
+  m.tips = [[18.9, 0.6, 5.4], [-18.9, 0.6, 5.4]];
+  return m;
+}
+
+/** Panneau triangulaire (toile) double face. */
+function sheet(parent, pts, color) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3)); g.computeVertexNormals();
+  parent.add(new THREE.Mesh(g, M(color, { side: THREE.DoubleSide })));
+}
+// ULM pendulaire : chariot à trois roues sous une aile delta en toile, hélice propulsive
+function pendulaire(spec) {
+  const m = base(), { hull, always } = m, O = 0xf08a2c, B = 0x2f5fa8, W = 0xf4f1ea;
+  for (const s of [-1, 1]) { // demi-aile : bord d'attaque, deux laizes
+    sheet(always, [[0, 2.35, -1.7], [s * 5, 2.1, 1.1], [0, 2.3, 0.2], [s * 5, 2.1, 1.1], [s * 2.6, 2.16, 1.35], [0, 2.3, 0.2]], O);
+    sheet(always, [[0, 2.3, 0.2], [s * 2.6, 2.16, 1.35], [0, 2.28, 1.5]], B);
+    bar(always, [0, 2.36, -1.74], [s * 5, 2.1, 1.1], 0.09, W);
+    bar(always, [s * 0.1, 2.2, -0.1], [s * 2.9, 2.16, 0.1], 0.06, METAL);
+    bar(always, [s * 0.75, 0.5, -0.85], [0, 2.2, -0.2], 0.05, METAL); bar(always, [s * 0.75, 0.5, -0.85], [s * 2.9, 2.14, 0.1], 0.025, DARK);
+  }
+  bar(always, [0, 2.4, -1.7], [0, 2.3, 1.5], 0.07, W); bar(always, [-0.75, 0.5, -0.85], [0.75, 0.5, -0.85], 0.05, METAL);
+  bar(always, [0, 2.25, 0.05], [0, -0.5, 0.5], 0.09, METAL);
+  hull.add(tube(0.12, 0.42, -1.9, -0.9, B, { y: -0.35, sy: 0.9 }), tube(0.42, 0.36, -0.9, 0.5, B, { y: -0.4, sy: 0.8 }));
+  hull.add(box(0.5, 0.5, 0.06, GLASS, 0, 0.08, -1.15), box(0.46, 0.5, 0.14, DARK, 0, -0.05, 0.1));
+  hull.add(blob(0.22, 0xd9a583, 0, 0.42, -0.15, 1, 1.1, 1), blob(0.25, O, 0, 0.52, -0.12, 1, 0.8, 1), box(0.5, 0.55, 0.3, 0x2b3440, 0, 0.0, -0.12)); // pilote
+  hull.add(box(0.5, 0.45, 0.6, DARK, 0, 0.1, 0.75));
+  bar(hull, [0, -0.6, -1.4], [0, -1.05, -1.6], 0.07, METAL); wheel(hull, 0.26, 0.14, 0, -1.09, -1.6);
+  bar2(hull, [0.3, -0.5, 0.4], [0.85, -1.05, 0.7], 0.07, W); wheel(hull, 0.28, 0.16, 0.92, -1.07, 0.7); wheel(hull, 0.28, 0.16, -0.92, -1.07, 0.7);
+  m.props.push(makeProp(always, 0.85, 3, 0, 0.15, 1.15));
+  m.cockpit = makeCockpit(spec.eye, { w: 0.6, frame: false, nose: { w: 0.5, len: 0.7, color: B, drop: 0.25 } });
+  m.tips = [[5, 2.1, 1.1], [-5, 2.1, 1.1]];
+  return m;
+}
+
+// Autogire biplace ouvert : rotor libre, hélice propulsive, double dérive
+function autogire(spec) {
+  const m = base(), { hull, always } = m, R = 0xd8312b, K = 0x26292d, W = 0xf4f1ea;
+  hull.add(tube(0.1, 0.5, -2.2, -1.3, R, { y: -0.15, sy: 0.9 }), tube(0.5, 0.55, -1.3, 0.2, R, { y: -0.12, sy: 1.0 }), tube(0.55, 0.2, 0.2, 1.2, R, { y: -0.05, sy: 1.0 }));
+  hull.add(box(0.7, 0.4, 0.06, GLASS, 0, 0.42, -1.2), box(0.62, 0.5, 0.12, K, 0, 0.35, 0.0), box(1.02, 0.1, 1.6, W, 0, -0.2, -0.7));
+  hull.add(blob(0.22, 0xd9a583, 0, 0.62, -0.45, 1, 1.1, 1), blob(0.26, W, 0, 0.72, -0.42, 1, 0.85, 1), box(0.5, 0.5, 0.3, 0x2b3440, 0, 0.2, -0.42));
+  hull.add(box(0.6, 0.5, 0.8, K, 0, 0.35, 0.75));
+  bar(always, [0, 0.3, 0.25], [0, 1.9, 0.1], 0.14, R); bar(hull, [0, -0.45, 0.8], [0, -0.35, 2.4], 0.14, R);
+  wingS(m, hull, [0.95, 0.75, 0.65, 0.07, 0.05], W, 0, -0.32, 2.3, [{ kind: 'elevator', t0: 0.05, t1: 1 }], 0.4);
+  for (const s of [-1, 1]) finS(m, hull, [1.25, 0.95, 0.6, 0.07, 0.35], R, s * 0.95, -0.5, 2.25, 0, 0.4);
+  bar(hull, [0, -0.5, -1.5], [0, -0.95, -1.65], 0.06, METAL); wheel(hull, 0.24, 0.13, 0, -0.96, -1.65);
+  bar2(hull, [0.4, -0.4, 0.3], [0.95, -0.9, 0.4], 0.07, W); wheel(hull, 0.26, 0.15, 1.02, -0.94, 0.4); wheel(hull, 0.26, 0.15, -1.02, -0.94, 0.4);
+  rotorAt(m, always, 4.3, 2, 0.22, 0, 1.98, 0.1, [-Math.PI / 2 + 0.12, 0, 0]);
+  m.props.push(makeProp(always, 0.85, 3, 0, 0.3, 1.25));
+  m.cockpit = makeCockpit(spec.eye, { w: 0.8, frame: false, nose: { w: 0.7, len: 0.8, color: R, drop: 0.2 } });
+  m.tips = [[4.2, 1.98, 0.1], [-4.2, 1.98, 0.1]];
+  return m;
+}
+
+// Dirigeable souple : enveloppe à fuseaux, nacelle vitrée, deux moteurs orientables, empennage en croix
+function dirigeable(spec) {
+  const m = base(), { hull, always } = m, E = 0xe9edf0, R = 0xd8312b, N = 0x2b3440, cy = 6.6;
+  const prof = [[0.05, 23], [1.6, 22.2], [3.4, 19.5], [5.0, 15], [6.1, 9], [6.5, 2], [6.3, -6], [5.2, -13], [3.4, -18.5], [1.4, -22], [0.05, -22.8]];
+  for (let k = 0; k < 16; k++) { // fuseaux alternés, avec une bande de couleur en bas
+    const g = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 1, (k / 16) * 6.2832, 6.2832 / 16);
+    g.rotateX(-Math.PI / 2); // la pointe avant vers -Z
+    const mesh = new THREE.Mesh(g, M(k % 4 === 0 ? R : E, { side: THREE.DoubleSide })); mesh.position.y = cy; always.add(mesh);
+  }
+  always.add(blob(1.2, R, 0, cy, -22.2, 1, 1, 0.9));
+  // empennage
+  for (const s of [-1, 1]) { const w = new THREE.Mesh(wingGeo(5.2, 6, 3.4, 0.3, 1.6), M(R)); w.position.set(s * 2.6, cy, 17.6); w.scale.x = s; always.add(w); }
+  finS(m, always, [5.2, 6, 3.4, 0.3, 1.6], R, 0, cy + 2.6, 17.6, 0, 0.3);
+  const low = new THREE.Mesh(wingGeo(4.4, 5.4, 3.4, 0.3, 1.6), M(R)); low.position.set(0, cy - 2.7, 17.6); low.rotation.z = -Math.PI / 2; always.add(low);
+  // nacelle
+  hull.add(tube(0.7, 1.25, -7.6, -6.2, N, { y: -1, sy: 1.05 }), tube(1.25, 1.25, -6.2, 3.2, N, { y: -1, sy: 1.05 }), tube(1.25, 0.4, 3.2, 5.6, N, { y: -0.8, sy: 1.05 }));
+  hull.add(box(2.4, 0.8, 1.5, GLASS, 0, -0.55, -6.5)); for (let z = -4.6; z <= 2.4; z += 1.15) hull.add(box(2.56, 0.75, 0.75, GLASS, 0, -0.6, z));
+  hull.add(box(2.5, 0.2, 10, R, 0, -1.3, -1.6), box(1.4, 1.2, 9, N, 0, 0.3, -1.4));
+  for (const s of [-1, 1]) {
+    bar(always, [s * 1.1, -0.9, 1.2], [s * 3, -0.7, 1.2], 0.2, METAL); always.add(tube(0.35, 0.5, -0.4, 0.4, R, { x: s * 3, y: -0.7 }), tube(0.5, 0.2, 0.4, 2.2, R, { x: s * 3, y: -0.7 }));
+    m.props.push(makeProp(always, 1.2, 3, s * 3, -0.7, -0.5));
+  }
+  leg(hull, 0, -2, -2.75, 1, 0.35, 0.25); leg(hull, 0, -2, -2.75, -4, 0.35, 0.25);
+  // câbles d'amarrage sous le nez
+  bar(always, [0, cy - 1.5, -21], [0, cy - 8, -20], 0.05, DARK);
+  m.cockpit = makeCockpit(spec.eye, { w: 2.0, frame: true, nose: { w: 1.6, len: 0.5, color: N, drop: 0.35 } });
+  m.tips = [[6, cy, 17], [-6, cy, 17]];
+  return m;
+}
+
+const BUILDERS = { bipoutre, ligne, pendulaire, autogire, dirigeable, planeur, tourisme, postier, biplan, epandeur, hydravion, canadair, chasseur, jet, cargo, helico, secours, libellule, birotor, racer };
 const cache = new Map();
 
 /** Construit (une seule fois par livrée) le modèle 3D d'un appareil. */

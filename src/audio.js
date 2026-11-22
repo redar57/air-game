@@ -358,6 +358,47 @@ export class Sound {
     this.rocketGain.gain.setTargetAtTime(k * (0.85 + Math.random() * 0.3), t, 0.15); // crépitement
   }
 
+  /** Trains, vus de la caméra : souffle de la vapeur, moteur diesel, sifflet et cloche des passages à niveau. */
+  trains(rails, cam, on, dt) {
+    if (!this.ctx || !rails) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (!this.dieselGain) {
+      const o = ctx.createOscillator(), o2 = ctx.createOscillator(), lp = ctx.createBiquadFilter();
+      o.type = 'sawtooth'; o.frequency.value = 46; o2.type = 'square'; o2.frequency.value = 69.5; lp.type = 'lowpass'; lp.frequency.value = 220;
+      this.dieselGain = ctx.createGain(); this.dieselGain.gain.value = 0;
+      o.connect(lp); o2.connect(lp); lp.connect(this.dieselGain).connect(this.master); o.start(); o2.start();
+    }
+    for (const T of rails.trains) {
+      const d = T.pos.distanceTo(cam), k = on ? 1 / (1 + (d / 90) ** 1.5) : 0;
+      if (T.kind === 'freight') this.dieselGain.gain.setTargetAtTime(k * 0.35, t, 0.2);
+      else if (k > 0.03 && (T.chuff = (T.chuff || 0) - dt) <= 0) { // quatre coups par tour de roue, chuintement à l'arrêt
+        T.chuff = T.v > 0.5 ? Math.max(0.11, 1.25 / T.v) : 1.6;
+        if (T.v > 0.5) { this.burst(750, 0.16, k * 0.8); this.burst(2600, 0.09, k * 0.25, this.master, 'bandpass', 0.8); } else this.burst(4200, 1.1, k * 0.2, this.master, 'bandpass', 0.6);
+      }
+      if (T.horn) { if (on && d < 2600) this.trainHorn(T.kind, T.horn, Math.min(1, 1.4 / (1 + d / 260)), Math.min(4, d / C_SOUND)); T.horn = 0; }
+    }
+    this.bellT = (this.bellT || 0) - dt;
+    if (on && this.bellT <= 0) {
+      this.bellT = 0.5;
+      let near = 1e9;
+      for (const c of rails.crossings) if (c.shut) near = Math.min(near, Math.hypot(c.x - cam.x, c.y - cam.y, c.z - cam.z));
+      if (near < 500) this.tone(1180, 0.45, 0.12 / (1 + (near / 60) ** 1.5), 'triangle');
+    }
+  }
+  tone(f, dur, gain, type = 'sine', delay = 0, attack = 0.005) {
+    const ctx = this.ctx, t = ctx.currentTime + delay, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(gain, 0.0002), t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  /** Sifflet à vapeur (accord qui monte) ou trompe de diesel ; n coups. */
+  trainHorn(kind, n, gain, delay = 0) {
+    const chord = kind === 'steam' ? [587, 740, 880, 1109] : [233, 294, 349];
+    for (let k = 0; k < n; k++) for (const f of chord) this.tone(f, k === n - 1 ? 1.5 : 0.7, gain * (kind === 'steam' ? 0.05 : 0.09), kind === 'steam' ? 'sine' : 'sawtooth', delay + k * 0.9, 0.08);
+    if (kind === 'steam') setTimeout(() => this.burst(3200, 1.2, gain * 0.12, this.master, 'bandpass', 0.7), delay * 1000);
+  }
+
   /** Panne : gros raté, toux du moteur. */
   failure() {
     this.burst(400, 0.35, 1.0, this.planeBus);

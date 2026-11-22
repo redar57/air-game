@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { heightAt, normalAt, groundHeight, setCorridor, HALF, BIG } from './terrain.js';
 import { runways, seaBase } from './airfields.js';
+import { city, cityPort, fishPort } from './places.js';
 import { toLocal, toWorld, lerp, smoothstep } from '../util.js';
 
 // Campagne de la grande île : quelques villages reliés par des chemins de terre, et les champs de la Prairie
@@ -185,13 +186,18 @@ export function planRoutes() {
   const lac = V('Village du Lac', 2950, 250, 16, 11), sud = V('Bourg du Sud', -1500, 4700, 22, 12);
   const port = V('Port de la Baie', -5000, 1800, 14, 13), col = V('Hameau du Col', -1700, -3300, 8, 14);
   const pre = V('Village de la Prairie', 9000, 1500, 12, 15);
-  country.villages.push(lac, sud, port, col, pre);
+  // la grande ville compte comme un bourg (étiquette, voitures au pas, arbres écartés), mais ses rues sont à part
+  const ville = { name: 'Grande Ville', x: city.x, z: city.z, r: 520, count: 0, seed: 16, city: true };
+  country.villages.push(lac, sud, port, col, pre, ville);
+  for (let x = -city.halfWid; x <= city.halfWid; x += 20) for (let z = -city.halfLen; z <= city.halfLen; z += 20) mark(city.x + x, city.z + z, 12, 3);
+  for (const p of [cityPort, fishPort]) { const w = {}; for (let a = -p.halfWid; a <= p.halfWid; a += 15) for (let b = -p.halfLen; b <= p.halfLen; b += 15) { toWorld(p, a, b, w); mark(w.x, w.z, 10, 3); } }
   const ap = rw('aeroport'), pr = rw('prairie'), bz = rw('baie');
   const end = (r, f) => { const w = {}; toWorld(r, r.width / 2 + 60, f * r.length / 2, w); return w; };
   // la voie d'abord : les routes la traversent mais évitent de la longer
-  planRail([...[sud, port, pre].map((v) => [v.name, v.x, v.z]), ["Aéroport", ap.x, ap.z], ['Plage du Nord', 1500, -8500], ['Cap du Nord-Est', 10500, -3200], ['Pied du Volcan', -11500, -3500]]);
+  planRail([...[sud, port, pre].map((v) => [v.name, v.x, v.z]), ['Grande Ville', city.x - city.halfWid, city.z], ["Aéroport", ap.x, ap.z], ['Plage du Nord', 1500, -8500], ['Cap du Nord-Est', 10500, -3200], ['Pied du Volcan', -11500, -3500]]);
+  const gate = (a, b) => ({ x: city.x + a * city.halfWid, z: city.z + b * city.halfLen });
   // routes goudronnées entre les bourgs et les terrains, chemins de terre vers le col et la base nautique
-  const links = [[end(ap, -0.6), lac, 1], [lac, pre, 1], [pre, end(pr, 0.55), 1], [lac, sud, 1], [sud, port, 1], [port, end(bz, 0.4), 1], [lac, col, 0]];
+  const links = [[end(ap, -0.6), lac, 1], [lac, pre, 1], [pre, end(pr, 0.55), 1], [lac, sud, 1], [sud, gate(0, 1), 1], [lac, gate(1, 0), 1], [gate(0, -1), port, 1], [gate(-1, 0), { x: cityPort.x + 20, z: cityPort.z }, 1], [port, toWorld(fishPort, 40, 0, {}), 1], [port, end(bz, 0.4), 1], [lac, col, 0]];
   if (seaBase.active) links.push([lac, toWorld(seaBase, 70, -125, {}), 0]);
   for (const [a, b, paved] of links) {
     const path = findPath(a, b);
@@ -250,7 +256,8 @@ function coastLoop() {
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const x = at(i), z = at(j);
     const strip = runways.some((r) => { toLocal(r, x, z, l); return Math.abs(l.x) < r.halfWid + RAIL.clear && Math.abs(l.z) < r.halfLen + RAIL.clear; });
-    m[i + j * n] = sea[i + j * n] || strip ? 0 : 1;
+    const dock = [cityPort, fishPort].some((r) => { toLocal(r, x, z, l); return Math.abs(l.x) < r.halfWid + 45 && Math.abs(l.z) < r.halfLen + 45; });
+    m[i + j * n] = sea[i + j * n] || strip || dock ? 0 : 1;
   }
   for (let it = 0; it < 3; it++) for (const d of [1, n]) { // trois moyennes glissantes = flou gaussien
     const o = new Float32Array(n * n), R = RAIL.blur;
@@ -353,7 +360,13 @@ function planRail(stops) {
   // gares : au point de la voie le plus proche de chaque lieu desservi
   const stations = stops.map(([name, x, z]) => {
     let bi = 0, bd = Infinity;
-    p.forEach((q, i) => { const d = Math.hypot(q.x - x, q.z - z) + (Math.abs(y[i] - g[i]) > 4 ? 250 : 0); if (d < bd) { bd = d; bi = i; } });
+    p.forEach((q, i) => {
+      // voie d'évitement de part et d'autre du quai : on évite viaducs et tunnels sur toute sa longueur
+      let gap = 0;
+      for (let k = -22; k <= 22; k += 4) gap = Math.max(gap, Math.abs(y[(i + k + n) % n] - g[(i + k + n) % n]));
+      const d = Math.hypot(q.x - x, q.z - z) + (gap > 10 ? 900 : gap > 5 ? 300 : 0);
+      if (d < bd) { bd = d; bi = i; }
+    });
     return { name, i: bi };
   }).sort((a, b) => a.i - b.i);
   country.rail = { pts: p.map((q, i) => ({ x: q.x, z: q.z, y: y[i], g: g[i] })), stations };
@@ -366,13 +379,22 @@ export function buildCountry(scene) {
   const roadMat = new THREE.MeshLambertMaterial({ color: 0xc9b07e, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   const asphalt = new THREE.MeshLambertMaterial({ map: asphaltTexture(), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   for (const path of country.roads) {
+    // aux passages à niveau, la route monte en pente douce à hauteur des rails
+    path.lift = new Float32Array(path.length);
+    path.forEach((p, i) => {
+      for (const q of country.rail ? country.rail.pts : []) {
+        if (Math.abs(q.x - p.x) > 45 || Math.abs(q.z - p.z) > 45) continue;
+        const up = q.y - heightAt(q.x, q.z);
+        if (up > 0 && up < 5) path.lift[i] = Math.max(path.lift[i], up * smoothstep(44, 9, Math.hypot(q.x - p.x, q.z - p.z)));
+      }
+    });
     const pos = [], W = path.paved ? 3.8 : 2.6;
     const len = [0];
     for (let i = 0; i < path.length; i++) {
       const a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)];
       let dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
       const p = path[i], lx = p.x - dz * W, lz = p.z + dx * W, rx = p.x + dz * W, rz = p.z - dx * W;
-      pos.push([lx, heightAt(lx, lz) + 0.3, lz, rx, heightAt(rx, rz) + 0.3, rz]);
+      pos.push([lx, heightAt(lx, lz) + 0.3 + path.lift[i], lz, rx, heightAt(rx, rz) + 0.3 + path.lift[i], rz]);
       if (i) len.push(len[i - 1] + Math.hypot(p.x - path[i - 1].x, p.z - path[i - 1].z));
     }
     const arr = [], uv = [];
