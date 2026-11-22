@@ -9,7 +9,8 @@ import { mergeColored, xform, toWorld, toLocal, clamp, smoothstep } from './util
 // placer dessous, la perche s'allonge jusqu'à son dos, il suit l'avion en douceur et fait le plein.
 
 const CRUISE = 104, VROT = 72, VLAND = 66, TAXI = 9, LAPS = 2, WAIT = 70, STEP = 10;
-const G = 9.81, LEN = 40, SPAN = 40, STAND = 3.9;
+const G = 9.81, LEN = 40, SPAN = 40;
+export const STAND = 3.9;
 // perche : pivot sous la queue, angle et longueur au repos (déployée), réceptacle sur le dos du Jet (repères avion)
 const PORT = [0, -1.5, 13.2], ANG = 0.52, REACH = 14, RECEPT = [0, 0.95, -1.2];
 const TIP = [0, PORT[1] - Math.sin(ANG) * REACH, PORT[2] + Math.cos(ANG) * REACH];
@@ -17,7 +18,8 @@ const FUEL_T = 20; // secondes pour un plein complet
 const lam = (o = {}) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, ...o });
 const _l = { x: 0, z: 0 }, _w = { x: 0, z: 0 }, _v = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
-function bodyMesh() {
+/** Coque, train et perche du ravitailleur (aussi pour l'appareil garé à la base). */
+export function bodyMesh() {
   const parts = [], W = 0xb4bac0, B = 0x9098a0, D = 0x5f666d, K = 0x23272d;
   const T = (rf, rb, zf, zb, c, x = 0, y = 0, seg = 12) => parts.push({ geo: new THREE.CylinderGeometry(rf, rb, zb - zf, seg).rotateX(-Math.PI / 2), color: c, matrix: xform(x, y, (zf + zb) / 2) });
   const BX = (w, h, d, c, x, y, z, ry = 0, rx = 0, rz = 0) => parts.push({ geo: new THREE.BoxGeometry(w, h, d), color: c, matrix: xform(x, y, z, ry, 1, 1, 1, rx, rz) });

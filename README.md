@@ -90,7 +90,9 @@ des roues, au décrochage et au crash (si le navigateur le permet).
 - **Volcan** : il fume, et entre en éruption toutes les 15 minutes environ (cendres, bombes, coulées de lave).
 - **Base militaire** (grande carte) : sur l'îlot voisin du porte-avions. Drapeau américain, piste, hangars, radar,
   casernes, hélisurfaces, carburant, aire d'embarquement des parachutistes, appareils garés, abris bétonnés, batterie
-  antiaérienne, chars, ponton et patrouilleur ; c'est aussi un point de départ.
+  antiaérienne, chars, ponton et patrouilleur ; un Stratotanker y reste garé ; c'est aussi un point de départ.
+- **Escorte du porte-avions** : deux destroyers et deux frégates tournent de part et d'autre, avec un pétrolier
+  ravitailleur, un sous-marin en surface, deux vedettes et un hélicoptère. L'axe d'appontage reste libre.
 - **Site de lancement** : sur un îlot. Environ toutes les 20 minutes, une fusée sort du hall, roule
   jusqu'au pas de tir et décolle.
 - **Routes et train** (grande carte) : des voitures, camionnettes, camions et cars circulent sur les routes

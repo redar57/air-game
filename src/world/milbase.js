@@ -4,6 +4,7 @@ import { milBase, lightsPoints, spinners } from './airfields.js';
 import { addBox, addCylinder } from './colliders.js';
 import { mergeColored, xform, toWorld } from '../util.js';
 import { usFlag } from './flag.js';
+import { bodyMesh, STAND } from '../tanker.js';
 import { PLANES } from '../planes/catalog.js';
 import { getModel } from '../planes/models.js';
 
@@ -11,15 +12,15 @@ import { getModel } from '../planes/models.js';
 // ponton et patrouilleur, escouade qui défile et jeep en ronde. Repère local de la piste (piste le long de Z).
 
 const lam = () => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-const OL = 0x5f6b45, OD = 0x46502f, SA = 0xcdbf98, CO = 0x9a9d9f, ST = 0x8a9199, DK = 0x2b3027, YE = 0xe8c33a;
+const OL = 0x5f6b45, OD = 0x46502f, SA = 0xcdbf98, CO = 0x9a9d9f, ST = 0x8a9199, DK = 0x2b3027, BLK = 0x1f2428, YE = 0xe8c33a;
 
 /** Appareil du jeu réduit à une seule géométrie (décor : sans cockpit, flammes ni disques d'hélice). */
-function parkedGeo(id, colors) {
+export function parkedGeo(id, colors, bare = false) { // bare : sans les pales
   const spec = PLANES.find((p) => p.id === id), m = getModel(spec, { name: '_gare', colors }), parts = [];
   m.root.updateMatrixWorld(true);
   const inv = m.root.matrixWorld.clone().invert();
   const walk = (o) => {
-    if (o === m.cockpit || m.flames.includes(o)) return;
+    if (o === m.cockpit || m.flames.includes(o) || (bare && m.props.some((p) => p.blades === o))) return;
     if (o.isMesh && !o.material.transparent && !o.material.vertexColors) parts.push({ geo: o.geometry, color: o.material.color, matrix: inv.clone().multiply(o.matrixWorld) });
     o.children.forEach(walk);
   };
@@ -77,6 +78,22 @@ export function buildMilBase(scene) {
   park('cargo', [[side + 78, 62, Math.PI / 2]]);
   park('birotor', [[side + 64, 290, 0.3]], [0x56603f, 0x3f4a2f, 0x2b3024]);
   park('libellule', [[side + 58, 335, 0.2], [side + 58, 360, 0.2]], [0x56603f, 0x2b3024]);
+  // un Stratotanker à demeure : perche repliée, passerelle, camion-citerne, groupe de parc, cales et cônes
+  {
+    const tx = side + 72, tz = -25, t = bodyMesh(), g = new THREE.Group();
+    g.add(t.m, t.gear, t.boom); t.boom.rotation.x = -0.06; t.tube.position.z = 9.6;
+    g.position.set(tx, STAND + 0.2, tz); g.rotation.y = Math.PI / 2; G.add(g);
+    collide(tx, tz, 2.2, 20, 7, Math.PI / 2); collide(tx + 2, tz, 19.5, 5, 4.6, Math.PI / 2);
+    line(0.5, 60, tx - 8, tz, Math.PI / 2); line(0.5, 8, tx - 14.5, tz);
+    // escalier jusqu'à la porte avant gauche
+    for (let k = 0; k < 8; k++) B(1.4, 0.2, 0.7, 0xdfe3e6, tx - 15, 0.5 + k * 0.42, tz + 6.6 - k * 0.62);
+    B(1.6, 0.25, 1.8, 0xdfe3e6, tx - 15, 3.75, tz + 2.3); B(0.4, 3.6, 0.4, YE, tx - 15, 1.9, tz + 2.2); B(1.8, 0.4, 6, YE, tx - 15, 0.5, tz + 4.4);
+    B(2.4, 1, 9, 0x3a4148, tx - 6, 1, tz + 16); B(2.4, 2.2, 2.2, OL, tx - 6, 2, tz + 19.5); parts.push({ geo: new THREE.CylinderGeometry(1.25, 1.25, 6.2, 10).rotateX(Math.PI / 2), color: 0xd9dcdf, matrix: xform(tx - 6, 2.4, tz + 14.6) }); // camion-citerne
+    B(2.2, 1.6, 3, YE, tx - 14, 1.1, tz - 5); B(0.2, 0.2, 4, BLK, tx - 14, 0.5, tz - 2); // groupe de parc
+    for (const s of [-1, 1]) for (const z of [-2.6, 2.6]) B(0.6, 0.4, 1.2, YE, tx + 0.5 + z * 0.75, 0.45, tz + s * 2.9);
+    for (const [x, z] of [[-22, 0], [12, -21], [12, 21], [23, 0]]) parts.push({ geo: new THREE.ConeGeometry(0.4, 1, 6), color: 0xf07a1e, matrix: xform(tx + x, 0.7, tz + z) });
+    collide(tx - 6, tz + 16, 1.3, 5, 4); collide(tx - 15, tz + 4, 1, 4, 4);
+  }
   // escabeaux, tracteurs et chariots de bombes devant les chasseurs
   for (let k = 0; k < 6; k++) {
     const z = -252 + k * 30;

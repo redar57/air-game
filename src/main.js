@@ -16,6 +16,7 @@ import { Career } from './career.js';
 import { Tanker } from './tanker.js';
 import { createAirdrop } from './airdrop.js';
 import { buildMilBase } from './world/milbase.js';
+import { buildEscort } from './world/escort.js';
 import { buildLaunchSite } from './world/spaceport.js';
 import { cityPort, fishPort, islets } from './world/places.js';
 import { buildHospital, hospital } from './world/sites.js';
@@ -73,7 +74,7 @@ const world = {
   atFuel: atFuelStation,
 };
 
-let career, tanker, spaceport, birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
+let career, tanker, escort, spaceport, birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
 let mission = null; // bombardier d'eau (hélicoptère rouge), ou null
 const _sv = new THREE.Vector3();
 let kills = 0; // montgolfières abattues depuis le lancement
@@ -523,6 +524,7 @@ function frame(now) {
     birds.update(dt, time, plane);
     boats.update(dt, time);
     spaceport.update(dt, camera.position);
+    escort.update(dt, time);
     updateTanker(dt);
     for (const sp of spinners) if (sp.tick) sp.tick(time); else sp.obj.rotation.y += sp.rate * dt;
   }
@@ -584,6 +586,7 @@ async function boot() {
   buildMilBase(scene);
   spaceport = buildLaunchSite(scene);
   buildCarrier(scene);
+  escort = buildEscort(scene);
   sky = new Sky(scene);
   scenery = buildScenery(scene);
   buildHospital(scene, scenery.villages, scenery.treeList);
@@ -591,7 +594,7 @@ async function boot() {
   if (BIG) STARTS.splice(2, 0, { id: 'baie', name: 'La Baie' }, { id: 'prairie', name: 'La Prairie' }, { id: 'base', name: 'Base nautique' }, { id: 'militaire', name: 'Base militaire' });
   buildThermalClouds(scene);
   birds = new Birds(scene, heightAt, thermals, runways, scenery.ports ? scenery.ports.gulls : []);
-  boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 450 }, ...(cityPort.active ? [{ ...cityPort, r: 480 }, { ...fishPort, r: 420 }] : [])]);
+  boats = new Boats(scene, heightAt, [{ x: carrier.x, z: carrier.z, r: 1150 }, ...(cityPort.active ? [{ ...cityPort, r: 480 }, { ...fishPort, r: 420 }] : [])]);
   career = new Career(badge);
   tanker = new Tanker(scene);
   fx = new Effects(scene);
@@ -638,7 +641,7 @@ async function boot() {
   // petit accès pour le débogage depuis la console
   window.airgame = {
     get plane() { return plane; }, get state() { return state; },
-    world, rig, sky, hospital, get tanker() { return tanker; }, get career() { return career; }, milBase, get spaceport() { return spaceport; }, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
+    world, rig, sky, hospital, get tanker() { return tanker; }, get career() { return career; }, milBase, get spaceport() { return spaceport; }, get escort() { return escort; }, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
     select(planeId, startId) {
       setPlane(PLANES.findIndex((p) => p.id === planeId));
       setStart(STARTS.findIndex((s) => s.id === startId));
