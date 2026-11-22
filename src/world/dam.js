@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { heightAt, DAM, highWaters, alongRange, fromRange, canyonAxis } from './terrain.js';
+import { heightAt, flatInfo, DAM, BIG, highWaters, alongRange, fromRange, canyonAxis, riverDist } from './terrain.js';
+import { occupied } from './country.js';
 import { keepOut, peaks } from './places.js';
 import { addBox, addCustom } from './colliders.js';
 import { lightsPoints } from './airfields.js';
@@ -42,15 +43,85 @@ export function planDam() {
   highWaters.push({ level: L, has });
   const c = fromRange(u0, vm);
   keepOut.push(has, (x, z) => { const p = alongRange(x, z); return Math.abs(p.u - u0 + 60) < 110 && Math.abs(p.v - vm) < half + 20; },
-    (x, z) => { const p = alongRange(x, z); return p.u < u0 && p.u > u0 - 1000 && Math.abs(p.v - canyonAxis(p.u)) < 22; });
+    (x, z) => riverDist(x, z) < 34);
+  planLine(u0, vm);
   peaks.dam = { name: 'Barrage', x: c.x, z: c.z, u0, vm, half, crest, wet, n, m, U, V, leak, count };
+}
+
+/** Tracé de la ligne à haute tension : le long de la vallée, puis jusqu'à un poste électrique près de la ville. */
+export const grid = { pylons: [], post: null };
+function planLine(u0) {
+  const way = [], turn = BIG ? -4300 : -1800;
+  for (let u = u0 - 150; u > turn; u -= 60) { const p = fromRange(u, canyonAxis(u) + 62); way.push([p.x, p.z]); }
+  way.push(...(BIG ? [[-1950, -3600], [-2100, -3000], [-2600, -1800], [-2900, -600], [-2700, 800], [-2500, 2000]] : [[-1060, -1330], [-1130, -1000], [-1000, -480], [-1080, 250], [-1180, 900], [-950, 1450], [-400, 1800]]));
+  // poste : l'endroit le plus plat près du bout de la ligne
+  const [ex, ez] = BIG ? [-2380, 2600] : [60, 2080];
+  let best = null;
+  for (let x = ex - 260; x <= ex + 260; x += 20) for (let z = ez - 260; z <= ez + 260; z += 20) {
+    let lo = Infinity, hi = -Infinity, ok = true;
+    for (const a of [-34, 0, 34]) for (const b of [-28, 0, 28]) { const h = heightAt(x + a, z + b); lo = Math.min(lo, h); hi = Math.max(hi, h); if (flatInfo(x + a, z + b).w > 0 || occupied(x + a, z + b)) ok = false; }
+    const cost = hi - lo + Math.hypot(x - ex, z - ez) * 0.012;
+    if (ok && lo > 4 && (!best || cost < best.cost)) best = { x, z, y: hi, lo, cost };
+  }
+  if (best) { const [lx, lz] = way[way.length - 1]; best.yaw = Math.atan2(lx - best.x, lz - best.z); grid.post = best; way.push([best.x + Math.sin(best.yaw) * 45, best.z + Math.cos(best.yaw) * 45]); }
+  // pylônes à intervalles réguliers, décalés s'ils tombent sur une route, un champ ou un terrain
+  const len = [0]; for (let i = 1; i < way.length; i++) len.push(len[i - 1] + Math.hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1]));
+  const total = len[len.length - 1], at = (s) => { let i = 0; while (i < way.length - 2 && len[i + 1] < s) i++; const t = (s - len[i]) / (len[i + 1] - len[i] || 1); return [lerp(way[i][0], way[i + 1][0], t), lerp(way[i][1], way[i + 1][1], t)]; };
+  const n = Math.round(total / 175);
+  for (let k = 0; k <= n; k++) {
+    let [x, z] = at((k / n) * total);
+    if (k < n) for (const d of [0, 18, -18, 36, -36, 54]) { const [a, b] = at((k / n) * total + d); if (!occupied(a, b) && flatInfo(a, b).w < 0.3) { x = a; z = b; break; } }
+    grid.pylons.push({ x, z, y: heightAt(x, z), h: 27 });
+  }
+  // les câbles restent à 12 m du sol au moins : on rehausse les pylônes qui encadrent une bosse
+  for (let it = 0; it < 4; it++) for (let k = 0; k < n; k++) {
+    const A = grid.pylons[k], E = grid.pylons[k + 1];
+    let miss = 0;
+    for (let t = 0.1; t < 0.95; t += 0.1) miss = Math.max(miss, heightAt(lerp(A.x, E.x, t), lerp(A.z, E.z, t)) + 12 - (lerp(A.y + A.h * 0.82, E.y + E.h * 0.82, t) - 28 * t * (1 - t)));
+    if (miss > 0) for (const p of [A, E]) p.h = Math.min(58, p.h + miss * 0.7);
+  }
+  keepOut.push((x, z) => grid.pylons.some((p, k) => { const q = grid.pylons[k + 1] || p, dx = q.x - p.x, dz = q.z - p.z, t = Math.max(0, Math.min(1, ((x - p.x) * dx + (z - p.z) * dz) / (dx * dx + dz * dz || 1))); return Math.abs(p.x + dx * t - x) + Math.abs(p.z + dz * t - z) < 16; }),
+    (x, z) => !!grid.post && Math.hypot(x - grid.post.x, z - grid.post.z) < 60);
+}
+
+/** Pylônes, câbles et poste électrique ; `start` : départ de la ligne à la centrale. */
+function buildLine(scene, start) {
+  const K = kit(), ST = 0x8f979d, lights = [], P = grid.pylons, tops = [];
+  P.forEach((p, k) => {
+    const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)], yaw = Math.atan2(b.x - a.x, b.z - a.z), h = p.h;
+    K.parts.push({ geo: new THREE.CylinderGeometry(0.4, 2 + h * 0.015, h + 1, 4), color: ST, matrix: xform(p.x, p.y + h / 2 - 0.5, p.z, yaw + Math.PI / 4) });
+    for (const f of [0.68, 0.82, 0.95]) K.parts.push({ geo: new THREE.BoxGeometry(13 - f * 4, 0.4, 0.5), color: ST, matrix: xform(p.x, p.y + h * f, p.z, yaw) });
+    addBox(p.x, p.z, yaw, 1.5, 1.5, p.y - 1, p.y + h); if (k % 2 === 0) lights.push(p.x, p.y + h, p.z);
+    tops.push({ x: p.x, y: p.y + h * 0.82, z: p.z, rx: Math.cos(yaw), rz: -Math.sin(yaw) });
+  });
+  const ends = [{ ...start, rx: tops[0].rx, rz: tops[0].rz }, ...tops], D = grid.post;
+  if (D) {
+    // poste électrique : dalle, portiques, transformateurs, bâtiment, clôture
+    const c = Math.cos(D.yaw), s = Math.sin(D.yaw), Y = D.y + 0.3, at = (x, z) => [D.x + x * c + z * s, D.z - x * s + z * c];
+    const B = (w, h, d, col, x, y, z, ry = 0) => { const [a, b] = at(x, z); K.parts.push({ geo: new THREE.BoxGeometry(w, h, d), color: col, matrix: xform(a, Y + y, b, D.yaw + ry) }); };
+    B(66, D.y - D.lo + 3, 54, 0xb9b4a6, 0, -(D.y - D.lo + 3) / 2, 0);
+    for (const z of [20, 4]) { for (const x of [-12, 0, 12]) B(0.7, 12, 0.7, ST, x, 6, z); B(25, 0.7, 0.7, ST, 0, 11.6, z); for (const x of [-8, 0, 8]) B(0.35, 2.2, 0.35, 0x6b4f3a, x, 10.2, z); }
+    for (const x of [-18, -6, 6, 18]) { B(6, 5, 7, 0x7f9aa8, x, 2.5, -8); for (const a of [-1.6, 0, 1.6]) B(0.5, 2.6, 0.5, 0x6b4f3a, x + a, 6.2, -8); B(1, 4, 6, 0x5f7a88, x + 3.4, 2.4, -8); }
+    B(20, 5, 8, 0xf2f2ee, -18, 2.5, -20); B(21, 0.6, 9, 0xb9472f, -18, 5.2, -20); for (const x of [-25, -20, -15, -10]) B(2, 1.4, 8.1, 0x2f4f66, x, 3, -20);
+    for (const q of [-1, 1]) { for (const y of [0.6, 1.3, 2]) { B(64, 0.08, 0.08, 0x9aa0a6, 0, y, q * 26); B(0.08, 0.08, 52, 0x9aa0a6, q * 32, y, 0); } for (let x = -32; x <= 32; x += 8) B(0.16, 2.4, 0.16, 0x9aa0a6, x, 1.2, q * 26); for (let z = -24; z <= 24; z += 8) B(0.16, 2.4, 0.16, 0x9aa0a6, q * 32, 1.2, z); }
+    addBox(D.x, D.z, D.yaw, 33, 27, D.lo - 3, Y + 6);
+    const [gx, gz] = at(0, 20); ends.push({ x: gx, y: Y + 10.8, z: gz, rx: c, rz: -s });
+    // départs vers la ville : poteaux plus petits
+    lights.push(gx, Y + 12.4, gz);
+  }
+  for (let k = 0; k + 1 < ends.length; k++) for (const o of [-4.2, 0, 4.2]) {
+    const A = ends[k], E = ends[k + 1], sag = Math.min(7, Math.hypot(E.x - A.x, E.z - A.z) * 0.04);
+    const a = new THREE.Vector3(A.x + A.rx * o, A.y, A.z + A.rz * o), b = new THREE.Vector3(E.x + E.rx * o, E.y, E.z + E.rz * o), m = a.clone().add(b).multiplyScalar(0.5); m.y -= sag * 2;
+    K.parts.push({ geo: new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, m, b), 8, 0.12, 3), color: 0x2b2e33 });
+  }
+  scene.add(K.mesh(), lightsPoints(lights, 0xff3020, 5));
 }
 
 /** Texture d'eau qui court : stries blanches. */
 function flow(light) {
   const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128; const g = cv.getContext('2d');
   g.fillStyle = light ? '#e6f4fb' : '#4f9fc8'; g.fillRect(0, 0, 64, 128);
-  for (let i = 0; i < 90; i++) { g.fillStyle = light ? (i % 3 ? 'rgba(255,255,255,.8)' : 'rgba(120,180,215,.5)') : 'rgba(255,255,255,.28)'; g.fillRect(Math.random() * 64, Math.random() * 128, 1 + Math.random() * 3, 8 + Math.random() * 26); }
+  for (let i = 0; i < 90; i++) { g.fillStyle = light ? (i % 3 ? 'rgba(255,255,255,.8)' : 'rgba(120,180,215,.5)') : 'rgba(255,255,255,.28)'; const y = Math.random() * 128, b = [Math.random() * 64, y, 1 + Math.random() * 3, 8 + Math.random() * 26]; g.fillRect(...b); b[1] -= 128; g.fillRect(...b); }
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
@@ -100,14 +171,7 @@ export function buildDam(scene, seaMat) {
   K.B(58, 15, 18, WH, px, fl + 6.5, pz); K.B(58.4, 5, 18.4, GL, px, fl + 9, pz); K.B(60, 1, 20, 0x5f7f98, px, fl + 14.4, pz); K.B(62, 2, 22, CO, px, fl + 0.4, pz); collide(px, pz, 29, 9, 16);
   for (let i = 0; i < 3; i++) K.parts.push({ geo: new THREE.CylinderGeometry(2.2, 2.2, 46, 10), color: 0x7f9aa8, matrix: xform(px - 16 + i * 16, fl + 15, pz + 26, 0, 1, 1, 1, 0.85) });
   for (let i = 0; i < 4; i++) { const x = px + 42 + i * 7; K.B(4, 4, 5, ST, x, fl + 2, pz + 2); for (const a of [-1.2, 0, 1.2]) K.C(0.25, 0.35, 2.4, 0x6b4f3a, x + a, fl + 5, pz + 2, 6); }
-  const pylon = (x, y, z, h) => { K.C(0.4, 2, h, ST, x, y + h / 2, z, 4); for (const f of [0.68, 0.82, 0.95]) K.B(13 - f * 4, 0.4, 0.5, ST, x, y + h * f, z); const w = fromRange(u0 + z, vm + x * dirV); addBox(w.x, w.z, yaw, 1.4, 1.4, y, y + h); return [x, y + h * 0.82, z]; };
-  // ligne à haute tension qui suit la vallée
-  const line = [[px + 52, fl + 5, pz + 2]];
-  for (let k = 0; k < 6; k++) { const u = u0 - 150 - k * 170, v = canyonAxis(u) + 62, x = (v - vm) * dirV, z = u - u0, y = hAt(u, v); if (y > 130) continue; line.push(pylon(x, y - 1, z, 26)); lights.push(x, y + 26, z); }
-  for (let k = 0; k + 1 < line.length; k++) for (const o of [-4.2, 0, 4.2]) {
-    const A = line[k], E = line[k + 1], cv = new THREE.QuadraticBezierCurve3(new THREE.Vector3(A[0] + o, A[1], A[2]), new THREE.Vector3((A[0] + E[0]) / 2 + o, (A[1] + E[1]) / 2 - 7, (A[2] + E[2]) / 2), new THREE.Vector3(E[0] + o, E[1], E[2]));
-    K.parts.push({ geo: new THREE.TubeGeometry(cv, 8, 0.12, 3), color: 0x2b2e33 });
-  }
+  { const w = fromRange(u0 + pz + 2, vm + (px + 52) * dirV); buildLine(scene, { x: w.x, y: fl + 5, z: w.z }); }
   G.add(K.mesh(), lightsPoints(lights, 0xff3020, 5));
   const dl = []; for (let k = 1; k < N; k += 2) dl.push(ring[k].b[0], top + 2.2, ring[k].b[2]);
   scene.add(lightsPoints(dl, 0xffe2a0, 5));
@@ -138,12 +202,15 @@ export function buildDam(scene, seaMat) {
   const pool = fromRange(u0 - 24, vm); sprays.push({ x: pool.x, y: fl + 2, z: pool.z, r: 18, n: 12, s: 7 });
   // rivière en aval
   const river = [];
-  for (let u = u0 - 20; u > u0 - 1500; u -= 18) {
-    const k = smoothstep(u0 - 20, u0 - 160, u), v = canyonAxis(u) * k + vm * (1 - k), p = fromRange(u, v), h = heightAt(p.x, p.z);
-    if (h < 1 || h > 75) break;
-    river.push([p.x, h + 0.45, p.z]);
+  for (let u = u0 - 20; u > DAM.mouth - 60; u -= 14) {
+    const k = smoothstep(u0 - 20, u0 - 160, u), v = canyonAxis(u) * k + vm * (1 - k), p = fromRange(u, v), q = fromRange(u - 4, canyonAxis(u - 4) * k + vm * (1 - k));
+    const l = Math.hypot(q.x - p.x, q.z - p.z) || 1, w = lerp(8, 18, (u0 - u) / (u0 - DAM.mouth)), nx = -(q.z - p.z) / l * w, nz = (q.x - p.x) / l * w;
+    const h = Math.max(heightAt(p.x, p.z), heightAt(p.x + nx, p.z + nz), heightAt(p.x - nx, p.z - nz));
+    if (h < 0.15 && u < DAM.mouth + 900) break;
+    river.push([p.x, h + 0.4, p.z]);
   }
-  if (river.length > 4) ribbon(river, 24, 13, blue, 0.35);
+  D.river = river;
+  if (river.length > 4) ribbon(river, 20, 42, blue, 0.35);
   // cascade naturelle : du haut de la paroi jusqu'à la retenue
   let best = null;
   for (let u = u0 + 130; u < u0 + 520; u += 20) for (const s of [-1, 1]) {
@@ -162,8 +229,8 @@ export function buildDam(scene, seaMat) {
   }
   return {
     update(dt, cam) {
-      if (cam && Math.hypot(cam.x - c.x, cam.z - c.z) > 4000) return;
       for (const f of ticks) f(dt);
+      if (cam && Math.hypot(cam.x - c.x, cam.z - c.z) > 4000) return;
       for (const s of sprays) if (Math.random() < dt * s.n) mist.emit(s.x + (Math.random() - 0.5) * s.r * 2, s.y, s.z + (Math.random() - 0.5) * s.r * 2, (Math.random() - 0.5) * 3, 2 + Math.random() * 3, (Math.random() - 0.5) * 3, 1.5, s.s, 3.2, 0xffffff);
       mist.update(dt);
     },

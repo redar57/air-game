@@ -182,6 +182,27 @@ function updateGhost(dt) {
   animateModel(jump.model, dt, { throttle: 0.6, gear: g.gearAnim, burner: 0, cockpitView: false, ctrl: g.ctrl, flaps: g.flapAnim, vtol: g.vtolAnim, reverse: 0, chute: 0, flame: 0 });
 }
 
+/** Mur du son : un cône de vapeur et un « bang » quand on le franchit. */
+const MACH = 340;
+let vapor = null, wasMach = false, vaporT = 0, bangT = 0;
+function updateMach(dt) {
+  const now = state === 'fly' && plane.speed > MACH;
+  bangT -= dt;
+  if (now && !wasMach && bangT <= 0) { vaporT = 1; bangT = 6; sound.bang(); input.rumble(0.7, 0.5, 260); }
+  wasMach = now;
+  vaporT = Math.max(0, vaporT - dt * 1.1);
+  if (!vapor && vaporT > 0) {
+    vapor = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 1, 0.9, 26, 1, true).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    scene.add(vapor);
+  }
+  if (!vapor) return;
+  vapor.visible = vaporT > 0 && rig.mode !== 'cockpit';
+  if (!vapor.visible) return;
+  const r = plane.spec.span * (0.75 + 0.35 * (1 - vaporT));
+  vapor.position.copy(plane.pos).addScaledVector(plane.fwd, -1.5 - 2 * (1 - vaporT)); vapor.quaternion.copy(plane.quat);
+  vapor.scale.set(r, r, plane.spec.len * 0.6); vapor.material.opacity = 0.5 * vaporT * vaporT;
+}
+
 /** Parachute-frein, derrière la queue. */
 let drogueMesh = null;
 function updateDrogue() {
@@ -451,7 +472,7 @@ function handleKeys() {
         if (airport.ready) { if (airport.start()) { ui.toast('Repoussage…', 1800); ui.clearHint(); } }
         else if (plane.spec.jumper) plane.openChute();
         else if (plane.spec.guns || mission) { /* tir / largage maintenus : gérés ailleurs */ }
-        else if (!plane.spec.missiles) ui.toast('Armes : missiles sur le jet, mitrailleuses sur le chasseur, eau sur l\'hélicoptère rouge et l\'écopeur, produit sur l\'épandeur', 1800);
+        else if (!plane.spec.missiles) ui.toast('Armes : missiles sur le Jet et le Vertical, mitrailleuses sur le chasseur, eau sur l\'hélicoptère rouge et l\'écopeur, produit sur l\'épandeur', 1800);
         else if (missiles.fire(plane, scenery.balloons)) input.rumble(0.25, 0.35, 120);
       }
       else if (key === 't') { const n = sky.cycle(); ui.toast(n, 1500); ui.setDaytime(n); }
@@ -630,7 +651,7 @@ function frame(now) {
       throttle: plane.power, gear: plane.gearAnim, burner: plane.burner, cockpitView: cockpit,
       ctrl: plane.ctrl, flaps: plane.flapAnim, vtol: plane.vtolAnim, reverse: plane.reverse, chute: plane.chute, flame: plane.flame,
     });
-    updateGhost(dt); updateDrogue();
+    updateGhost(dt); updateDrogue(); updateMach(dt);
     plane.cloud = sky.inCloud;
     // souffle des tuyères près du sol
     if (state === 'fly' && plane.vtol && plane.agl < 14 && plane.power > 0.3 && frameNo % 2 === 0) {
@@ -674,6 +695,7 @@ function frame(now) {
     const flags = [];
     if (plane.stalling) flags.push('DÉCROCHAGE');
     if (plane.burner > 0) flags.push('POSTCOMBUSTION');
+    if (plane.speed > MACH * 0.97) flags.push(`MACH ${(plane.speed / MACH).toFixed(2).replace('.', ',')}`);
     if (plane.fuelOn && !plane.spec.glider && plane.fuel <= 0) flags.push('PANNE SÈCHE');
     if (plane.fuelOn && plane.refuelT > 0) flags.push('PLEIN EN COURS…');
     if (plane.flaps) flags.push(`VOLETS ${plane.flaps}`);

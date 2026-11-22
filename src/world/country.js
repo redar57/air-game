@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightAt, normalAt, groundHeight, setCorridor, HALF, BIG } from './terrain.js';
+import { heightAt, normalAt, groundHeight, setCorridor, riverDist, HALF, BIG } from './terrain.js';
 import { runways, seaBase } from './airfields.js';
 import { city, cityPort, fishPort, circuit, castle } from './places.js';
 import { toLocal, toWorld, lerp, smoothstep } from '../util.js';
@@ -353,6 +353,7 @@ function planRail(stops) {
       if (list) for (const i of list) { const d = (p[i].x - x) ** 2 + (p[i].z - z) ** 2; if (d < best) { best = d; bi = i; } }
     }
     if (bi < 0) return h;
+    if (riverDist(x, z) < 75) return h; // la voie enjambe la rivière
     const d = Math.sqrt(best), ty = y[bi] - 0.7, dh = Math.abs(ty - h);
     if (g[bi] < 1 || Math.abs(y[bi] - g[bi]) > RAIL.cut) return h;
     return lerp(h, ty, 1 - smoothstep(30, 40 + dh * 2.2, d));

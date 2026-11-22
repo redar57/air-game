@@ -33,6 +33,7 @@ export function setBig(big) {
   BIG = !!big;
   SIZE = BIG ? 30000 : 11000; SEG = BIG ? 800 : 352; CELL = SIZE / SEG; HALF = SIZE / 2;
   if (!BIG) return;
+  DAM.mouth = -5600;
   Object.assign(MTN, { x: 2300, z: -5200, ang: -0.22, len: 5000, wid: 1800, amp: 1350 });
   Object.assign(VOLCANO, { x: -8600, z: -3000, rimR: 360, baseR: 1750, h: 950, depth: 270 });
   ISLETS.splice(0, ISLETS.length,
@@ -44,7 +45,14 @@ export function setBig(big) {
 }
 
 /** Barrage : en travers du canyon, à l'abscisse u0 le long de la chaîne ; la retenue s'étend vers les u croissants. */
-export const DAM = { u0: 200, level: 92, bump: 100 };
+export const DAM = { u0: 200, level: 92, bump: 100, mouth: -3000 }; // mouth : abscisse de l'embouchure de la rivière
+/** Altitude du lit de la rivière, qui descend régulièrement du pied du barrage jusqu'à la mer. */
+export const riverBed = (u) => lerp(-2.5, 27, clamp((u - DAM.mouth) / (DAM.u0 - 100 - DAM.mouth), 0, 1));
+/** Distance à la rivière (infinie en amont du barrage et au large). */
+export function riverDist(x, z) {
+  const { u } = alongRange(x, z);
+  return u > DAM.u0 - 40 || u < DAM.mouth - 120 ? Infinity : canyonDist(x, z);
+}
 /** Coordonnées le long / en travers de la chaîne de montagnes, et retour. */
 export const alongRange = (x, z) => ({ u: (x - MTN.x) * mca + (z - MTN.z) * msa, v: -(x - MTN.x) * msa + (z - MTN.z) * mca });
 export const fromRange = (u, v) => ({ x: MTN.x + u * mca - v * msa, z: MTN.z + u * msa + v * mca });
@@ -125,8 +133,10 @@ export function rawBase(x, z) {
   if (cd < 300) {
     // (en amont du barrage, un seuil ferme la vallée : il retient le lac)
     const sill = smoothstep(DAM.u0 + 520, DAM.u0 + 820, u) * (1 - smoothstep(DAM.u0 + 1000, DAM.u0 + 1500, u));
-    const floor = 34 + 14 * nC(u * 0.0015, 7.7) + DAM.bump * sill;
+    const down = (1 - smoothstep(DAM.u0 - 160, DAM.u0 - 40, u)) * smoothstep(DAM.mouth - 250, DAM.mouth, u); // rivière en aval
+    const floor = lerp(34 + 14 * nC(u * 0.0015, 7.7) + DAM.bump * sill, riverBed(u), down);
     if (h > floor) h = floor + (h - floor) * smoothstep(85, 290, cd);
+    else if (down > 0) h = lerp(h, floor, down * (1 - smoothstep(60, 170, cd)));
   }
   return h;
 }

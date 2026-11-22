@@ -82,7 +82,7 @@ export class Plane {
   // amphibie sur l'eau : il flotte sur sa coque, roues sorties ou non
   get standH() { return this.retractUp || (this.spec.amphibian && this.surface === 'water') ? this.spec.bellyH : this.spec.gearH; }
   get burner() {
-    return this.spec.afterburner ? clamp((this.throttle - 0.9) * 10, 0, 1) * clamp((this.rpm - 0.88) * 12, 0, 1) : 0;
+    return this.spec.afterburner && !this.vtol ? clamp((this.throttle - 0.9) * 10, 0, 1) * clamp((this.rpm - 0.88) * 12, 0, 1) : 0;
   }
   /** Le moteur tourne-t-il ? (carburant et pannes, si l'option est activée) */
   get engineRunning() { return !this.spec.glider && !(this.fuelOn && (this.fuel <= 0 || this.failure === 'stop')); }

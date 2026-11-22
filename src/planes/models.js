@@ -882,14 +882,19 @@ function vertical(spec) {
     // tuyères : avant (froides) et arrière (chaudes)
     for (const z of [-0.9, 1.5]) {
       const n = new THREE.Group(); n.position.set(s * 1.35, -0.3, z);
-      n.add(tube(0.32, 0.26, -0.15, 0.75, z > 0 ? N : D, {})); n.add(box(0.5, 0.5, 0.5, D, -s * 0.12, 0, 0)); always.add(n); (m.nozzles || (m.nozzles = [])).push(n);
+      n.add(tube(0.32, 0.26, -0.15, 0.75, z > 0 ? N : D, {})); n.add(box(0.5, 0.5, 0.5, D, -s * 0.12, 0, 0));
+      if (z > 0) { // postcombustion dans les tuyères chaudes
+        const flame = tube(0.28, 0.03, 0.75, 3.3, 0, { mat: new THREE.MeshBasicMaterial({ color: 0xffa53a, transparent: true, opacity: 0.85, depthWrite: false }) });
+        flame.userData.noShadow = true; flame.userData.z0 = 0.75; flame.userData.len = 2.55; flame.visible = false; n.add(flame); m.flames.push(flame);
+      } always.add(n); (m.nozzles || (m.nozzles = [])).push(n);
     }
     hull.add(box(0.1, 0.5, 2.2, D, s * 0.45, -0.95, 0.2)); // virures ventrales
   }
   finS(m, hull, [2.3, 2.3, 0.9, 0.13, 1.4], D, 0, 0.5, 4.9, 0, 0.32, 0.1, 0.9);
   wingS(m, hull, [2.2, 1.6, 0.7, 0.1, 0.9, -0.5], G, 0.3, 0.3, 5.6, [{ kind: 'elevator', t0: 0, t1: 1 }], 0.45);
   wingS(m, always, [4.2, 3.4, 1.2, 0.2, 1.7, -0.55, 0.4], G, 0.5, 0.72, 0.3, [{ kind: 'flap', t0: 0.02, t1: 0.5 }, { kind: 'aileron', t0: 0.54, t1: 0.94 }], 0.24);
-  always.add(box(1.2, 0.2, 3.2, G, 0, 0.75, 0.2));
+  always.add(box(1.2, 0.2, 3.2, G, 0, 0.75, 0.2), box(0.34, 0.1, 0.5, N, 0, 1.08, -1.5)); // trappe de ravitaillement sur le dos
+  for (const p of spec.missiles || []) { always.add(box(0.12, 0.5, 1.5, D, p[0], p[1] + 0.3, p[2])); const ms = newMissileMesh(); ms.position.set(...p); always.add(ms); }
   const gear = new THREE.Group();
   leg(gear, 0, -0.6, -1.6, -3.4, 0.3, 0.2); for (const s of [-1, 1]) { wheel(gear, 0.36, 0.22, s * 0.2, -1.54, 1.7); bar(gear, [s * 3.5, 0.3, 1.6], [s * 3.5, -1.65, 1.7], 0.09, METAL); wheel(gear, 0.2, 0.12, s * 3.5, -1.7, 1.7); }
   bar(gear, [0, -0.7, 1.6], [0, -1.5, 1.7], 0.16, METAL);

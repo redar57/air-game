@@ -78,7 +78,7 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   rembarque à l'arrêt sur l'aire verte de la base militaire (sur la petite carte : sur une piste).
 - **Largage de matériel** (Bipoutre) : jeeps, caisses et canon sous parachutes. La croix bleue au sol montre où la
   charge tombera ; X largue (au-dessus de 120 m). On recharge à l'arrêt sur une piste.
-- **Ravitaillement en vol** (Jet de chasse) : un ravitailleur façon KC-135 fait le tour de la carte, se pose de temps en
+- **Ravitaillement en vol** (Jet de chasse, Vertical) : un ravitailleur façon KC-135 fait le tour de la carte, se pose de temps en
   temps à la base (petite carte : à l'aéroport), roule jusqu'à la pompe et repart. Pastille « R » sur la carte du Jet.
   Place-toi derrière, sous sa perche, à la même vitesse : elle se branche, le plein prend 20 s, Espace pour se débrancher.
 - **Dirigeable** : il flotte tout seul. Gaz pour avancer, manche pour monter ou descendre, Espace pour s'arrêter.
@@ -98,7 +98,8 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   surface ; un avion-radar tourne au-dessus.
 - **Le Veilleur** (avion-radar) : la carte montre tout ce qui navigue ou vole autour.
 - **Le Vertical** : tuyères vers le bas, il se pilote comme un hélicoptère ; prends de la vitesse puis V pour voler
-  comme un jet, V encore (sous 430 km/h) pour revenir au vol vertical.
+  comme un jet, V encore (sous 430 km/h) pour revenir au vol vertical. Supersonique à pleine postcombustion, missiles,
+  ravitaillement en vol.
 - **Le Baroudeur** : gros pneus, il se pose dans les prés et les pentes. **Le Paquebot volant** : quadrimoteur amphibie.
 - **Vol libre** (deltaplane, parapente) : départ *Rampe de vol libre*, maintiens R pour courir, puis monte dans
   l'ascendance devant la rampe.
@@ -110,7 +111,7 @@ des roues, au décrochage et au crash (si le navigateur le permet).
 - **Repoussage** : au départ de l'aéroport, le Long-Courrier est à sa porte ; X appelle le tracteur.
 - **Nuages** : on entre vraiment dedans (brouillard, soleil voilé, quelques secousses).
 - **Aéroport animé** : passerelles, bus, chariots à bagages, passagers.
-- **Barrage et centrale** dans le canyon, avec retenue et cascade ; **station de ski** et son téléphérique ;
+- **Barrage et centrale** dans le canyon, avec retenue, cascade, rivière jusqu'à la mer et ligne électrique jusqu'au poste de la ville ; **station de ski** et son téléphérique ;
   **éoliennes**, **château fort**, **monastère** sur son piton ; **circuit** où dix voitures se disputent la course ;
   **plateforme pétrolière** avec hélisurface et carburant.
 - **Site de lancement** : sur un îlot. Environ toutes les 20 minutes, une fusée sort du hall, roule

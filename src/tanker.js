@@ -11,7 +11,7 @@ import { mergeColored, xform, toWorld, toLocal, clamp, smoothstep } from './util
 const CRUISE = 104, VROT = 72, VLAND = 66, TAXI = 9, LAPS = 2, WAIT = 70, STEP = 10;
 const G = 9.81, LEN = 40, SPAN = 40;
 export const STAND = 3.9;
-// perche : pivot sous la queue, angle et longueur au repos (déployée), réceptacle sur le dos du Jet (repères avion)
+// perche : pivot sous la queue, angle et longueur au repos (déployée), réceptacle sur le dos (repères avion ; spec.recept)
 const PORT = [0, -1.5, 13.2], ANG = 0.52, REACH = 14, RECEPT = [0, 0.95, -1.2];
 const TIP = [0, PORT[1] - Math.sin(ANG) * REACH, PORT[2] + Math.cos(ANG) * REACH];
 const FUEL_T = 20; // secondes pour un plein complet
@@ -181,10 +181,10 @@ export class Tanker {
   /** Branchement du Jet : approche aidée, transfert, débranchement. */
   assist(dt, plane) {
     this.near = false; this.info = null; this.cool -= dt;
-    if (!plane || !plane.spec.afterburner || plane.onGround || plane.crashed || !this.flying) { this.unlink(); return; }
+    if (!plane || !plane.spec.afterburner || plane.vtol || plane.onGround || plane.crashed || !this.flying) { this.unlink(); return; }
     _d.set(...TIP); _d.x += Math.sin(this.t * 0.7) * 0.25; _d.y += Math.sin(this.t * 1.1) * 0.2;
     _d.applyQuaternion(this.root.quaternion).add(this.pos); // bout de la perche
-    _p.set(...RECEPT).applyQuaternion(plane.quat).add(plane.pos);
+    _p.set(...(plane.spec.recept || RECEPT)).applyQuaternion(plane.quat).add(plane.pos);
     const r = _v.subVectors(_d, _p), d = r.length();
     if (plane.pos.distanceTo(this.pos) > 1600) { this.unlink(); return; }
     this.near = true;
@@ -221,7 +221,7 @@ export class Tanker {
     this.out += ((this.flying ? 1 : 0) - this.out) * (1 - Math.exp(-dt * 0.5));
     let a = -0.06 + (ANG + 0.06) * this.out + Math.sin(this.t * 1.1) * 0.012 * this.out, b = Math.sin(this.t * 0.7) * 0.016 * this.out, len = 9.6 + (REACH - 9.6) * this.out;
     if (this.linked && plane) {
-      _p.set(...RECEPT).applyQuaternion(plane.quat).add(plane.pos).sub(this.pos).applyQuaternion(_q.copy(this.root.quaternion).invert());
+      _p.set(...(plane.spec.recept || RECEPT)).applyQuaternion(plane.quat).add(plane.pos).sub(this.pos).applyQuaternion(_q.copy(this.root.quaternion).invert());
       _p.x -= PORT[0]; _p.y -= PORT[1]; _p.z -= PORT[2];
       a = Math.atan2(-_p.y, Math.hypot(_p.x, _p.z)); b = Math.atan2(_p.x, _p.z); len = clamp(_p.length(), 9.6, 18);
     }

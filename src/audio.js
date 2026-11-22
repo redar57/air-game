@@ -484,6 +484,7 @@ export class Sound {
   }
 
   boom() { this.burst(900, 1.6, 1.4, this.reverbIn); this.burst(900, 1.6, 1.4); this.burst(120, 2.4, 1.2); }
+  bang() { this.burst(420, 0.9, 1.1, this.reverbIn); this.burst(110, 1.3, 1.3); }
   splash() { this.burst(3500, 1.1, 0.8); this.burst(300, 1.2, 0.6); }
   thump() { this.burst(260, 0.25, 0.7); }
 }

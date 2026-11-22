@@ -77,6 +77,10 @@ export class IslandMap {
       for (let a = 0; a < 8; a++) { g.beginPath(); for (const r of [56, 205, 285, 425]) { const p = cityOutline(r, 8)[a]; g.lineTo(this.px(city.x + p.x), this.px(city.z + p.z)); } g.stroke(); }
       g.fillStyle = '#8f9499'; for (const o of [cityPort, fishPort]) this.rect(g, o, 0, 0, o.halfWid * 2, o.halfLen * 2);
     }
+    if (peaks.dam && peaks.dam.river) { // rivière
+      g.strokeStyle = 'rgb(62,132,190)'; g.lineWidth = Math.max(1, S / 420); g.beginPath();
+      peaks.dam.river.forEach((p, i) => (i ? g.lineTo : g.moveTo).call(g, this.px(p[0]), this.px(p[2]))); g.stroke();
+    }
     // circuit, château
     g.strokeStyle = '#3f4247'; g.lineWidth = Math.max(1, S / 520); g.beginPath();
     for (let i = 0; i <= 24; i++) { const a = i * 0.2618; toWorld(circuit, Math.cos(a) * 150, Math.sin(a) * 270, _w); (i ? g.lineTo : g.moveTo).call(g, this.px(_w.x), this.px(_w.z)); }
@@ -128,7 +132,7 @@ export class IslandMap {
     for (const d of decks) {
       const w = {}, pt = (lx, lz) => { toWorld(d, lx, lz, w); return f(w.x, w.z); }, big = d.kind === 'carrier';
       if (!big) { const [x, y] = f(d.x, d.z); g.fillStyle = '#4a5158'; g.beginPath(); g.arc(x, y, 2.2 * scale, 0, 6.283); g.fill(); continue; }
-      const K = Math.max(1, (4 * scale) / (d.hw * rk * 1.2)), c = f(d.x, d.z);
+      const K = Math.max(1, (1.4 * scale) / (d.hw * rk * 1.2)), c = f(d.x, d.z);
       g.fillStyle = '#3b3f45'; g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = scale * 0.6; g.beginPath();
       [[0, -d.hl], [d.hw, -d.hl * 0.6], [d.hw, d.hl], [-d.hw, d.hl], [-d.hw, -d.hl * 0.6]].forEach(([a, b], i) => { const q = pt(a, b); (i ? g.lineTo : g.moveTo).call(g, c[0] + (q[0] - c[0]) * K, c[1] + (q[1] - c[1]) * K); });
       g.closePath(); g.fill(); g.stroke();
