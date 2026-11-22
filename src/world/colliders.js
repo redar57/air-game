@@ -7,8 +7,11 @@ const _l = { x: 0, z: 0 };
 export function addBox(x, z, yaw, hx, hz, y0, y1) {
   list.push({ t: 0, x, z, yaw, hx, hz, y0, y1, r: Math.hypot(hx, hz) });
 }
+/** Renvoie l'obstacle (.off = true le désactive). */
 export function addCylinder(x, z, r, y0, y1) {
-  list.push({ t: 1, x, z, r, y0, y1 });
+  const c = { t: 1, x, z, r, y0, y1, off: false };
+  list.push(c);
+  return c;
 }
 /** Renvoie l'obstacle : mettre .off = true le désactive (montgolfière abattue). */
 export function addSphere(x, y, z, r) {

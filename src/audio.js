@@ -341,6 +341,23 @@ export class Sound {
     n.drop.gain.setTargetAtTime(dropping ? 0.5 : 0, t, 0.08);
   }
 
+  /** Grondement continu d'une fusée (k : 0 = silence, 1 = tout près). */
+  rocket(k) {
+    if (!this.ctx || (!k && !this.rocketGain)) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (!this.rocketGain) {
+      this.rocketGain = ctx.createGain(); this.rocketGain.gain.value = 0;
+      for (const [type, f, q, g] of [['lowpass', 140, 0.7, 1.6], ['bandpass', 420, 0.5, 0.7]]) {
+        const s = ctx.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true; s.start(0, Math.random() * 1.5);
+        const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+        const gn = ctx.createGain(); gn.gain.value = g;
+        s.connect(fl).connect(gn).connect(this.rocketGain);
+      }
+      this.rocketGain.connect(this.master);
+    }
+    this.rocketGain.gain.setTargetAtTime(k * (0.85 + Math.random() * 0.3), t, 0.15); // crépitement
+  }
+
   /** Panne : gros raté, toux du moteur. */
   failure() {
     this.burst(400, 0.35, 1.0, this.planeBus);

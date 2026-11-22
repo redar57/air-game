@@ -1,5 +1,5 @@
 import { toWorld } from '../util.js';
-import { fuelStation, loadPad, seaBase, extraPumps } from './airfields.js';
+import { fuelStation, loadPad, seaBase, extraPumps, launchSite } from './airfields.js';
 import { country } from './country.js';
 import { hospital } from './sites.js';
 import { BIG } from './terrain.js';
@@ -87,7 +87,12 @@ export class IslandMap {
 
   /** Dessine les repères (thermiques, montgolfières, feux…) ; f(x, z) -> [px, py] sur le canevas. */
   marks(g, f, extras, scale, rk) {
-    const { thermals = [], balloons = [], fires = [], fuel = false, load = false, mail = null, pins = [] } = extras;
+    const { thermals = [], balloons = [], fires = [], fuel = false, load = false, mail = null, pins = [], train = null, rocket = null } = extras;
+    for (const [o, icon] of [[train, '🚂'], [rocket, '🚀']]) if (o) {
+      const [x, y] = f(o.x, o.z), r = 7 * scale;
+      g.font = `${Math.round(r * 2)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillStyle = '#fff'; g.fillText(icon, x, y);
+    }
     for (const p of pins) { // objectifs des missions (blessés, charges, zones de saut…)
       const [x, y] = f(p.x, p.z), r = 6 * scale;
       g.fillStyle = p.color; g.strokeStyle = '#1b1d21'; g.lineWidth = scale;
@@ -197,6 +202,7 @@ export class IslandMap {
     g.font = `700 ${Math.round(W / 55)}px sans-serif`;
     label(this.carrier, 'Porte-avions', -14);
     if (seaBase.active) label(seaBase, 'Base nautique', -14);
+    label(launchSite, 'Site de lancement', -14);
     if (hospital.active) label(hospital, 'Hôpital', -12);
     if (extras.fuel) label(fuelStation, 'Carburant', 22 * W / 1100 + 14);
     const [x, y] = f(plane.pos.x, plane.pos.z);

@@ -12,6 +12,8 @@ import { PLANES, STARTS, liveriesOf } from './planes/catalog.js';
 import { createWaterBomber, createSprayer, createMail, canScoop } from './missions.js';
 import { createRescue, createSling } from './heli-missions.js';
 import { createParas } from './paras.js';
+import { buildMilBase } from './world/milbase.js';
+import { buildLaunchSite } from './world/spaceport.js';
 import { buildHospital, hospital } from './world/sites.js';
 import { country, treatedShare, planRoutes } from './world/country.js';
 import { save } from './save.js';
@@ -67,7 +69,7 @@ const world = {
   atFuel: atFuelStation,
 };
 
-let birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
+let spaceport, birds, boats, sky, scenery, rig, ui, fx, plane, model, missiles, guns, islandMap = null;
 let mission = null; // bombardier d'eau (hélicoptère rouge), ou null
 const _sv = new THREE.Vector3();
 let kills = 0; // montgolfières abattues depuis le lancement
@@ -351,7 +353,7 @@ function resume() {
 /** Mini-carte (toutes les 3 images) et grande carte si elle est ouverte. */
 function drawMaps() {
   if (!islandMap) return;
-  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : [] };
+  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : [], train: scenery.traffic.train && scenery.traffic.train.pos, rocket: spaceport.pos };
   if (frameNo % 3 === 0) islandMap.drawMini(document.getElementById('minimap'), plane, tele.hdg, extras, plane.spec.maxSpeed > 120 ? 3500 : 2200);
   if (ui.bigMapOpen && frameNo % 4 === 0) islandMap.drawFull(document.getElementById('bigmapc'), plane, tele.hdg, extras);
 }
@@ -480,7 +482,9 @@ function frame(now) {
     scenery.update(time, sky.night, dt, camera.position);
     birds.update(dt, time, plane);
     boats.update(dt, time);
-    for (const sp of spinners) sp.obj.rotation.y += sp.rate * dt;
+    const ev = spaceport.update(dt, camera.position);
+    if (ev && state === 'fly' && Math.hypot(plane.pos.x - spaceport.x, plane.pos.z - spaceport.z) < 9000) ui.toast(ev, 3500);
+    for (const sp of spinners) if (sp.tick) sp.tick(time); else sp.obj.rotation.y += sp.rate * dt;
   }
   if (!paused) {
     const hdg = Math.atan2(plane.fwd.x, -plane.fwd.z);
@@ -522,6 +526,7 @@ function frame(now) {
     plane, camera, cockpit, dt, active: state === 'fly' || state === 'crash',
     engineOn: state === 'fly' && plane.engineRunning,
   });
+  sound.rocket(paused || state === 'menu' ? 0 : spaceport.loudness(camera.position));
   renderer.render(scene, camera);
 }
 
@@ -535,6 +540,8 @@ async function boot() {
   scene.add(buildTerrain(flatZones()));
   buildAirfields(scene);
   buildSeaBase(scene);
+  buildMilBase(scene);
+  spaceport = buildLaunchSite(scene);
   buildCarrier(scene);
   sky = new Sky(scene);
   scenery = buildScenery(scene);
@@ -587,7 +594,7 @@ async function boot() {
   // petit accès pour le débogage depuis la console
   window.airgame = {
     get plane() { return plane; }, get state() { return state; },
-    world, rig, sky, hospital, milBase, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
+    world, rig, sky, hospital, milBase, get spaceport() { return spaceport; }, input, sound, get missiles() { return missiles; }, get guns() { return guns; }, get mission() { return mission; }, get scenery() { return scenery; }, get birds() { return birds; }, get boats() { return boats; }, runways, carrier, PLANES, heightAt, scene, camera, renderer,
     select(planeId, startId) {
       setPlane(PLANES.findIndex((p) => p.id === planeId));
       setStart(STARTS.findIndex((s) => s.id === startId));

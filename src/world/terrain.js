@@ -12,7 +12,7 @@ export const VOLCANO = { x: -2500, z: 1000, rimR: 300, baseR: 1350, h: 760, dept
 const ISLETS = [
   { x: 4300, z: -3700, r: 380, a: 150 },
   { x: -4700, z: -3000, r: 300, a: 125 },
-  { x: 3500, z: 4300, r: 260, a: 110 },
+  { x: 3500, z: 4300, r: 420, a: 110 }, // îlot du site de lancement
   { x: -1200, z: -4900, r: 240, a: 105 },
 ];
 /** Grande île : réunion « douce » de lobes elliptiques, une grande baie au sud-ouest et un lac au centre. */
@@ -37,7 +37,8 @@ export function setBig(big) {
   Object.assign(VOLCANO, { x: -8600, z: -3000, rimR: 360, baseR: 1750, h: 950, depth: 270 });
   ISLETS.splice(0, ISLETS.length,
     { x: -12300, z: 600, r: 450, a: 140 }, { x: 12800, z: -500, r: 380, a: 125 }, { x: -3200, z: -8600, r: 400, a: 130 },
-    { x: 12000, z: 5400, r: 320, a: 105 }, { x: 4700, z: 8050, r: 820, a: 112 }, // îlot de la base militaire, près du porte-avions
+    { x: 12000, z: 5400, r: 640, a: 105 }, // îlot du site de lancement
+    { x: 4700, z: 8050, r: 820, a: 112 }, // îlot de la base militaire, près du porte-avions
     { x: -9000, z: 6400, r: 300, a: 100 });
   mca = Math.cos(MTN.ang); msa = Math.sin(MTN.ang);
 }

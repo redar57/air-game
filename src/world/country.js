@@ -36,8 +36,8 @@ function mark(x, z, r, v) {
 // ---------------------------------------------------------------------------
 // Tracé des chemins (A* sur une grille de 100 m)
 const G = 100;
-function findPath(a, b, opt = {}) {
-  const { slopeK = 400, highK = 60, villages = [] } = opt;
+const railCells = new Set(); // cases de 100 m où passe la voie ferrée
+function findPath(a, b) {
   const n = Math.round((2 * HALF) / G), N = n * n;
   const idx = (x, z) => Math.round((x + HALF) / G) + Math.round((z + HALF) / G) * n;
   const pos = (k) => [-HALF + (k % n) * G, -HALF + Math.floor(k / n) * G];
@@ -72,8 +72,8 @@ function findPath(a, b, opt = {}) {
       const h = H(k2);
       if (h < 2) continue; // pas de chemin dans l'eau
       const [x, z] = pos(k2), d = G * Math.hypot(di, dj), slope = Math.abs(h - h0) / d;
-      let cost = d * (1 + slope * slope * slopeK + Math.max(0, h - 250) / highK);
-      for (const v of villages) if (Math.hypot(x - v.x, z - v.z) < v.r * 0.8) cost *= 4; // la voie contourne les maisons
+      let cost = d * (1 + slope * slope * 400 + Math.max(0, h - 250) / 60);
+      if (railCells.has(k2)) cost *= 4;
       if (k2 !== goal && onRunway(x, z)) cost *= 30;
       const ng = g[k] + cost;
       if (ng < g[k2]) { g[k2] = ng; from[k2] = k; push(k2, ng + Math.hypot(x - gx, z - gz)); }
@@ -188,6 +188,8 @@ export function planRoutes() {
   country.villages.push(lac, sud, port, col, pre);
   const ap = rw('aeroport'), pr = rw('prairie'), bz = rw('baie');
   const end = (r, f) => { const w = {}; toWorld(r, r.width / 2 + 60, f * r.length / 2, w); return w; };
+  // la voie d'abord : les routes la traversent mais évitent de la longer
+  planRail([...[sud, port, pre].map((v) => [v.name, v.x, v.z]), ["Aéroport", ap.x, ap.z], ['Plage du Nord', 1500, -8500], ['Cap du Nord-Est', 10500, -3200], ['Pied du Volcan', -11500, -3500]]);
   // routes goudronnées entre les bourgs et les terrains, chemins de terre vers le col et la base nautique
   const links = [[end(ap, -0.6), lac, 1], [lac, pre, 1], [pre, end(pr, 0.55), 1], [lac, sud, 1], [sud, port, 1], [port, end(bz, 0.4), 1], [lac, col, 0]];
   if (seaBase.active) links.push([lac, toWorld(seaBase, 70, -125, {}), 0]);
@@ -195,7 +197,6 @@ export function planRoutes() {
     const path = findPath(a, b);
     if (path) { path.paved = !!paved; country.roads.push(path); for (const p of path) mark(p.x, p.z, paved ? 8 : 6, 1); }
   }
-  planRail([lac, pre, sud, port, col]);
   hf = heightAt;
 }
 
@@ -227,52 +228,110 @@ export function planCountry() {
   }
 }
 
-/** Point à terre le plus proche de (x, z) (cherche en spirale). */
-function landNear(x, z, min = 6) {
-  for (let r = 0; r < 2500; r += 60) for (let a = 0; a < 6.283; a += r ? 60 / r : 7) {
-    const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
-    if (hf(px, pz) > min && hf(px, pz) < 160) return { x: px, z: pz };
+/**
+ * Boucle qui fait le tour de l'île à bonne distance de la côte : courbe de niveau d'une carte « terre / mer »
+ * floutée. Une courbe de niveau ne se recoupe jamais, et le flou arrondit tous ses virages.
+ */
+function coastLoop() {
+  const C = 100, n = Math.round((2 * HALF) / C) + 1, at = (i) => -HALF + i * C;
+  // la mer : tout ce qui communique avec le bord de la carte (le lac compte comme de la terre)
+  const sea = new Uint8Array(n * n), stack = [0];
+  sea[0] = 1;
+  while (stack.length) {
+    const k = stack.pop(), i = k % n, j = (k - i) / n;
+    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const x = i + a, y = j + b, q = x + y * n;
+      if (x < 0 || y < 0 || x >= n || y >= n || sea[q] || hf(at(x), at(y)) > 2) continue;
+      sea[q] = 1; stack.push(q);
+    }
   }
-  return { x, z };
+  let m = new Float32Array(n * n);
+  const l = {};
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const x = at(i), z = at(j);
+    const strip = runways.some((r) => { toLocal(r, x, z, l); return Math.abs(l.x) < r.halfWid + RAIL.clear && Math.abs(l.z) < r.halfLen + RAIL.clear; });
+    m[i + j * n] = sea[i + j * n] || strip ? 0 : 1;
+  }
+  for (let it = 0; it < 3; it++) for (const d of [1, n]) { // trois moyennes glissantes = flou gaussien
+    const o = new Float32Array(n * n), R = RAIL.blur;
+    for (let k = 0; k < n * n; k++) { let t = 0; for (let r = -R; r <= R; r++) t += m[k + r * d] || 0; o[k] = t / (2 * R + 1); }
+    m = o;
+  }
+  // courbes de niveau : on relie les bords de case traversés (chaque bord est partagé par deux cases au plus)
+  const L = RAIL.level, link = new Map(), P = new Map();
+  const add = (a, b) => { for (const [u, v] of [[a, b], [b, a]]) (link.get(u) || link.set(u, []).get(u)).push(v); };
+  const edge = (i, j, vert) => {
+    const k = i + j * n, q = vert ? k + n : k + 1, A = m[k], B = m[q];
+    if ((A > L) === (B > L)) return null;
+    const key = k * 2 + (vert ? 1 : 0), f = (L - A) / (B - A);
+    if (!P.has(key)) P.set(key, vert ? { x: at(i), z: at(j) + f * C } : { x: at(i) + f * C, z: at(j) });
+    return key;
+  };
+  for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) {
+    const e = [edge(i, j, 0), edge(i + 1, j, 1), edge(i, j + 1, 0), edge(i, j, 1)].filter((v) => v !== null);
+    if (e.length === 2) add(e[0], e[1]);
+    else if (e.length === 4) { add(e[0], e[3]); add(e[1], e[2]); }
+  }
+  // la plus grande boucle fermée
+  let best = [], bestA = 0;
+  const seen = new Set();
+  for (const s of link.keys()) {
+    if (seen.has(s)) continue;
+    const loop = [];
+    let k = s;
+    while (k !== undefined && !seen.has(k)) { seen.add(k); loop.push(P.get(k)); k = link.get(k).find((q) => !seen.has(q)); }
+    let A = 0;
+    loop.forEach((p, i) => { const q = loop[(i + 1) % loop.length]; A += p.x * q.z - q.x * p.z; });
+    if (Math.abs(A) > bestA) { bestA = Math.abs(A); best = loop; }
+  }
+  return best;
+}
+
+/** Rééchantillonne une boucle fermée à pas constant (proche de `step`). */
+function resampleLoop(p, step) {
+  const len = [0];
+  p.forEach((a, i) => { const b = p[(i + 1) % p.length]; len.push(len[i] + Math.hypot(b.x - a.x, b.z - a.z)); });
+  const total = len[p.length], n = Math.round(total / step), out = [];
+  for (let k = 0, i = 0; k < n; k++) {
+    const s = (k * total) / n;
+    while (len[i + 1] < s) i++;
+    const a = p[i], b = p[(i + 1) % p.length], f = (s - len[i]) / (len[i + 1] - len[i] || 1);
+    out.push({ x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f });
+  }
+  return out;
+}
+/** Moyenne glissante en boucle de demi-largeur W (en points), `times` fois. */
+function smoothRing(v, W, times) {
+  const n = v.length;
+  for (let it = 0; it < times; it++) {
+    let sum = 0;
+    for (let k = -W; k <= W; k++) sum += v[(k + n) % n];
+    const o = new Array(n);
+    for (let i = 0; i < n; i++) { o[i] = sum / (2 * W + 1); sum += v[(i + W + 1) % n] - v[(i - W + n) % n]; }
+    v = o;
+  }
+  return v;
 }
 
 /**
- * Voie ferrée qui fait le tour de l'île en passant par les gares des villages. Le tracé évite les pentes
- * (plus encore que les routes), puis l'altitude de la voie est lissée : remblais et viaducs dans les creux,
- * tunnels sous les bosses.
+ * Voie ferrée qui fait le tour de l'île, le long de la côte. Son altitude est une version adoucie de celle du
+ * sol : remblais et viaducs dans les creux, tranchées et tunnels dans les bosses.
  */
-function planRail([lac, pre, sud, port, col]) {
-  const gare = (v, dx, dz) => ({ ...landNear(v.x + dx * (v.r + 110), v.z + dz * (v.r + 110)), name: v.name });
-  const stops = [gare(lac, 0.2, 1), gare(pre, -0.3, 1), null, null, gare(col, 0.3, 1), null, gare(port, 0.6, -0.8), gare(sud, 0.8, -0.6), null];
-  const route = [stops[0], stops[1], landNear(9300, -2300), landNear(5200, -2000), stops[4], landNear(-5600, -700), stops[6], stops[7], landNear(1600, 3500)];
-  const pts = [];
-  const stopIdx = [];
-  for (let k = 0; k < route.length; k++) {
-    const a = route[k], b = route[(k + 1) % route.length];
-    if (stops[k]) stopIdx.push({ i: pts.length, name: stops[k].name });
-    const path = findPath(a, b, { slopeK: 9000, highK: 25, villages: country.villages });
-    if (!path) return;
-    pts.push(...path.slice(0, -1));
-  }
-  // lissage supplémentaire du tracé (la boucle est fermée), puis rééchantillonnage tous les 8 m
-  let p = pts;
-  for (let it = 0; it < 3; it++) p = p.map((q, i) => {
-    const A = p[(i - 1 + p.length) % p.length], B = p[(i + 1) % p.length];
-    return { x: (A.x + 2 * q.x + B.x) / 4, z: (A.z + 2 * q.z + B.z) / 4 };
-  });
+const RAIL = { blur: 4, level: 0.62, clear: 300, cut: 22, grade: 0.045 };
+function planRail(stops) {
+  let p = resampleLoop(coastLoop(), 8);
+  const sx = smoothRing(p.map((q) => q.x), 16, 3), sz = smoothRing(p.map((q) => q.z), 16, 3);
+  p = resampleLoop(sx.map((x, i) => ({ x, z: sz[i] })), 8);
   const n = p.length, g = p.map((q) => hf(q.x, q.z));
-  // altitude de la voie : moyenne glissante sur ±200 m, jamais sous 5 m (viaduc au-dessus de l'eau)
-  let y = g.map((h) => Math.max(h, 5));
-  for (let it = 0; it < 5; it++) {
-    const W = 25;
-    y = y.map((_, i) => {
-      let sum = 0;
-      for (let k = -W; k <= W; k++) sum += y[(i + k + n) % n];
-      return Math.max(5, sum / (2 * W + 1));
-    });
+  // pente limitée : milieu entre l'enveloppe qui creuse et celle qui remblaie
+  const soft = smoothRing(g.map((h) => Math.max(h, 5)), 8, 2), lo = soft.slice(), up = soft.slice(), dy = RAIL.grade * 8;
+  for (let k = 0; k < 4 * n; k++) {
+    const i = k < 2 * n ? k % n : n - 1 - (k % n), j = k < 2 * n ? (i - 1 + n) % n : (i + 1) % n;
+    lo[i] = Math.min(lo[i], lo[j] + dy); up[i] = Math.max(up[i], up[j] - dy);
   }
+  const y = smoothRing(lo.map((v, i) => (v + up[i]) / 2), 8, 2).map((h) => Math.max(5, h));
   // déblais et remblais : le relief est ramené au niveau de la voie sur une bande de part et d'autre,
-  // avec des talus ; au-delà de 16 m d'écart on laisse le relief (viaduc ou tunnel)
+  // avec des talus ; au-delà de RAIL.cut mètres d'écart on laisse le relief (viaduc ou tunnel)
   const CELL = 64, cells = new Map();
   p.forEach((q, i) => {
     const key = Math.floor(q.x / CELL) * 100003 + Math.floor(q.z / CELL);
@@ -288,14 +347,17 @@ function planRail([lac, pre, sud, port, col]) {
     }
     if (bi < 0) return h;
     const d = Math.sqrt(best), ty = y[bi] - 0.7, dh = Math.abs(ty - h);
-    if (g[bi] < 1 || Math.abs(y[bi] - g[bi]) > 16) return h;
+    if (g[bi] < 1 || Math.abs(y[bi] - g[bi]) > RAIL.cut) return h;
     return lerp(h, ty, 1 - smoothstep(30, 40 + dh * 2.2, d));
   });
-  country.rail = {
-    pts: p.map((q, i) => ({ x: q.x, z: q.z, y: y[i], g: g[i] })),
-    stations: stopIdx.map((s) => ({ ...s, i: Math.min(n - 1, s.i) })),
-  };
-  for (const q of p) mark(q.x, q.z, 9, 1);
+  // gares : au point de la voie le plus proche de chaque lieu desservi
+  const stations = stops.map(([name, x, z]) => {
+    let bi = 0, bd = Infinity;
+    p.forEach((q, i) => { const d = Math.hypot(q.x - x, q.z - z) + (Math.abs(y[i] - g[i]) > 4 ? 250 : 0); if (d < bd) { bd = d; bi = i; } });
+    return { name, i: bi };
+  }).sort((a, b) => a.i - b.i);
+  country.rail = { pts: p.map((q, i) => ({ x: q.x, z: q.z, y: y[i], g: g[i] })), stations };
+  for (const q of p) { mark(q.x, q.z, 9, 1); railCells.add(Math.round((q.x + HALF) / G) + Math.round((q.z + HALF) / G) * Math.round((2 * HALF) / G)); }
 }
 
 /** Construit chemins et champs. */

@@ -4,12 +4,13 @@ import { country } from './country.js';
 import { lightsPoints } from './airfields.js';
 import { addBox, addCylinder } from './colliders.js';
 import { mulberry32, mergeColored, xform } from '../util.js';
+import { Puffs } from './puffs.js';
 
 // Circulation de la grande île : voitures, camionnettes, camions et cars sur les routes goudronnées, et un
-// train de voyageurs qui fait le tour de l'île en s'arrêtant à chaque gare. Repère des véhicules : -Z vers l'avant.
+// petit train à vapeur qui fait le tour de l'île en s'arrêtant à chaque gare. Repère des véhicules : -Z vers l'avant.
 
 const STEP = 8; // espacement des points des routes et de la voie (m)
-const _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _p = new THREE.Vector3();
 const lam = (o = {}) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, ...o });
 
 /** Position, cap et pente le long d'une polyligne à l'abscisse s (en nombre de points), en boucle ou non. */
@@ -108,6 +109,22 @@ function buildRail(scene, rail) {
   const track = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: ballastTexture(), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
   track.receiveShadow = true;
   scene.add(track);
+  // passages à niveau : croix de Saint-André de chaque côté de la voie
+  for (const path of country.roads) {
+    let last = -99;
+    path.forEach((r, k) => {
+      if (k - last < 12) return;
+      const i = P.findIndex((q) => Math.abs(q.x - r.x) < 6 && Math.abs(q.z - r.z) < 6 && Math.abs(q.y - heightAt(q.x, q.z)) < 2);
+      if (i < 0) return;
+      last = k;
+      const a = path[Math.max(0, k - 2)], b = path[Math.min(path.length - 1, k + 2)], L = Math.hypot(b.x - a.x, b.z - a.z) || 1, ux = (b.x - a.x) / L, uz = (b.z - a.z) / L, ry = Math.atan2(ux, uz);
+      for (const s of [-1, 1]) {
+        const x = r.x + ux * s * 8 - uz * s * 5, z = r.z + uz * s * 8 + ux * s * 5, y = heightAt(x, z);
+        parts.push({ geo: new THREE.BoxGeometry(0.2, 4, 0.2), color: 0xd9dcdf, matrix: xform(x, y + 2, z, ry) });
+        for (const t of [-0.7, 0.7]) parts.push({ geo: new THREE.BoxGeometry(2.2, 0.35, 0.12), color: t > 0 ? 0xf4f4ee : 0xd8312b, matrix: xform(x, y + 3.7, z, ry, 1, 1, 1, 0, t) });
+      }
+    });
+  }
   // gares : quai, abri et panneau, sur le côté droit de la voie
   const lamps = [];
   for (const st of rail.stations) {
@@ -126,22 +143,58 @@ function buildRail(scene, rail) {
   if (lamps.length) scene.add(lightsPoints(lamps, 0xffe2a0, 4));
 }
 
-function wagonMesh(loco, color) {
-  const parts = [], G = 0x2c4558, K = 0x26292d;
-  const B = (w, h, d, c, x, y, z) => parts.push({ geo: new THREE.BoxGeometry(w, h, d), color: c, matrix: xform(x, y, z) });
-  if (loco) {
-    B(2.9, 2.6, 15, color, 0, 2.3, 0.5); B(3.0, 1.1, 3.2, G, 0, 3.1, -5.3); B(2.95, 0.35, 15.1, 0xf2c230, 0, 1.3, 0.5);
-    B(2.4, 0.5, 13, 0x5a5f66, 0, 3.85, 0.8); B(2.9, 0.5, 0.2, K, 0, 1.6, -7.05);
-  } else {
-    B(2.9, 2.9, 15.4, color, 0, 2.45, 0); B(2.95, 0.9, 13, G, 0, 2.9, 0); B(2.7, 0.35, 15.4, 0xc9cdd2, 0, 4.05, 0);
-    B(2.95, 0.3, 15.45, 0xf4f1ea, 0, 1.55, 0);
+/** Petite locomotive à vapeur : chaudière, dôme, cheminée évasée, cabine, roues rouges et chasse-bœufs. */
+function locoMesh() {
+  const parts = [], N = 0x1f2b2a, GR = 0x2f6b47, R = 0xc8402f, L = 0xd9a92b, K = 0x26292d;
+  const B = (w, h, d, c, x, y, z, rx = 0) => parts.push({ geo: new THREE.BoxGeometry(w, h, d), color: c, matrix: xform(x, y, z, 0, 1, 1, 1, rx) });
+  const tubeZ = (r, d, c, y, z) => parts.push({ geo: new THREE.CylinderGeometry(r, r, d, 12).rotateX(Math.PI / 2), color: c, matrix: xform(0, y, z) });
+  const C = (rt, rb, h, c, y, z) => parts.push({ geo: new THREE.CylinderGeometry(rt, rb, h, 10), color: c, matrix: xform(0, y, z) });
+  B(2.3, 0.4, 10.4, K, 0, 1.25, 0);
+  tubeZ(1.1, 5.6, GR, 2.55, -1.2); tubeZ(1.16, 1.3, N, 2.55, -4.5);
+  for (const z of [-2.8, -1.2, 0.4]) tubeZ(1.14, 0.18, L, 2.55, z); // cerclages de laiton
+  C(0.75, 0.4, 1.0, N, 4.9, -4.5); C(0.4, 0.45, 1.2, N, 4, -4.5);   // cheminée évasée
+  C(0.42, 0.5, 0.7, L, 3.85, -2); parts.push({ geo: new THREE.SphereGeometry(0.42, 8, 6), color: L, matrix: xform(0, 4.2, -2) });
+  C(0.12, 0.12, 0.7, L, 3.9, 0.2);                                   // sifflet
+  B(2.7, 2.5, 2.8, R, 0, 2.7, 3); B(2.74, 0.9, 1.7, 0x2c4558, 0, 3.3, 3); B(3.1, 0.3, 3.5, N, 0, 4.1, 3);
+  B(2.6, 0.5, 0.4, R, 0, 1.2, -5.3); B(2.2, 0.9, 0.2, K, 0, 0.65, -5.75, 0.5);
+  for (const s of [-1, 1]) {
+    for (const z of [-0.9, 0.9, 2.7]) parts.push({ geo: new THREE.CylinderGeometry(0.78, 0.78, 0.22, 12).rotateZ(Math.PI / 2), color: R, matrix: xform(s * 1.1, 0.8, z) });
+    for (const z of [-4.4, -3.2]) parts.push({ geo: new THREE.CylinderGeometry(0.42, 0.42, 0.2, 10).rotateZ(Math.PI / 2), color: R, matrix: xform(s * 1.1, 0.45, z) });
+    B(0.12, 0.2, 4.6, L, s * 1.28, 0.8, 0.6); B(0.5, 0.7, 1.4, N, s * 1.2, 1.05, -3.5); // bielles, cylindres
   }
-  for (const z of [-5, 5]) { B(2.2, 0.8, 3, K, 0, 0.75, z); }
-  const mesh = new THREE.Mesh(mergeColored(parts), lam());
+  tubeZ(0.3, 0.4, L, 3.75, -5.1);
+  return { parts, lights: [[0, 3.75, -5.4], 0xfff4c8, 3] };
+}
+function tenderMesh() {
+  const parts = [], B = (w, h, d, c, x, y, z, ry = 0) => parts.push({ geo: new THREE.BoxGeometry(w, h, d), color: c, matrix: xform(x, y, z, ry) });
+  B(2.3, 0.4, 5.4, 0x26292d, 0, 1.0, 0); B(2.5, 1.6, 5, 0x2f6b47, 0, 2, 0); B(2.54, 0.15, 5.04, 0xd9a92b, 0, 2.6, 0);
+  for (let k = 0; k < 7; k++) B(1.1, 0.8, 1.1, 0x17191b, ((k % 2) - 0.5) * 1.1, 2.85 + (k % 3) * 0.12, -1.8 + k * 0.6, k);
+  wheelsZ(parts, [-1.5, 1.5]);
+  return { parts, lights: null };
+}
+function wheelsZ(parts, zs) {
+  for (const z of zs) for (const x of [-1.1, 1.1]) parts.push({ geo: new THREE.CylinderGeometry(0.45, 0.45, 0.2, 10).rotateZ(Math.PI / 2), color: 0x26292d, matrix: xform(x, 0.45, z) });
+}
+/** Voiture en bois à plateformes et toit bombé ; last : avec lanterne rouge de queue. */
+function coachMesh(color, last) {
+  const parts = [], G = 0x2c4558, I = 0xf2ead2;
+  const B = (w, h, d, c, x, y, z) => parts.push({ geo: new THREE.BoxGeometry(w, h, d), color: c, matrix: xform(x, y, z) });
+  B(2.5, 0.35, 10.6, 0x26292d, 0, 1, 0); B(2.5, 1.1, 8.4, color, 0, 1.75, 0); B(2.4, 1.1, 8.3, G, 0, 2.8, 0);
+  for (let z = -4.1; z <= 4.2; z += 1.37) B(2.52, 1.1, 0.3, I, 0, 2.8, z);
+  B(2.52, 0.2, 8.42, I, 0, 2.32, 0); B(2.52, 0.25, 8.42, I, 0, 3.4, 0);
+  parts.push({ geo: new THREE.CylinderGeometry(1.45, 1.45, 10.8, 10, 1, false, -Math.PI / 2, Math.PI), color: 0x8a3f30, matrix: xform(0, 3.45, 0, 0, 1, 1, 0.42, -Math.PI / 2) });
+  for (const z of [-5.1, 5.1]) { B(2.4, 0.1, 0.1, 0xd9a92b, 0, 2.1, z); for (const x of [-1.15, 1.15]) { B(0.1, 2.4, 0.1, 0x26292d, x, 2.3, z); } }
+  wheelsZ(parts, [-3.9, -2.7, 2.7, 3.9]);
+  const w = []; for (let z = -3.4; z <= 3.5; z += 1.37) w.push(-1.3, 2.8, z, 1.3, 2.8, z);
+  return { parts, lights: last ? [[0, 2.2, 5.4], 0xff3020, 2] : null, windows: w };
+}
+function trainUnit(scene, o, half) {
+  const mesh = new THREE.Mesh(mergeColored(o.parts), lam());
   mesh.castShadow = true;
-  if (loco) mesh.add(lightsPoints([0, 3.2, -7.1, -0.9, 1.6, -7.1, 0.9, 1.6, -7.1], 0xfff4c8, 2.2));
-  else { const w = []; for (let z = -6; z <= 6; z += 3) w.push(-1.5, 2.9, z, 1.5, 2.9, z); mesh.add(lightsPoints(w, 0xffd890, 1.6)); }
-  return mesh;
+  if (o.lights) mesh.add(lightsPoints(...o.lights));
+  if (o.windows) mesh.add(lightsPoints(o.windows, 0xffd890, 1.3));
+  scene.add(mesh);
+  return { mesh, half };
 }
 
 // ---------------------------------------------------------------------------
@@ -164,16 +217,18 @@ export function buildTraffic(scene) {
     }
   }
 
-  // le train : une locomotive et cinq voitures
-  let train = null;
+  // le petit train : locomotive à vapeur, tender et cinq voitures en bois
+  let train = null, smoke = null;
   const rail = country.rail;
   if (rail && rail.pts.length > 50) {
     buildRail(scene, rail);
-    const cars_ = [wagonMesh(true, 0xc8402f)];
-    for (let k = 0; k < 5; k++) cars_.push(wagonMesh(false, k % 2 ? 0x2f6b47 : 0x2f5fa8));
-    for (const m of cars_) scene.add(m);
+    const units = [trainUnit(scene, locoMesh(), 5.8), trainUnit(scene, tenderMesh(), 2.9)];
+    [0xc8402f, 0x2f5fa8, 0xf2a22c, 0x2f8a5a, 0x8e1f3a].forEach((c, k) => units.push(trainUnit(scene, coachMesh(c, k === 4), 5.6)));
+    let off = -units[0].half;
+    for (const u of units) { off += u.half; u.off = off; off += u.half; } // distance du milieu derrière celui de la locomotive
+    smoke = new Puffs(scene, 60, { opacity: 0.85 });
     const st0 = rail.stations[0];
-    train = { meshes: cars_, s: st0 ? st0.i - 0.5 : 0, v: 0, vmax: 24, wait: 12, next: 1, n: rail.pts.length };
+    train = { units, pos: units[0].mesh.position, puff: 0, s: st0 ? st0.i : 0, v: 0, vmax: 20, wait: 12, next: 1, n: rail.pts.length };
   }
 
   const place = (mesh, x, y, z, yaw, pitch) => {
@@ -203,7 +258,7 @@ export function buildTraffic(scene) {
         const y0 = heightAt(x - fx * 1.5, z - fz * 1.5), y1 = heightAt(x + fx * 1.5, z + fz * 1.5);
         place(c.mesh, x, (y0 + y1) / 2 + 0.32, z, Math.atan2(-fx, -fz), Math.atan2(y1 - y0, 3));
       }
-      // train : accélère, roule à 85 km/h, freine pour s'arrêter à quai, repart après un moment
+      // train : accélère, roule à 70 km/h, freine pour s'arrêter à quai, repart après un moment
       if (train) {
         const T = train, P = rail.pts, st = rail.stations;
         if (T.wait > 0) T.wait -= dt;
@@ -216,13 +271,22 @@ export function buildTraffic(scene) {
           d = ((target.i - T.s) % T.n + T.n) % T.n * STEP;
           if (d < 1.5 || d > (T.n - 3) * STEP) { T.v = 0; T.wait = 20; T.next++; }
         }
-        T.meshes.forEach((m, k) => {
-          const s0 = T.s - k * (16 / STEP), sf = s0 + 6 / STEP, sb = s0 - 6 / STEP;
+        for (const { mesh, half, off } of T.units) {
+          const s0 = T.s - off / STEP, sf = s0 + (half * 0.7) / STEP, sb = s0 - (half * 0.7) / STEP;
           along(P, sf, true, _a); const fx = _a.x, fz = _a.z, fy = _a.y;
           along(P, sb, true, _b);
           const dx = fx - _b.x, dz = fz - _b.z;
-          place(m, (fx + _b.x) / 2, (fy + _b.y) / 2 + 0.35, (fz + _b.z) / 2, Math.atan2(-dx, -dz), Math.atan2(fy - _b.y, Math.hypot(dx, dz)));
-        });
+          place(mesh, (fx + _b.x) / 2, (fy + _b.y) / 2 + 0.35, (fz + _b.z) / 2, Math.atan2(-dx, -dz), Math.atan2(fy - _b.y, Math.hypot(dx, dz)));
+        }
+        // panache de vapeur (rien à dessiner de loin, ni dans un tunnel)
+        const loco = T.units[0].mesh;
+        const near = cam && Math.hypot(T.pos.x - cam.x, T.pos.z - cam.z) < 4000 && heightAt(T.pos.x, T.pos.z) < T.pos.y + 3;
+        if (near && (T.puff -= dt) <= 0) {
+          T.puff = T.v > 1 ? 0.12 : 0.6;
+          _p.set(0, 5.6, -4.5).applyMatrix4(loco.matrixWorld);
+          smoke.emit(_p.x, _p.y, _p.z, (rnd() - 0.5) * 1.5, 3 + rnd() * 1.5 + T.v * 0.05, (rnd() - 0.5) * 1.5, 0.45, 1.5 + rnd() * 0.8, 3.5, T.v > 1 ? 0xe4e4e2 : 0xffffff);
+        }
+        smoke.update(dt, 0.6);
       }
     },
   };

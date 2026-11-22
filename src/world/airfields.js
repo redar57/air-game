@@ -19,14 +19,16 @@ export const seaBase = { active: false, x: 0, z: 0, yaw: 0, alt: 4, zone: null, 
  * hélisurfaces et aire d'embarquement des parachutistes (repère local de sa piste).
  */
 export const milBase = { active: false, rw: null, board: { lx: 0, lz: 0, hw: 26, hd: 38, x: 0, z: 0 }, fuel: { lx: 0, lz: 0, half: 16 } };
+/** Site de lancement de fusées, sur un îlot (c'est aussi sa zone aplanie). Repère local : le pas de tir vers -Z. */
+export const launchSite = { x: 0, z: 0, yaw: 0, alt: 10, halfLen: 175, halfWid: 125, margin: 110 };
 /** Hélisurfaces (base militaire, hôpital…) : { x, z, y, r, name }. */
 export const helipads = [];
 /** Pompes à carburant en plus de celle de l'aéroport : { x, z, yaw, half } (centre monde, demi-côté). */
 export const extraPumps = [];
-/** Objets qui tournent sur eux-mêmes (antennes radar) : mis à jour à chaque image. */
+/** Objets animés à chaque image : { obj, rate } tourne sur lui-même (antenne), { tick(t) } fait ce qu'il veut. */
 export const spinners = [];
 /** Zones à aplanir : les pistes, plus l'esplanade de la base nautique. */
-export function flatZones() { return seaBase.zone ? [...runways, seaBase.zone] : runways; }
+export function flatZones() { return [...runways, seaBase.zone, launchSite].filter(Boolean); }
 /** Matériaux des balises lumineuses (leur opacité suit la tombée de la nuit). */
 export const nightLights = [];
 
@@ -88,6 +90,10 @@ export function defineAirfields() {
       helipads.push({ x: _w.x, z: _w.z, y: rw.alt, r: 12, name: 'Base militaire', base: true });
     }
   }
+
+  Object.assign(launchSite, BIG ? { x: 12000, z: 5400, yaw: 0.5 } : { x: 3500, z: 4300, yaw: 0.8 });
+  toWorld(launchSite, -78, -5, _w);
+  helipads.push({ x: _w.x, z: _w.z, y: launchSite.alt, r: 12, name: 'Site de lancement', launch: true });
 
   if (BIG) {
     // base nautique sur la rive nord-ouest du lac : on part du centre du lac jusqu'à la terre ferme
@@ -336,10 +342,8 @@ export function buildAirfields(scene) {
         parts.push({ geo: new THREE.ExtrudeGeometry(tri, { depth: 35, bevelEnabled: false }), color: OD, matrix: xform(side + 190, 5, z - 17.5) });
         collide(side + 190, z, 8, 17, 8.4);
       }
-      // mât et drapeau, terrain de rassemblement
-      B(40, 0.08, 40, 0xb9ab86, side + 135, 0.12, 165);
-      C(0.15, 0.2, 14, 0xd9dcdf, side + 135, 7, 165, 6);
-      B(0.05, 1.6, 0.85, 0x1f4f9c, side + 135, 13, 165 + 0.5); B(0.05, 1.6, 0.85, 0xf4f4ee, side + 135, 13, 165 + 1.35); B(0.05, 1.6, 0.85, 0xd8312b, side + 135, 13, 165 + 2.2);
+      // terrain de rassemblement (le mât, le drapeau et le reste du décor : milbase.js)
+      B(40, 0.08, 40, 0xb9ab86, side + 135, 0.2, 165);
       // aire d'embarquement des parachutistes : cadre vert et pelotons alignés au bord
       const bx = milBase.board.lx, bz = milBase.board.lz, hw = milBase.board.hw, hd = milBase.board.hd;
       for (const [w, d, x, z] of [[hw * 2, 1, bx, bz - hd], [hw * 2, 1, bx, bz + hd], [1, hd * 2, bx - hw, bz], [1, hd * 2, bx + hw, bz]]) B(w, 0.06, d, 0x3fae4a, x, 0.33, z);
@@ -386,11 +390,7 @@ export function buildAirfields(scene) {
       hangar(side + 108, L / 2 - 230, 30, 9, 34, 0xc8452f);
       hangar(side + 108, L / 2 - 280, 30, 9, 34, 0xe8b23a);
       // station de carburant (aéroport principal seulement) : aire cerclée de jaune, pompes et panneau
-      if (rw.style === 'military') {
-      const fx = milBase.fuel.lx, fz = milBase.fuel.lz, hf = milBase.fuel.half;
-      for (const [x, z] of [[-hf, -hf], [hf, -hf], [hf, hf], [-hf, hf]]) pos.push(fx + x, 0.7, fz + z);
-    }
-    if (rw === runways[0]) {
+      if (rw === runways[0]) {
       const fx = fuelStation.lx, fz = fuelStation.lz, hf = fuelStation.half;
       for (const [w, d, x, z] of [[hf * 2, 0.9, fx, fz - hf], [hf * 2, 0.9, fx, fz + hf], [0.9, hf * 2, fx - hf, fz], [0.9, hf * 2, fx + hf, fz]]) B(w, 0.06, d, 0xf2c230, x, 0.33, z);
       B(10, 0.06, 1.4, 0xf2c230, fx, 0.33, fz); B(1.4, 0.06, 10, 0xf2c230, fx, 0.33, fz);
