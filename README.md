@@ -77,9 +77,9 @@ des roues, au décrochage et au crash (si le navigateur le permet).
   rembarque à l'arrêt sur l'aire verte de la base militaire (sur la petite carte : sur une piste).
 - **Largage de matériel** (Bipoutre) : jeeps, caisses et canon sous parachutes. La croix bleue au sol montre où la
   charge tombera ; X largue (au-dessus de 120 m). On recharge à l'arrêt sur une piste.
-- **Ravitaillement en vol** (Jet de chasse) : un ravitailleur fait le tour de la carte, se pose de temps en temps à la
-  base (petite carte : à l'aéroport) et repart. Pastille « R » sur la carte du Jet. Approche le panier par derrière, à
-  la même vitesse : il se branche, le plein prend 20 s, Espace pour se débrancher.
+- **Ravitaillement en vol** (Jet de chasse) : un ravitailleur façon KC-135 fait le tour de la carte, se pose de temps en
+  temps à la base (petite carte : à l'aéroport), roule jusqu'à la pompe et repart. Pastille « R » sur la carte du Jet.
+  Place-toi derrière, sous sa perche, à la même vitesse : elle se branche, le plein prend 20 s, Espace pour se débrancher.
 - **Dirigeable** : il flotte tout seul. Gaz pour avancer, manche pour monter ou descendre, Espace pour s'arrêter.
 - **Carnet de vol** (bouton du menu ou J) : heures, kilomètres, décollages et atterrissages par appareil, 33 badges.
 - **Grande Ville** (grande carte) : gratte-ciel, cathédrale, parc, stade, fête foraine, port avec ferry vers le Village

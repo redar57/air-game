@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { heightAt, normalAt, flatInfo, LAKE, BIG, HALF } from './terrain.js';
 import { city, cityPort, fishPort } from './places.js';
-import { runways, launchSite } from './airfields.js';
+import { runways, launchSite, milBase } from './airfields.js';
 import { country, occupied } from './country.js';
 import { kit } from './ports.js';
 import { palms } from './islets.js';
@@ -60,7 +60,7 @@ export function buildBeaches(scene, villages) {
   for (let n = 0; n < 200000 && beaches.length < want; n++) {
     const x = (rnd() - 0.5) * span, z = (rnd() - 0.5) * span, h = heightAt(x, z);
     if (h < 1.2 || h > 2.6 || normalAt(x, z, _n).y < 0.97 || flatInfo(x, z).w > 0 || occupied(x, z)) continue;
-    if (bad.some((r) => Math.hypot(r.x - x, r.z - z) < (r === launchSite ? 900 : 520)) || beaches.some((b) => Math.hypot(b.x - x, b.z - z) < (BIG ? 1300 : 900))) continue;
+    if (bad.some((r) => Math.hypot(r.x - x, r.z - z) < (r === launchSite || (milBase.active && r === milBase.rw) ? 1500 : 520)) || beaches.some((b) => Math.hypot(b.x - x, b.z - z) < (BIG ? 1300 : 900))) continue;
     let dx = heightAt(x + 12, z) - heightAt(x - 12, z), dz = heightAt(x, z + 12) - heightAt(x, z - 12); const l = Math.hypot(dx, dz); if (l < 0.5) continue;
     dx /= -l; dz /= -l; // vers la mer
     if (heightAt(x + dx * 60, z + dz * 60) > -2 || heightAt(x + dx * 320, z + dz * 320) > -12 || heightAt(x - dx * 40, z - dz * 40) > 16) continue;

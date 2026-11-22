@@ -719,32 +719,36 @@ function bipoutre(spec) {
   return m;
 }
 
-// Biréacteur de ligne
+// Triréacteur de ligne façon DC-10 : gros fuselage, aile basse en flèche, deux réacteurs sous l'aile et un troisième
+// traversant la base de la dérive, train central
 function ligne(spec) {
-  const m = base(), { hull, always } = m, W = 0xf6f6f2, B = 0x1f5fa8, O = 0xf2a22c;
-  hull.add(tube(0.35, 1.35, -20.6, -19, W, { y: -0.35, seg: 12 }), tube(1.35, 2, -19, -16.4, W, { y: -0.1, seg: 12 }), tube(2, 2, -16.4, 9.5, W, { seg: 12 }), tube(2, 0.45, 9.5, 20.4, W, { y: 0.75, seg: 12 }));
-  hull.add(box(2.5, 0.62, 0.9, GLASS, 0, 0.85, -18));
-  hull.add(tube(2.02, 2.02, -16.4, 9.5, B, { seg: 12, sy: 0.34, y: -1.2, sx: 0.93 }));
+  const m = base(), { hull, always } = m, W = 0xf6f6f2, B = 0x1f5fa8, O = 0xf2a22c, o = { seg: 14 };
+  hull.add(tube(0.5, 1.5, -23.5, -22.2, W, { ...o, y: -0.45 }), tube(1.5, 2.25, -22.2, -20, W, { ...o, y: -0.2 }), tube(2.25, 2.6, -20, -17, W, { ...o, y: -0.05 }), tube(2.6, 2.6, -17, 11, W, o), tube(2.6, 1.7, 11, 17.5, W, { ...o, y: 0.5 }), tube(1.7, 0.3, 17.5, 23.5, W, { ...o, y: 1.0 }));
+  hull.add(box(2.7, 0.62, 0.9, GLASS, 0, 1.0, -20.9), box(3.5, 0.5, 0.6, GLASS, 0, 0.95, -20.2));
   for (const s of [-1, 1]) {
-    for (let z = -14; z < 9; z += 0.95) if (Math.abs(z + 2.5) > 0.6) hull.add(box(0.06, 0.36, 0.28, GLASS, s * 1.97, 0.35, z));
-    for (const z of [-15.3, 8.6]) hull.add(box(0.06, 1.5, 0.8, O, s * 1.96, 0.1, z));
-    hull.add(box(0.07, 0.16, 26, O, s * 1.95, -0.28, -3.2));
+    for (let z = -17; z < 12; z += 0.95) hull.add(box(0.07, 0.38, 0.3, GLASS, s * 2.5, 0.75, z));
+    hull.add(box(0.06, 0.34, 32, B, s * 2.58, 0.12, -2), box(0.06, 0.2, 32, O, s * 2.58, -0.2, -2)); // double filet
+    for (const z of [-18.2, -9.6, 1.4, 11.4]) hull.add(box(0.1, 1.7, 1, 0xd9dcdf, s * 2.5, 0.3, z));
   }
-  finS(m, hull, [6.6, 5.4, 2.6, 0.4, 3.4], B, 0, 1.6, 15.2, 0, 0.3, 0.06, 0.94);
-  hull.add(box(0.44, 1.1, 2.6, O, 0, 5.6, 17.4));
-  wingS(m, hull, [6.6, 3.4, 1.5, 0.28, 2.2, 0.5], W, 0.5, 1.1, 17, [{ kind: 'elevator', t0: 0.08, t1: 1 }], 0.32);
-  wingS(m, always, [17.4, 6.8, 1.7, 0.75, 6.2, 1.3, 0.4], W, 1.4, -0.9, -1, [{ kind: 'flap', t0: 0.05, t1: 0.66 }, { kind: 'aileron', t0: 0.7, t1: 0.97 }], 0.2);
-  always.add(box(3.4, 1.1, 8, W, 0, -1.2, -0.6));
+  // réacteur central et dérive
+  const ny = 4.3;
+  hull.add(box(1.2, 2.4, 7.2, W, 0, 2.8, 16.6), tube(1.42, 1.5, 11.6, 12.6, B, { ...o, y: ny }), tube(1.5, 1.45, 12.6, 19, W, { ...o, y: ny }), tube(1.45, 0.95, 19, 22.4, W, { ...o, y: ny - 0.1 }), tube(1.22, 1.22, 11.5, 11.6, DARK, { ...o, y: ny }), tube(0.72, 0.4, 22.4, 23.4, DARK, { y: ny - 0.1 }));
+  finS(m, hull, [7.2, 6.2, 2.7, 0.5, 4.6], B, 0, ny + 1.1, 16.4, 0, 0.3, 0.06, 0.94);
+  hull.add(box(0.56, 1.1, 2.9, O, 0, ny + 6.3, 20));
+  wingS(m, hull, [8.2, 4.2, 1.8, 0.35, 3.4, 1.0], W, 0.7, 1.0, 18.2, [{ kind: 'elevator', t0: 0.06, t1: 1 }], 0.32);
+  // aile et réacteurs
+  wingS(m, always, [20.4, 9, 2.2, 0.95, 8.8, 2.0, 0.4], W, 1.6, -1.3, -1.6, [{ kind: 'flap', t0: 0.04, t1: 0.64 }, { kind: 'aileron', t0: 0.68, t1: 0.97 }], 0.2);
+  always.add(box(4.4, 1.5, 11, W, 0, -1.7, -0.6));
   for (const s of [-1, 1]) {
-    fin(always, wingGeo(1.9, 1.6, 0.7, 0.14, 1.1), B, s * 18.8, 0.4, 5.2, s * 0.25);
-    const x = s * 6.4; always.add(box(0.3, 0.9, 3, W, x, -1.05, -2.4), tube(1.25, 1.3, -5.6, -4.8, B, { x, y: -1.9, seg: 12 }), tube(1.3, 0.95, -4.8, -1.6, B, { x, y: -1.9, seg: 12 }), tube(1.02, 1.02, -5.7, -5.6, DARK, { x, y: -1.9, seg: 12 }), tube(0.62, 0.3, -1.6, -0.6, DARK, { x, y: -1.9 }));
+    const x = s * 7.6; always.add(box(0.36, 1.2, 4, W, x, -1.5, -3.2), tube(1.5, 1.55, -7.4, -6.2, B, { ...o, x, y: -2.5 }), tube(1.55, 1.15, -6.2, -2.4, W, { ...o, x, y: -2.5 }), tube(1.24, 1.24, -7.5, -7.4, DARK, { ...o, x, y: -2.5 }), tube(0.75, 0.35, -2.4, -1, DARK, { x, y: -2.5 }));
   }
   const gear = new THREE.Group();
-  for (const s of [-1, 1]) for (const z of [0.7, 2]) { leg(gear, s * 2.9, -1.4, -3.4, z, 0.6, 0.45); wheel(gear, 0.6, 0.45, s * 2.2, -3.4, z); }
-  leg(gear, 0.26, -1.6, -3.55, -15.6, 0.45, 0.26); wheel(gear, 0.45, 0.26, -0.26, -3.55, -15.6);
+  for (const s of [-1, 1]) for (const z of [0.9, 2.5]) { leg(gear, s * 3.9, -1.6, -4.06, z, 0.64, 0.45); wheel(gear, 0.64, 0.45, s * 3.1, -4.06, z); }
+  for (const s of [-1, 1]) wheel(gear, 0.6, 0.4, s * 0.4, -4.1, 2.4); bar(gear, [0, -2, 2.4], [0, -4.1, 2.4], 0.3, METAL); // train central
+  leg(gear, 0.3, -2, -4.2, -16.6, 0.5, 0.28); wheel(gear, 0.5, 0.28, -0.3, -4.2, -16.6);
   hull.add(gear); m.gear = gear;
-  m.cockpit = makeCockpit(spec.eye, { w: 1.9, frame: true, nose: { w: 1.7, len: 0.9, color: W, drop: 0.16 } });
-  m.tips = [[18.9, 0.6, 5.4], [-18.9, 0.6, 5.4]];
+  m.cockpit = makeCockpit(spec.eye, { w: 2.0, frame: true, nose: { w: 1.8, len: 0.9, color: W, drop: 0.16 } });
+  m.tips = [[22, 0.7, 7.2], [-22, 0.7, 7.2]];
   return m;
 }
 

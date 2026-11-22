@@ -58,7 +58,7 @@ export function buildMilBase(scene) {
 
   // --- marquages : voies de circulation jaunes, places de parking, bandes d'arrêt
   const line = (w, d, x, z, ry = 0, c = YE) => B(w, 0.06, d, c, x, 0.27, z, ry);
-  line(0.6, 840, side + 24, 0);
+  line(0.6, 900, side + 24, 60);
   for (const z of [-300, 0, 300]) { line(22, 0.6, side + 12, z); B(0.6, 0.06, 26, YE, side + 2.5, 0.22, z); }
 
   // --- appareils garés
@@ -75,8 +75,8 @@ export function buildMilBase(scene) {
   const row = []; for (let k = 0; k < 6; k++) row.push([side + 72, -262 + k * 30, Math.PI / 2 - 0.45]);
   park('jet', row);
   park('cargo', [[side + 78, 62, Math.PI / 2]]);
-  park('birotor', [[side + 50, 290, 0.3]], [0x56603f, 0x3f4a2f, 0x2b3024]);
-  park('libellule', [[side + 48, 335, 0.2], [side + 48, 360, 0.2]], [0x56603f, 0x2b3024]);
+  park('birotor', [[side + 64, 290, 0.3]], [0x56603f, 0x3f4a2f, 0x2b3024]);
+  park('libellule', [[side + 58, 335, 0.2], [side + 58, 360, 0.2]], [0x56603f, 0x2b3024]);
   // escabeaux, tracteurs et chariots de bombes devant les chasseurs
   for (let k = 0; k < 6; k++) {
     const z = -252 + k * 30;

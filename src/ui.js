@@ -133,7 +133,7 @@ export class UI {
     if (p.sling) rows.push([k('X'), "Accrocher / décrocher la charge (crochet près de l'anneau jaune)"]);
     if (p.paras) rows.push([k('X'), 'Faire sauter 4 parachutistes (plus de 250 m de haut)']);
     if (p.drops) rows.push([k('X'), 'Larguer une charge (plus de 120 m de haut)']);
-    if (p.missiles && p.afterburner) rows.push(['Ravitailleur', 'Approche-toi du panier derrière lui, à la même vitesse']);
+    if (p.missiles && p.afterburner) rows.push(['Ravitailleur', 'Place-toi sous sa perche, derrière lui, à la même vitesse']);
     if (p.id === 'canadair') rows.push([k('X'), "Larguer l'eau (maintenir) · écope en rasant l'eau"]);
     rows.push(['🎮', p.heli ? 'Stick gauche · RT / LT gaz · LB / RB pivot' : 'Stick gauche · RT / LT gaz · LB / RB palonnier']);
     return rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');

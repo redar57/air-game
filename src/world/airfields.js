@@ -320,6 +320,7 @@ export function buildAirfields(scene) {
       // grand parking en béton le long de la piste, et bretelles
       B(150, 0.3, 860, 0x6e7177, side + 85, 0.05, 0);
       for (const z of [-300, 0, 300]) B(22, 0.3, 30, 0x6e7177, side + 4, 0.04, z);
+      B(30, 0.3, 110, 0x6e7177, side + 24, 0.05, 482); B(34, 0.3, 46, 0x6e7177, side + 6, 0.04, 514); // voie de circulation jusqu'au seuil
       // hangars voûtés camouflés, portes tournées vers la piste
       for (const [z, col] of [[-210, OL], [-145, OD], [-80, OL]]) {
         const x = side + 150, w = 46, h = 10, d = 40;
@@ -388,6 +389,10 @@ export function buildAirfields(scene) {
       B(72, 0.3, 230, 0x595c62, side + 62, 0.05, L / 2 - 260);
       B(30, 0.3, 26, 0x595c62, side + 13, 0.04, L / 2 - 170);
       B(30, 0.3, 26, 0x595c62, side + 13, 0.04, L / 2 - 350);
+      // voie de circulation le long de la piste : bretelle de dégagement, aire de la pompe, seuil
+      B(24, 0.3, 450, 0x595c62, side + 27, 0.03, 155); B(38, 0.3, 64, 0x595c62, side + 10, 0.02, -50); B(36, 0.3, 62, 0x595c62, side + 37, 0.03, 385);
+      B(40, 0.3, 130, 0x595c62, side + 34, 0.03, L / 2 - 85); B(34, 0.3, 60, 0x595c62, side + 10, 0.02, L / 2 - 42);
+      for (const [w, d, x, z] of [[0.6, 400, side + 27, 150], [0.6, 100, side + 47, 440]]) B(w, 0.06, d, 0xf2c230, x, 0.27, z);
       hangar(side + 108, L / 2 - 180, 30, 9, 34, 0x3f79b8);
       hangar(side + 108, L / 2 - 230, 30, 9, 34, 0xc8452f);
       hangar(side + 108, L / 2 - 280, 30, 9, 34, 0xe8b23a);
