@@ -87,12 +87,7 @@ export class IslandMap {
 
   /** Dessine les repères (thermiques, montgolfières, feux…) ; f(x, z) -> [px, py] sur le canevas. */
   marks(g, f, extras, scale, rk) {
-    const { thermals = [], balloons = [], fires = [], fuel = false, load = false, mail = null, pins = [], train = null, rocket = null } = extras;
-    for (const [o, icon] of [[train, '🚂'], [rocket, '🚀']]) if (o) {
-      const [x, y] = f(o.x, o.z), r = 7 * scale;
-      g.font = `${Math.round(r * 2)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillStyle = '#fff'; g.fillText(icon, x, y);
-    }
+    const { thermals = [], balloons = [], fires = [], fuel = false, load = false, mail = null, pins = [] } = extras;
     for (const p of pins) { // objectifs des missions (blessés, charges, zones de saut…)
       const [x, y] = f(p.x, p.z), r = 6 * scale;
       g.fillStyle = p.color; g.strokeStyle = '#1b1d21'; g.lineWidth = scale;

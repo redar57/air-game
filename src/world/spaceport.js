@@ -12,7 +12,7 @@ import { usFlag, usFlagTexture } from './flag.js';
 const lam = (o = {}) => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, ...o });
 const PAD_Z = -95, PAD_H = 6, HALL_Z = 110;
 /** Durée de chaque étape (s). */
-const T = { rollout: 45, ready: 60, count: 10, ignite: 3, flight: 75, back: 35 };
+const T = { rollout: 45, ready: 1030, count: 10, ignite: 3, flight: 75, back: 35 };
 
 /** Lanceur : corps blanc à bandes orange, deux propulseurs, coiffe ; base des tuyères à y = 0, environ 58 m. */
 function rocketMesh() {
@@ -158,7 +158,7 @@ export function buildLaunchSite(scene) {
   const order = ['rollout', 'ready', 'count', 'ignite', 'flight', 'back'];
 
   const api = {
-    x: S.x, z: S.z, phase: 'ready', t: 15, speed: 0, pos: { x: S.x, z: S.z }, rocket: R.g, smoke,
+    x: S.x, z: S.z, phase: 'ready', t: 600, rocket: R.g, smoke,
     /** Passe directement à une étape (essais). */
     go(phase) { this.phase = phase; this.t = 0; this.enter(); },
     enter() {
@@ -172,13 +172,10 @@ export function buildLaunchSite(scene) {
       return (1.3 * (this.phase === 'ignite' ? smoothstep(0, 1, this.t) : 1 - smoothstep(60, T.flight, this.t))) / (1 + (_p.distanceTo(cam) / 900) ** 1.3);
     },
     update(dt, cam) {
-      let msg = null;
       this.t += dt;
       if (this.t >= T[this.phase]) {
         this.t = 0; this.phase = order[(order.indexOf(this.phase) + 1) % order.length];
         this.enter();
-        if (this.phase === 'count') msg = '🚀 Site de lancement : décollage dans 10 secondes';
-        if (this.phase === 'flight') msg = '🚀 Décollage de la fusée !';
       }
       const ph = this.phase, t = this.t, near = Math.hypot(cam.x - S.x, cam.z - S.z) < 15000;
       // position du transporteur : du hall (0) au pas de tir (1), en montant la rampe
@@ -197,7 +194,7 @@ export function buildLaunchSite(scene) {
       for (const f of R.flames) { f.visible = lit; if (lit) f.scale.set(1, (ph === 'ignite' ? 0.5 : 1) * (0.85 + Math.random() * 0.3), 1); }
       if (ph === 'flight') this.fly(dt, near);
       else this.emit = (this.emit || 0) - dt;
-      R.g.getWorldPosition(_p); this.pos.x = _p.x; this.pos.z = _p.z;
+      R.g.getWorldPosition(_p);
       if (near && this.emit <= 0) {
         if (ph === 'ready' || ph === 'count') { // dégazage le long du corps
           this.emit = 0.25; const h = 14 + rnd() * 26, s = rnd() < 0.5 ? -1 : 1;
@@ -205,7 +202,6 @@ export function buildLaunchSite(scene) {
         } else if (ph === 'ignite') this.ground(0.04, 3);
       }
       smoke.update(dt, 0.5);
-      return msg;
     },
     /** Nuages de vapeur chassés des deux côtés par la tranchée à flammes. */
     ground(every, n) {

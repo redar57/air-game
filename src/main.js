@@ -353,7 +353,7 @@ function resume() {
 /** Mini-carte (toutes les 3 images) et grande carte si elle est ouverte. */
 function drawMaps() {
   if (!islandMap) return;
-  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : [], train: scenery.traffic.train && scenery.traffic.train.pos, rocket: spaceport.pos };
+  const extras = { thermals, balloons: scenery.balloons, fires: mission && mission.fires ? mission.fires : [], fuel: plane.fuelOn && !plane.spec.glider, load: !!plane.spec.sprayer, mail: mission && mission.mailTarget ? mission.mailTarget : null, pins: mission && mission.pins ? mission.pins : [] };
   if (frameNo % 3 === 0) islandMap.drawMini(document.getElementById('minimap'), plane, tele.hdg, extras, plane.spec.maxSpeed > 120 ? 3500 : 2200);
   if (ui.bigMapOpen && frameNo % 4 === 0) islandMap.drawFull(document.getElementById('bigmapc'), plane, tele.hdg, extras);
 }
@@ -482,8 +482,7 @@ function frame(now) {
     scenery.update(time, sky.night, dt, camera.position);
     birds.update(dt, time, plane);
     boats.update(dt, time);
-    const ev = spaceport.update(dt, camera.position);
-    if (ev && state === 'fly' && Math.hypot(plane.pos.x - spaceport.x, plane.pos.z - spaceport.z) < 9000) ui.toast(ev, 3500);
+    spaceport.update(dt, camera.position);
     for (const sp of spinners) if (sp.tick) sp.tick(time); else sp.obj.rotation.y += sp.rate * dt;
   }
   if (!paused) {

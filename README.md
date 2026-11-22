@@ -77,10 +77,10 @@ des roues, au décrochage et au crash (si le navigateur le permet).
 - **Base militaire** (grande carte) : sur l'îlot voisin du porte-avions. Drapeau américain, piste, hangars, radar,
   casernes, hélisurfaces, carburant, aire d'embarquement des parachutistes, appareils garés, abris bétonnés, batterie
   antiaérienne, chars, ponton et patrouilleur ; c'est aussi un point de départ.
-- **Site de lancement** : sur un îlot (🚀 sur la carte). Environ toutes les 4 minutes, une fusée sort du hall, roule
+- **Site de lancement** : sur un îlot. Environ toutes les 20 minutes, une fusée sort du hall, roule
   jusqu'au pas de tir et décolle.
 - **Routes et train** (grande carte) : des voitures, camionnettes, camions et cars circulent sur les routes
-  goudronnées ; un petit train à vapeur (🚂 sur la carte) fait le tour de l'île le long de la côte et s'arrête dans 7 gares.
+  goudronnées ; un petit train à vapeur fait le tour de l'île le long de la côte et s'arrête dans 7 gares.
 - **Animaux** : bancs de dauphins qui bondissent près des côtes, baleines qui soufflent au large, cerfs à l'orée
   des bois (ils s'enfuient si on les frôle).
 - **Planeur** : sans moteur, il part en altitude. Les gros nuages ronds marquent les thermiques : tourne dedans pour
